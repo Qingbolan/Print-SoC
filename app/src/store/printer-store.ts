@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { SSHConfig, PrintJob, Printer } from '@/types/printer'
+import type { SSHConfig, PrintJob, Printer, PrinterGroup } from '@/types/printer'
+import { groupPrinters } from '@/data/printers'
 
 export type ConnectionStatus =
   | { type: 'disconnected' }
@@ -8,10 +9,22 @@ export type ConnectionStatus =
   | { type: 'connected'; connectedAt: Date }
   | { type: 'error'; message: string; lastAttempt: Date }
 
+export interface SavedCredentials {
+  serverType: 'stu' | 'stf'
+  username: string
+  password: string
+  rememberMe: boolean
+}
+
 interface PrinterState {
   // SSH Configuration
   sshConfig: SSHConfig | null
   setSshConfig: (config: SSHConfig | null) => void
+
+  // Saved Credentials for auto-login
+  savedCredentials: SavedCredentials | null
+  setSavedCredentials: (credentials: SavedCredentials | null) => void
+  clearSavedCredentials: () => void
 
   // Print Jobs
   printJobs: PrintJob[]
@@ -25,6 +38,11 @@ interface PrinterState {
   setPrinters: (printers: Printer[]) => void
   selectedPrinter: Printer | null
   setSelectedPrinter: (printer: Printer | null) => void
+
+  // Printer Groups
+  printerGroups: PrinterGroup[]
+  getPrinterGroups: () => PrinterGroup[]
+  updatePrinterStatus: (printerId: string, status: Printer['status'], queueCount?: number) => void
 
   // Current upload/print state
   currentFile: File | null
@@ -47,6 +65,11 @@ export const usePrinterStore = create<PrinterState>()(
       sshConfig: null,
       setSshConfig: (config) => set({ sshConfig: config }),
 
+      // Saved Credentials
+      savedCredentials: null,
+      setSavedCredentials: (credentials) => set({ savedCredentials: credentials }),
+      clearSavedCredentials: () => set({ savedCredentials: null }),
+
       // Print Jobs
       printJobs: [],
       setPrintJobs: (jobs) => set({ printJobs: jobs }),
@@ -65,9 +88,29 @@ export const usePrinterStore = create<PrinterState>()(
 
       // Printers
       printers: [],
-      setPrinters: (printers) => set({ printers }),
+      setPrinters: (printers) => {
+        const groups = groupPrinters(printers)
+        set({ printers, printerGroups: groups })
+      },
       selectedPrinter: null,
       setSelectedPrinter: (printer) => set({ selectedPrinter: printer }),
+
+      // Printer Groups
+      printerGroups: [],
+      getPrinterGroups: () => {
+        const state = usePrinterStore.getState()
+        return groupPrinters(state.printers)
+      },
+      updatePrinterStatus: (printerId, status, queueCount) =>
+        set((state) => {
+          const updatedPrinters = state.printers.map((printer) =>
+            printer.id === printerId
+              ? { ...printer, status, queue_count: queueCount ?? printer.queue_count }
+              : printer
+          )
+          const groups = groupPrinters(updatedPrinters)
+          return { printers: updatedPrinters, printerGroups: groups }
+        }),
 
       // Current upload/print state
       currentFile: null,
@@ -88,6 +131,7 @@ export const usePrinterStore = create<PrinterState>()(
       partialize: (state) => ({
         sshConfig: state.sshConfig,
         selectedPrinter: state.selectedPrinter,
+        savedCredentials: state.savedCredentials,
       }),
     }
   )

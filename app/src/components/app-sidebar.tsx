@@ -1,6 +1,6 @@
 import { Link, useLocation } from "react-router-dom"
 import { GlobeIcon } from "@/components/icons"
-import { Home, Printer, MapPin, History, HelpCircle, Settings as SettingsIcon, PanelLeftIcon, Upload, ListOrdered } from "lucide-react"
+import { Home, Printer, MapPin, History, HelpCircle, Settings as SettingsIcon, PanelLeftIcon, Upload, Monitor } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useI18n } from "@/lib/i18n"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -12,7 +12,7 @@ export function AppSidebar() {
   const pathname = location.pathname
   const { locale, setLocale, t } = useI18n()
   const { collapsed, toggle } = useRBSidebar()
-  const { printJobs } = usePrinterStore()
+  const { printJobs, isConnected } = usePrinterStore()
 
   // Smart navigation - show different items based on usage
   const hasUsedBefore = printJobs.length > 0
@@ -31,10 +31,11 @@ export function AppSidebar() {
       showAlways: false,
     },
     {
-      name: "Queue",
-      href: "/queue",
-      icon: ListOrdered,
-      showAlways: true,
+      name: "Monitor",
+      href: "/monitor",
+      icon: Monitor,
+      showAlways: true, // Show in main navigation
+      requiresSSH: true, // Only show when SSH is connected
     },
     {
       name: "Jobs",
@@ -57,8 +58,8 @@ export function AppSidebar() {
   ]
 
   const navigation = hasUsedBefore
-    ? allNavigation
-    : allNavigation.filter((item) => item.showAlways)
+    ? allNavigation.filter((item) => !item.requiresSSH || isConnected)
+    : allNavigation.filter((item) => item.showAlways && (!item.requiresSSH || isConnected))
 
   const toggleLocale = () => {
     setLocale(locale === "en" ? "zh" : "en")
@@ -121,7 +122,7 @@ export function AppSidebar() {
       </div>
 
       {/* Navigation with modern styling */}
-      <nav className="flex-1 space-y-1 p-3  pt-0 overflow-y-auto overscroll-y-contain">
+      <nav className="flex-1 p-3 pt-0 overflow-y-auto overscroll-y-contain">
         {navigation.map((item) => {
           const isActive = pathname === item.href ||
             (item.href === "/home" && pathname.startsWith("/preview"))
@@ -139,7 +140,7 @@ export function AppSidebar() {
               )}
             >
               <item.icon className={cn(
-                "h-6 w-6 flex-shrink-0 transition-transform duration-167",
+                "h-5 w-5 flex-shrink-0 transition-transform duration-167",
                 isActive && "scale-110"
               )} />
               {!collapsed && (
@@ -156,12 +157,7 @@ export function AppSidebar() {
       <div className="backdrop-blur-sm bg-sidebar/30">
         {/* Theme Toggle */}
         <div className="p-3">
-          <div className={cn(
-            "rounded-xl p-2.5 bg-gradient-to-br from-sidebar-accent/50 to-sidebar-accent/30 border border-sidebar-border/30",
-            !collapsed && "fluent-shadow-xs"
-          )}>
             <ThemeToggle collapsed={collapsed} />
-          </div>
         </div>
 
         {/* Language Toggle */}

@@ -1,301 +1,214 @@
 import { useEffect, useState } from 'react'
 import { usePrinterStore } from '@/store/printer-store'
-import { checkPrinterQueue, getPrinters } from '@/lib/printer-api'
-import { SimpleCard, SimpleCardHeader, SimpleCardTitle, SimpleCardDescription, SimpleCardContent } from '@/components/ui/simple-card'
-import { PageHeader } from '@/components/PageHeader'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { PRINTERS } from '@/data/printers'
+import { checkPrinterQueue } from '@/lib/printer-api'
+import type { PrinterGroup } from '@/types/printer'
+import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
-import {
-  ListOrdered,
-  RefreshCw,
-  AlertCircle,
-  Clock,
-  Printer as PrinterIcon,
-  CheckCircle
-} from 'lucide-react'
-
-interface QueueData {
-  printerName: string
-  queueName: string
-  items: string[]
-  loading: boolean
-  error?: string
-}
+import { RefreshCw } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { PrinterGridSkeleton } from '@/components/PrinterCardSkeleton'
+import { AnimatedCard } from '@/components/magic/animated-card'
 
 export default function PrintQueuePage() {
-  const { printers, setPrinters, sshConfig, isConnected } = usePrinterStore()
-  const [queueData, setQueueData] = useState<QueueData[]>([])
-  const [autoRefresh, setAutoRefresh] = useState(true)
-  const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
+  const { printerGroups, updatePrinterStatus, sshConfig, isConnected } = usePrinterStore()
+  const [selectedGroup, setSelectedGroup] = useState<string | null>('info')
   const [isRefreshing, setIsRefreshing] = useState(false)
 
-  // Load printers on mount
-  useEffect(() => {
-    loadPrinters()
-  }, [])
+  // Check if we have actual data loaded (not just Unknown status)
+  const hasLoadedData = printerGroups.length > 0 && printerGroups.some(g =>
+    g.printers.some(p => p.status !== 'Unknown')
+  )
 
-  useEffect(() => {
-    if (isConnected && sshConfig && printers.length > 0) {
-      loadAllQueues()
-    }
-  }, [isConnected, sshConfig, printers])
-
-  const loadPrinters = async () => {
-    const result = await getPrinters()
-    if (result.success && result.data) {
-      setPrinters(result.data)
-    }
-  }
-
-  useEffect(() => {
-    if (!autoRefresh || !isConnected || !sshConfig) return
-
-    const interval = setInterval(() => {
-      loadAllQueues(true)
-    }, 30000) // Refresh every 30 seconds
-
-    return () => clearInterval(interval)
-  }, [autoRefresh, isConnected, sshConfig, printers])
-
-  const loadAllQueues = async (silent = false) => {
+  const loadAllQueues = async () => {
     if (!sshConfig) {
       toast.error('Not connected to SSH')
       return
     }
 
-    if (!silent) {
-      setIsRefreshing(true)
-    }
+    setIsRefreshing(true)
+    toast.info('Refreshing printer data...')
 
-    // Initialize queue data with loading state
-    const initialData: QueueData[] = printers.map(printer => ({
-      printerName: printer.name,
-      queueName: printer.queue_name,
-      items: [],
-      loading: true,
-    }))
-    setQueueData(initialData)
-
-    // Fetch queue data for each printer
-    const results = await Promise.all(
-      printers.map(async (printer) => {
+    // Fetch queue data for each printer (don't await, let it run in background)
+    Promise.all(
+      PRINTERS.map(async (printer) => {
         try {
           const result = await checkPrinterQueue(sshConfig, printer.queue_name)
-          return {
-            printerName: printer.name,
-            queueName: printer.queue_name,
-            items: result.success ? (result.data || []) : [],
-            loading: false,
-            error: result.success ? undefined : result.error,
-          }
+          const queueCount = result.success ? (result.data?.length || 0) : 0
+          const status = result.success ? 'Online' : 'Error'
+          updatePrinterStatus(printer.id, status, queueCount)
         } catch (error) {
-          return {
-            printerName: printer.name,
-            queueName: printer.queue_name,
-            items: [],
-            loading: false,
-            error: error instanceof Error ? error.message : 'Unknown error',
-          }
+          updatePrinterStatus(printer.id, 'Error', 0)
         }
       })
-    )
-
-    setQueueData(results)
-    setLastUpdate(new Date())
-    setIsRefreshing(false)
-
-    if (!silent) {
+    ).then(() => {
+      setIsRefreshing(false)
       toast.success('Queue data refreshed')
-    }
+    }).catch(() => {
+      setIsRefreshing(false)
+      toast.error('Failed to refresh some printers')
+    })
   }
 
-  const totalJobs = queueData.reduce((sum, q) => sum + q.items.length, 0)
-  const activeQueues = queueData.filter(q => q.items.length > 0).length
+  // Use Info as a special view showing all groups
+  const groups = printerGroups.length > 0 ? printerGroups : []
+
+  const displayGroup = groups.find((g) => g.id === selectedGroup)
+  const displayPrinters = selectedGroup === 'info'
+    ? groups.flatMap(g => g.printers.filter(p => p.variant === 'main'))
+    : displayGroup?.printers || []
 
   if (!isConnected || !sshConfig) {
     return (
-      <div className="p-8 space-y-8">
-        <PageHeader
-          title="Print Queue"
-          description="Monitor real-time print queue status"
-          icon={<ListOrdered className="w-8 h-8" />}
-        />
-        <SimpleCard variant="bordered" padding="lg">
-          <div className="flex flex-col items-center justify-center py-12 text-center">
-            <AlertCircle className="w-16 h-16 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold mb-2">Not Connected</h3>
-            <p className="text-muted-foreground mb-6">
-              Please connect to SSH in Settings to view the print queue
-            </p>
-            <Button onClick={() => window.location.href = '/settings'}>
-              Go to Settings
-            </Button>
-          </div>
-        </SimpleCard>
+      <div className="h-full flex flex-col items-center justify-center">
+        <div className="p-8 max-w-md text-center">
+          <h2 className="text-xl font-bold mb-4">Not Connected</h2>
+          <p className="text-muted-foreground mb-6">
+            Please connect to SSH in Settings to view the print queue
+          </p>
+          <Button onClick={() => window.location.href = '/settings'}>
+            Go to Settings
+          </Button>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="p-8 space-y-8">
+    <div className="h-full flex flex-col">
       {/* Header */}
-      <PageHeader
-        title="Print Queue"
-        description="Monitor real-time print queue status across all printers"
-        icon={<ListOrdered className="w-8 h-8" />}
-      />
-
-      {/* Controls and Stats */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-6">
-          <div className="flex items-center gap-2">
-            <PrinterIcon className="w-5 h-5 text-muted-foreground" />
-            <span className="text-sm">
-              <span className="font-semibold">{activeQueues}</span>
-              <span className="text-muted-foreground"> / {printers.length} active</span>
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <ListOrdered className="w-5 h-5 text-muted-foreground" />
-            <span className="text-sm">
-              <span className="font-semibold">{totalJobs}</span>
-              <span className="text-muted-foreground"> jobs in queue</span>
-            </span>
-          </div>
-          {lastUpdate && (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Clock className="w-4 h-4" />
-              Last update: {lastUpdate.toLocaleTimeString()}
-            </div>
-          )}
+      <div className="border-b border-border/50 py-4 px-6 flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Printer Monitor</h1>
+          <p className="text-xs text-muted-foreground mt-1">Auto-refreshes every 30 seconds</p>
         </div>
+
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => loadAllQueues()}
+          disabled={isRefreshing}
+        >
+          <RefreshCw className={`w-4 h-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+          Refresh Now
+        </Button>
+      </div>
+
+      {/* Navigation Tabs */}
+      <div className="border-b border-border/50 px-4 py-3">
         <div className="flex items-center gap-3">
-          <label className="flex items-center gap-2 text-sm cursor-pointer">
-            <input
-              type="checkbox"
-              checked={autoRefresh}
-              onChange={(e) => setAutoRefresh(e.target.checked)}
-              className="rounded"
-            />
-            <span>Auto-refresh (30s)</span>
-          </label>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => loadAllQueues()}
-            disabled={isRefreshing}
+          {/* Info Tab */}
+          <button
+            onClick={() => setSelectedGroup('info')}
+            className={cn(
+              'px-6 py-2 rounded-md font-medium transition-colors flex items-center gap-2',
+              selectedGroup === 'info'
+                ? 'bg-accent text-foreground'
+                : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
+            )}
           >
-            <RefreshCw className={`w-4 h-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
+            <span>Info</span>
+          </button>
+
+          {/* Group Tabs */}
+          {groups.map((group) => (
+            <button
+              key={group.id}
+              onClick={() => setSelectedGroup(group.id)}
+              className={cn(
+                'px-6 py-2 rounded-md font-medium transition-colors flex items-center gap-2',
+                selectedGroup === group.id
+                  ? 'bg-accent text-foreground'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
+              )}
+            >
+              <span>{group.name}</span>
+              <span
+                className={cn(
+                  'min-w-[32px] h-7 rounded-md flex items-center justify-center px-2 text-white font-bold text-sm',
+                  group.total_queue_count === 0
+                    ? 'bg-red-800'
+                    : 'bg-red-600'
+                )}
+              >
+                {group.total_queue_count}
+              </span>
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Queue Cards Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {queueData.map((queue) => (
-          <SimpleCard key={queue.queueName} variant="default" hoverable>
-            <SimpleCardHeader>
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <SimpleCardTitle className="flex items-center gap-2">
-                    <PrinterIcon className="w-5 h-5" />
-                    {queue.printerName}
-                  </SimpleCardTitle>
-                  <SimpleCardDescription className="mt-1">
-                    Queue: {queue.queueName}
-                  </SimpleCardDescription>
-                </div>
-                <Badge
-                  variant="secondary"
-                  className={
-                    queue.loading
-                      ? 'bg-blue-500 text-white'
-                      : queue.error
-                      ? 'bg-red-500 text-white'
-                      : queue.items.length > 0
-                      ? 'bg-yellow-500 text-white'
-                      : 'bg-green-500 text-white'
-                  }
-                >
-                  {queue.loading ? (
-                    <>
-                      <RefreshCw className="w-4 h-4 animate-spin" />
-                      <span className="ml-1">Loading...</span>
-                    </>
-                  ) : queue.error ? (
-                    <>
-                      <AlertCircle className="w-4 h-4" />
-                      <span className="ml-1">Error</span>
-                    </>
-                  ) : queue.items.length > 0 ? (
-                    <>
-                      <Clock className="w-4 h-4" />
-                      <span className="ml-1">{queue.items.length} job(s)</span>
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle className="w-4 h-4" />
-                      <span className="ml-1">Empty</span>
-                    </>
-                  )}
-                </Badge>
-              </div>
-            </SimpleCardHeader>
-            <SimpleCardContent>
-              {queue.loading ? (
-                <div className="flex items-center justify-center py-8">
-                  <RefreshCw className="w-6 h-6 animate-spin text-muted-foreground" />
-                </div>
-              ) : queue.error ? (
-                <div className="flex items-start gap-2 p-4 bg-red-50 dark:bg-red-900/20 rounded-lg">
-                  <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
-                  <div className="text-sm text-red-600 dark:text-red-400">{queue.error}</div>
-                </div>
-              ) : queue.items.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-8 text-center">
-                  <CheckCircle className="w-12 h-12 text-green-500 mb-2" />
-                  <p className="text-sm text-muted-foreground">Queue is empty</p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <div className="text-sm font-medium mb-3">
-                    Jobs in Queue ({queue.items.length})
-                  </div>
-                  <div className="space-y-2 max-h-64 overflow-y-auto">
-                    {queue.items.map((item, index) => (
-                      <div
-                        key={index}
-                        className="flex items-start gap-3 p-3 bg-muted/30 rounded-lg border border-border/50"
-                      >
-                        <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                          <span className="text-xs font-medium text-primary">{index + 1}</span>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-sm font-mono break-all">{item}</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </SimpleCardContent>
-          </SimpleCard>
-        ))}
-      </div>
+      {/* Printer Cards Grid */}
+      <div className="flex-1 overflow-y-auto p-6">
+        {!hasLoadedData ? (
+          <PrinterGridSkeleton count={9} />
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-7xl">
+            {displayPrinters.map((printer, index) => {
+            const isOnline = printer.status === 'Online'
+            const queueCount = printer.queue_count || 0
 
-      {printers.length === 0 && (
-        <SimpleCard variant="bordered" padding="lg">
-          <div className="flex flex-col items-center justify-center py-12 text-center">
-            <PrinterIcon className="w-16 h-16 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold mb-2">No Printers Available</h3>
-            <p className="text-muted-foreground mb-6">
-              No printers found. Please add printers to view their queues.
-            </p>
+            return (
+              <AnimatedCard
+                key={printer.id}
+                delay={index * 0.05}
+                className="border-border/50 hover:border-border transition-colors overflow-hidden"
+              >
+                <div className="p-6 flex items-center justify-between">
+                  {/* Printer Name */}
+                  <h2 className="text-2xl font-bold">
+                    {printer.name}
+                  </h2>
+
+                  {/* Queue Count Badge */}
+                  <div
+                    className={cn(
+                      'min-w-[48px] h-10 rounded-md flex items-center justify-center px-3 text-white font-bold text-lg shadow-md',
+                      isOnline && queueCount === 0
+                        ? 'bg-green-600 dark:bg-green-700'
+                        : !isOnline
+                        ? 'bg-red-600 dark:bg-red-700'
+                        : 'bg-yellow-500 dark:bg-yellow-600'
+                    )}
+                  >
+                    {queueCount}
+                  </div>
+                </div>
+
+                {/* Additional Info */}
+                <div className="px-6 pb-4 pt-2 border-t border-border/50">
+                  <div className="text-sm text-muted-foreground">
+                    <div className="flex items-center justify-between">
+                      <span>Status:</span>
+                      <span className={cn(
+                        'font-medium',
+                        isOnline ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+                      )}>
+                        {printer.status}
+                      </span>
+                    </div>
+                    {printer.variant && (
+                      <div className="flex items-center justify-between mt-1">
+                        <span>Variant:</span>
+                        <span className="font-medium text-foreground uppercase">
+                          {printer.variant}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </AnimatedCard>
+            )
+          })}
           </div>
-        </SimpleCard>
-      )}
+        )}
+
+        {hasLoadedData && displayPrinters.length === 0 && (
+          <div className="text-center py-12 text-muted-foreground">
+            <p className="text-lg">No printers available</p>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

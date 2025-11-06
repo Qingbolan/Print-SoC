@@ -89,71 +89,73 @@ export function ThemeToggle({ collapsed = false }: { collapsed?: boolean }) {
     )
   }
 
-  // If collapsed, show icon for CURRENT theme
+  // If collapsed, only show a toggle button
   if (collapsed) {
     const toggleTheme = () => {
-      // Cycle through: light → dark → light
-      if (theme === "light" || theme === "system") {
-        setTheme("dark")
-      } else {
-        setTheme("light")
-      }
+      setTheme(theme === "light" ? "dark" : "light")
     }
-
-    // Show icon for CURRENT theme
-    const currentIcon = (theme === "dark")
-      ? <MoonIcon className="h-4 w-4" />      // Dark mode (show moon)
-      : <SunIcon className="h-4 w-4" />       // Light mode (show sun)
-
-    const tooltipText = (theme === "dark")
-      ? "Dark Mode (click to switch to Light)"
-      : "Light Mode (click to switch to Dark)"
 
     return (
       <button
         onClick={toggleTheme}
-        title={tooltipText}
+        title={theme === "light" ? "Switch to Dark" : "Switch to Light"}
         className={cn(
           "w-full flex items-center justify-center px-2 py-2 rounded-lg text-sm transition-all duration-167 fluent-transition",
           "bg-primary/10 text-primary border border-primary/20"
         )}
       >
-        {currentIcon}
+        {theme === "light" ? (
+          <SunIcon className="h-4 w-4" />
+        ) : (
+          <MoonIcon className="h-4 w-4" />
+        )}
       </button>
     )
   }
 
-  // Expanded state shows two buttons in a grid
+  // Expanded state shows two buttons
   return (
     <div className="space-y-2">
-      <div className="grid grid-cols-2 gap-2">
+      <div className="flex gap-2">
         <button
           onClick={() => setTheme("light")}
-          title="Light theme"
           className={cn(
-            "flex flex-col items-center justify-center gap-1.5 px-2 py-2.5 rounded-lg text-xs transition-all duration-167 fluent-transition",
-            theme === "light" || theme === "system"
-              ? "bg-primary/10 text-primary border border-primary/20 fluent-shadow-xs"
-              : "bg-sidebar-accent hover:bg-muted-hover text-muted-foreground border border-transparent"
+            "flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm transition-all duration-167 fluent-transition",
+            theme === "light"
+              ? "bg-primary/10 text-primary border border-primary/20"
+              : "bg-muted hover:bg-muted-hover text-muted-foreground"
           )}
         >
           <SunIcon className="h-4 w-4 flex-shrink-0" />
-          <span className="font-medium">Light</span>
+          <span>Light</span>
         </button>
 
         <button
           onClick={() => setTheme("dark")}
-          title="Dark theme"
           className={cn(
-            "flex flex-col items-center justify-center gap-1.5 px-2 py-2.5 rounded-lg text-xs transition-all duration-167 fluent-transition",
+            "flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm transition-all duration-167 fluent-transition",
             theme === "dark"
-              ? "bg-primary/10 text-primary border border-primary/20 fluent-shadow-xs"
-              : "bg-sidebar-accent hover:bg-muted-hover text-muted-foreground border border-transparent"
+              ? "bg-primary/10 text-primary border border-primary/20"
+              : "bg-muted hover:bg-muted-hover text-muted-foreground"
           )}
         >
           <MoonIcon className="h-4 w-4 flex-shrink-0" />
-          <span className="font-medium">Dark</span>
+          <span>Dark</span>
         </button>
+{/* 
+        <button
+          onClick={() => setTheme("system")}
+          className={cn(
+            "flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm",
+            "transition-all duration-167 fluent-transition",
+            theme === "system"
+              ? "bg-primary/10 text-primary border border-primary/20"
+              : "bg-muted hover:bg-muted-hover text-muted-foreground"
+          )}
+        >
+          <MonitorIcon className="h-4 w-4" />
+          <span className="hidden sm:inline">Auto</span>
+        </button> */}
       </div>
     </div>
   )

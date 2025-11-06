@@ -9,6 +9,7 @@ import { FluentProviderWrapper } from '@/components/providers/fluent-provider'
 import { AntdProvider } from '@/components/providers/antd-provider'
 import { PageBreadcrumb } from '@/components/PageBreadcrumb'
 import { safeOpenDevTools } from '@/lib/tauri-utils'
+import { useBackgroundMonitor } from '@/hooks/useBackgroundMonitor'
 
 // Pages
 import ModernLoginPageV2 from '@/pages/ModernLoginPageV2'
@@ -21,6 +22,9 @@ import HelpPage from '@/pages/HelpPage'
 import SettingsPage from '@/pages/SettingsPage'
 
 function AppLayout({ children }: { children: React.ReactNode }) {
+  // Enable background monitoring for printer queues
+  useBackgroundMonitor()
+
   useEffect(() => {
     const handleKeyDown = async (e: KeyboardEvent) => {
       // Check for Cmd+Shift+I (Mac) or Ctrl+Shift+I (Windows/Linux) or F12
@@ -141,7 +145,7 @@ export default function App() {
           <Route path="/home" element={<ModernHomePageV2 />} />
           <Route path="/preview" element={<ModernPreviewPage />} />
           <Route path="/printers" element={<PrintersPage />} />
-          <Route path="/queue" element={<PrintQueuePage />} />
+          <Route path="/monitor" element={<PrintQueuePage />} />
           <Route path="/jobs" element={<JobsPage />} />
           <Route path="/help" element={<HelpPage />} />
           <Route path="/settings" element={<SettingsPage />} />

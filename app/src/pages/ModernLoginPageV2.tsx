@@ -11,13 +11,70 @@ import { Loader2, ChevronRight, GraduationCap, Briefcase } from 'lucide-react'
 
 export default function ModernLoginPageV2() {
   const navigate = useNavigate()
-  const { setSshConfig, setIsConnected } = usePrinterStore()
+  const { setSshConfig, setIsConnected, savedCredentials, setSavedCredentials } = usePrinterStore()
 
   const [step, setStep] = useState<'welcome' | 'server' | 'credentials'>('welcome')
   const [serverType, setServerType] = useState<'stu' | 'stf' | null>(null)
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [rememberMe, setRememberMe] = useState(true) // Default checked
   const [loading, setLoading] = useState(false)
+  const [autoLoginAttempted, setAutoLoginAttempted] = useState(false)
+
+  // Auto-login effect: check for saved credentials on mount
+  useEffect(() => {
+    if (savedCredentials && savedCredentials.rememberMe && !autoLoginAttempted) {
+      setAutoLoginAttempted(true)
+      setServerType(savedCredentials.serverType)
+      setUsername(savedCredentials.username)
+      setPassword(savedCredentials.password)
+      setRememberMe(true)
+
+      // Auto-login after a short delay to show the UI
+      setTimeout(() => {
+        setStep('credentials')
+        // Trigger auto-login
+        const host = savedCredentials.serverType === 'stu'
+          ? 'stu.comp.nus.edu.sg'
+          : 'stf.comp.nus.edu.sg'
+        const config = {
+          host,
+          port: 22,
+          username: savedCredentials.username,
+          auth_type: { type: 'Password' as const, password: savedCredentials.password },
+        }
+
+        setLoading(true)
+        const isDebugMode = import.meta.env.VITE_DEBUG_OFFLINE === 'true'
+
+        if (isDebugMode) {
+          toast.info(`🔧 Debug Mode: Auto-login to ${savedCredentials.serverType.toUpperCase()}`)
+        } else {
+          toast.info(`Auto-login to ${savedCredentials.serverType.toUpperCase()} server...`)
+        }
+
+        testSSHConnection(config).then(result => {
+          if (result.success) {
+            setSshConfig(config)
+            setIsConnected(true)
+            toast.success(`Auto-login successful!`)
+            setTimeout(() => navigate('/home'), 500)
+          } else {
+            toast.error('Auto-login failed. Please login manually.')
+            setLoading(false)
+          }
+        }).catch(error => {
+          toast.error('Auto-login failed: ' + String(error))
+          setLoading(false)
+        })
+      }, 1000)
+    } else if (savedCredentials && !savedCredentials.rememberMe) {
+      // Pre-fill credentials but don't auto-login
+      setServerType(savedCredentials.serverType)
+      setUsername(savedCredentials.username)
+      setPassword(savedCredentials.password)
+    }
+  }, [savedCredentials, autoLoginAttempted, setSshConfig, setIsConnected, navigate])
 
   const handleConnect = useCallback(async () => {
     if (!username || !password || !serverType) return
@@ -56,6 +113,20 @@ export default function ModernLoginPageV2() {
       if (result.success) {
         setSshConfig(config)
         setIsConnected(true)
+
+        // Save credentials if "Remember me" is checked
+        if (rememberMe) {
+          setSavedCredentials({
+            serverType,
+            username,
+            password,
+            rememberMe: true,
+          })
+        } else {
+          // Clear saved credentials if not remembering
+          setSavedCredentials(null)
+        }
+
         const successMsg = isDebugMode
           ? `Debug Mode: Bypassed ${serverType.toUpperCase()} connection`
           : `Connected to ${serverType.toUpperCase()} successfully!`
@@ -72,7 +143,7 @@ export default function ModernLoginPageV2() {
     } finally {
       setLoading(false)
     }
-  }, [username, password, serverType, setSshConfig, setIsConnected, navigate])
+  }, [username, password, serverType, rememberMe, setSshConfig, setIsConnected, setSavedCredentials, navigate])
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
@@ -243,6 +314,23 @@ export default function ModernLoginPageV2() {
                     aria-required="true"
                   />
                 </div>
+
+                <div className="flex items-center space-x-2">
+                  <input
+                    id="remember-me"
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    className="h-4 w-4 rounded border-border text-cyan-500 focus:ring-cyan-500 focus:ring-offset-0"
+                  />
+                  <label htmlFor="remember-me" className="text-sm text-foreground cursor-pointer">
+                    Remember me (auto-login next time)
+                  </label>
+                </div>
+
+                <p className="text-xs text-muted-foreground">
+                  Your credentials are stored locally on your device and never sent to third parties.
+                </p>
 
                 <Button
                   type="submit"

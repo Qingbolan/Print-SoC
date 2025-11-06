@@ -12,7 +12,7 @@ import { useState } from 'react'
 import type { SSHConfig } from '@/types/printer'
 
 export default function SettingsPage() {
-  const { sshConfig, setSshConfig, connectionStatus } = usePrinterStore()
+  const { sshConfig, setSshConfig, connectionStatus, savedCredentials, clearSavedCredentials } = usePrinterStore()
   const { connectWithRetry, disconnect, isConnecting } = useSSHConnection()
 
   const [formData, setFormData] = useState<SSHConfig>(
@@ -51,6 +51,11 @@ export default function SettingsPage() {
   const handleDisconnect = () => {
     disconnect()
     toast.info('Disconnected')
+  }
+
+  const handleClearCredentials = () => {
+    clearSavedCredentials()
+    toast.success('Auto-login credentials cleared')
   }
 
   const handleInputChange = (field: string, value: string | number) => {
@@ -167,6 +172,36 @@ export default function SettingsPage() {
                   {isConnecting ? 'Connecting...' : connectionStatus.type === 'connected' ? 'Connected' : 'Test Connection'}
                 </Button>
               </div>
+
+              {/* Auto-login Settings */}
+              {savedCredentials && (
+                <div className="p-4 border border-border rounded-lg bg-muted/30">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-sm font-medium text-foreground">Auto-login Enabled</h3>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Server: {savedCredentials.serverType.toUpperCase()} • Username: {savedCredentials.username}
+                        </p>
+                      </div>
+                      <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20">
+                        Active
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      You will be automatically logged in when you open the app. Your credentials are stored securely on your device.
+                    </p>
+                    <Button
+                      onClick={handleClearCredentials}
+                      variant="destructive"
+                      size="sm"
+                      className="w-full"
+                    >
+                      Clear Auto-login
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           </section>
 

@@ -63,7 +63,20 @@ export interface Printer {
   supports_duplex: boolean
   supports_color: boolean
   supported_paper_sizes: PaperSize[]
+  group_id?: string
+  variant?: PrinterVariant
+  queue_count?: number
 }
+
+export interface PrinterGroup {
+  id: string
+  name: string
+  display_name: string
+  printers: Printer[]
+  total_queue_count: number
+}
+
+export type PrinterVariant = 'main' | 'sx' | 'nb'
 
 export interface PrinterLocation {
   building: string
