@@ -1,0 +1,3 @@
+[env]
+# Tell tectonic to use vendored/bundled C libraries instead of system ones
+TECTONIC_DEP_BACKEND = "default"

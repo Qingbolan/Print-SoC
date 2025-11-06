@@ -1,0 +1,16 @@
+# Rust/Cargo build artifacts
+/target/
+
+# Tauri generated files
+/gen/
+
+# WIX Toolset (Windows installer)
+/WixTools/
+
+# macOS
+.DS_Store
+
+# Backup files
+*.bak
+*.swp
+*~

@@ -1,0 +1,83 @@
+# Flatpak manifest for EasyPaper
+# Build with: flatpak-builder build-dir tech.silan.EasyPaper.yml --force-clean
+# Export: flatpak build-export repo build-dir
+# Bundle: flatpak build-bundle repo EasyPaper.flatpak tech.silan.EasyPaper
+
+app-id: tech.silan.EasyPaper
+runtime: org.freedesktop.Platform
+runtime-version: '23.08'
+sdk: org.freedesktop.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+  - org.freedesktop.Sdk.Extension.node20
+
+command: EasyPaper
+
+finish-args:
+  # Display server access
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --share=ipc
+
+  # GPU acceleration
+  - --device=dri
+
+  # Network access (for updates and data sync)
+  - --share=network
+
+  # Filesystem access
+  - --filesystem=home
+  - --filesystem=xdg-documents
+  - --filesystem=xdg-download
+
+  # Desktop integration
+  - --talk-name=org.freedesktop.Notifications
+  - --talk-name=org.kde.StatusNotifierWatcher
+  - --own-name=org.mpris.MediaPlayer2.EasyPaper
+
+  # System tray support
+  - --talk-name=org.freedesktop.portal.Desktop
+  - --talk-name=org.freedesktop.portal.FileChooser
+
+modules:
+  # Build the Tauri application
+  - name: EasyPaper
+    buildsystem: simple
+    build-options:
+      append-path: /usr/lib/sdk/rust-stable/bin:/usr/lib/sdk/node20/bin
+      env:
+        CARGO_HOME: /run/build/EasyPaper/cargo
+        NPM_CONFIG_CACHE: /run/build/EasyPaper/npm-cache
+        XDG_CACHE_HOME: /run/build/EasyPaper/cache
+
+    build-commands:
+      # Install Node.js dependencies
+      - cd app && npm install --frozen-lockfile
+
+      # Build the application
+      - cd app && npm run tauri:build -- --bundles none
+
+      # Install the binary
+      - install -Dm755 app/src-tauri/target/release/EasyPaper /app/bin/EasyPaper
+
+      # Install desktop file
+      - install -Dm644 app/src-tauri/tech.silan.EasyPaper.desktop /app/share/applications/tech.silan.EasyPaper.desktop
+
+      # Install icons
+      - |
+        for size in 32 128 256; do
+          install -Dm644 app/src-tauri/icons/${size}x${size}.png \
+            /app/share/icons/hicolor/${size}x${size}/apps/tech.silan.EasyPaper.png
+        done
+
+      # Install appdata/metainfo
+      - install -Dm644 app/src-tauri/tech.silan.EasyPaper.metainfo.xml /app/share/metainfo/tech.silan.EasyPaper.metainfo.xml
+
+    sources:
+      - type: dir
+        path: ../../../
+        skip:
+          - .git
+          - app/node_modules
+          - app/dist
+          - app/src-tauri/target

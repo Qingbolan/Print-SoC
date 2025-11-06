@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>tech.silan.EasyPaper</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <name>EasyPaper</name>
+  <summary>Paper Management Platform for Academic Research</summary>
+
+  <description>
+    <p>
+      EasyPaper is a comprehensive desktop application designed for managing academic papers
+      and author information. It provides powerful tools for researchers, academics, and conference
+      organizers to efficiently handle large datasets of research papers.
+    </p>
+    <p>Key Features:</p>
+    <ul>
+      <li>Import and export Excel data with ease</li>
+      <li>Track paper metadata including titles, authors, abstracts, and keywords</li>
+      <li>Manage author profiles with affiliations and contact information</li>
+      <li>Advanced search and filtering capabilities</li>
+      <li>Export organized datasets in multiple formats</li>
+      <li>Clean and intuitive user interface</li>
+    </ul>
+  </description>
+
+  <categories>
+    <category>Science</category>
+    <category>Education</category>
+    <category>Office</category>
+    <category>Database</category>
+  </categories>
+
+  <keywords>
+    <keyword>paper</keyword>
+    <keyword>research</keyword>
+    <keyword>academic</keyword>
+    <keyword>vldb</keyword>
+    <keyword>database</keyword>
+    <keyword>management</keyword>
+  </keywords>
+
+  <url type="homepage">https://github.com/yourusername/EasyPaper</url>
+  <url type="bugtracker">https://github.com/yourusername/EasyPaper/issues</url>
+
+  <launchable type="desktop-id">tech.silan.EasyPaper.desktop</launchable>
+
+  <screenshots>
+    <screenshot type="default">
+      <caption>Main application window</caption>
+      <image>https://via.placeholder.com/1920x1080</image>
+    </screenshot>
+  </screenshots>
+
+  <releases>
+    <release version="0.1.0" date="2025-01-01">
+      <description>
+        <p>Initial release of EasyPaper</p>
+        <ul>
+          <li>Core paper management functionality</li>
+          <li>Excel import/export support</li>
+          <li>Author profile management</li>
+          <li>Search and filter capabilities</li>
+        </ul>
+      </description>
+    </release>
+  </releases>
+
+  <content_rating type="oars-1.1" />
+
+  <developer_name>Silan Hu</developer_name>
+  <update_contact>silan.hu@u.nus.edu</update_contact>
+</component>

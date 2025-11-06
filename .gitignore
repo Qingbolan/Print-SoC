@@ -9,8 +9,11 @@ dist/
 dist-ssr/
 build/
 
-# Tauri specific (src-tauri/.gitignore handles most Rust/Cargo files)
-# Note: src-tauri has its own .gitignore for /target/ and /gen/schemas
+# Tauri specific
+# Note: app/src-tauri/ has its own .gitignore for Rust build artifacts:
+#   - /target/ (Rust compilation output)
+#   - /gen/ (Tauri generated code)
+#   - /WixTools/ (Windows installer tools)
 
 # Environment variables
 .env
@@ -59,5 +62,3 @@ Desktop.ini
 # package-lock.json
 # yarn.lock
 # pnpm-lock.yaml
-
-app/src-tauri/
