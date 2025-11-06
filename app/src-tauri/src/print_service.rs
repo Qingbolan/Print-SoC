@@ -191,6 +191,7 @@ pub fn print_get_printers() -> ApiResponse<Vec<Printer>> {
             paper_level: Some(75),
             supports_duplex: true,
             supports_color: false,
+            supported_paper_sizes: vec![PaperSize::A4],
         },
         Printer {
             id: "psc008".to_string(),
@@ -206,6 +207,7 @@ pub fn print_get_printers() -> ApiResponse<Vec<Printer>> {
             paper_level: Some(60),
             supports_duplex: true,
             supports_color: true,
+            supported_paper_sizes: vec![PaperSize::A4, PaperSize::A3],
         },
         Printer {
             id: "pstsc".to_string(),
@@ -221,6 +223,7 @@ pub fn print_get_printers() -> ApiResponse<Vec<Printer>> {
             paper_level: Some(40),
             supports_duplex: true,
             supports_color: false,
+            supported_paper_sizes: vec![PaperSize::A4],
         },
     ];
 

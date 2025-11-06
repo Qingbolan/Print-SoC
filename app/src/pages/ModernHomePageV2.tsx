@@ -2,10 +2,11 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePrinterStore } from '@/store/printer-store'
 import { getAllPrintJobs, getPDFInfo } from '@/lib/printer-api'
+import { safeDialogOpen } from '@/lib/tauri-utils'
 import { toast } from 'sonner'
-import { open } from '@tauri-apps/plugin-dialog'
 import { FileText, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { AnimatedCard } from '@/components/magic/animated-card'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,6 +32,7 @@ export default function ModernHomePageV2() {
   const navigate = useNavigate()
   const { isConnected, printJobs, setPrintJobs, setCurrentFile, sshConfig } = usePrinterStore()
   const [loading, setLoading] = useState(false)
+  const [isDragging, setIsDragging] = useState(false)
   const [errorDialog, setErrorDialog] = useState<{
     open: boolean
     title: string
@@ -42,14 +44,6 @@ export default function ModernHomePageV2() {
     message: '',
   })
   const connectionStatus = isConnected ? 'connected' : 'disconnected'
-
-  useEffect(() => {
-    if (!isConnected) {
-      navigate('/login')
-      return
-    }
-    loadJobs()
-  }, [isConnected, navigate])
 
   const loadJobs = async () => {
     const result = await getAllPrintJobs()
@@ -102,12 +96,58 @@ export default function ModernHomePageV2() {
   }, [setCurrentFile, navigate])
 
   const handleBrowseFile = useCallback(async () => {
-    const file = await open({
+    const file = await safeDialogOpen({
       multiple: false,
       filters: [{ name: 'PDF', extensions: ['pdf'] }],
     })
     if (file) {
       handleFileSelect(file as string)
+    }
+  }, [handleFileSelect])
+
+  useEffect(() => {
+    if (!isConnected) {
+      navigate('/login')
+      return
+    }
+    loadJobs()
+  }, [isConnected, navigate])
+
+  // Tauri file drop event listener (Tauri v2 API)
+  useEffect(() => {
+    let unlisten: (() => void) | undefined
+
+    const setupListeners = async () => {
+      try {
+        const { getCurrentWebviewWindow } = await import('@tauri-apps/api/webviewWindow')
+        const webview = getCurrentWebviewWindow()
+
+        unlisten = await webview.onDragDropEvent((event) => {
+          const payload = event.payload as any
+          if (payload.type === 'enter' || payload.type === 'over') {
+            setIsDragging(true)
+          } else if (payload.type === 'leave') {
+            setIsDragging(false)
+          } else if (payload.type === 'drop') {
+            const paths: string[] = payload.paths || []
+            const pdfPath = paths.find((p) => p.toLowerCase().endsWith('.pdf'))
+            if (pdfPath) {
+              handleFileSelect(pdfPath)
+            } else {
+              toast.error('Please drop a PDF file')
+            }
+            setIsDragging(false)
+          }
+        })
+      } catch (error) {
+        console.error('Error setting up drag & drop listener:', error)
+      }
+    }
+
+    setupListeners()
+
+    return () => {
+      if (unlisten) unlisten()
     }
   }, [handleFileSelect])
 
@@ -162,11 +202,27 @@ export default function ModernHomePageV2() {
 
         {/* Left side - Upload area (占满宽度和高度) */}
         <div className="flex-1 p-8 overflow-y-auto">
-          <div className="h-full flex items-center justify-center border-2 border-dashed border-border rounded-xl backdrop-blur-sm bg-card/30">
+          <AnimatedCard
+            className={`h-full flex items-center justify-center border-2 border-dashed backdrop-blur-sm fluent-transition ${
+              isDragging
+                ? 'border-primary bg-primary/10 scale-[0.98]'
+                : 'border-border bg-card/30'
+            }`}
+          >
             {loading ? (
               <div className="text-center">
                 <div className="text-4xl mb-4">⏳</div>
                 <p className="text-muted-foreground">Loading PDF...</p>
+              </div>
+            ) : isDragging ? (
+              <div className="text-center">
+                <div className="text-5xl mb-4">📥</div>
+                <h2 className="text-xl font-semibold text-primary mb-2">
+                  Drop PDF Here
+                </h2>
+                <p className="text-muted-foreground">
+                  Release to upload
+                </p>
               </div>
             ) : (
               <div className="text-center">
@@ -175,7 +231,7 @@ export default function ModernHomePageV2() {
                   Upload PDF Document
                 </h2>
                 <p className="text-muted-foreground mb-6">
-                  Click the button below to select a file
+                  Drag and drop a file here, or click to browse
                 </p>
                 <Button
                   onClick={handleBrowseFile}
@@ -189,7 +245,7 @@ export default function ModernHomePageV2() {
                 </div>
               </div>
             )}
-          </div>
+          </AnimatedCard>
         </div>
 
         {/* Right side - Recent jobs table (占满宽度和高度) */}

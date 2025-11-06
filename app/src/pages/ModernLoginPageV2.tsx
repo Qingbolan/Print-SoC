@@ -23,7 +23,13 @@ export default function ModernLoginPageV2() {
     if (!username || !password || !serverType) return
 
     setLoading(true)
-    toast.info(`Connecting to ${serverType.toUpperCase()} server...`)
+    const isDebugMode = import.meta.env.VITE_DEBUG_OFFLINE === 'true'
+
+    if (isDebugMode) {
+      toast.info(`🔧 Debug Mode: Skipping SSH connection`)
+    } else {
+      toast.info(`Connecting to ${serverType.toUpperCase()} server...`)
+    }
 
     const host = serverType === 'stu' ? 'stu.comp.nus.edu.sg' : 'stf.comp.nus.edu.sg'
     const config = {
@@ -34,14 +40,26 @@ export default function ModernLoginPageV2() {
     }
 
     try {
-      console.log('Testing SSH connection to:', host)
-      const result = await testSSHConnection(config)
-      console.log('SSH connection result:', result)
+      let result
+
+      if (isDebugMode) {
+        // 离线调试模式：跳过SSH连接
+        console.log('🔧 Debug mode enabled - Skipping SSH connection to:', host)
+        result = { success: true }
+      } else {
+        // 正常模式：实际连接SSH
+        console.log('Testing SSH connection to:', host)
+        result = await testSSHConnection(config)
+        console.log('SSH connection result:', result)
+      }
 
       if (result.success) {
         setSshConfig(config)
         setIsConnected(true)
-        toast.success(`Connected to ${serverType.toUpperCase()} successfully!`)
+        const successMsg = isDebugMode
+          ? `Debug Mode: Bypassed ${serverType.toUpperCase()} connection`
+          : `Connected to ${serverType.toUpperCase()} successfully!`
+        toast.success(successMsg)
         setTimeout(() => navigate('/home'), 500)
       } else {
         toast.error(result.error || 'Connection failed')

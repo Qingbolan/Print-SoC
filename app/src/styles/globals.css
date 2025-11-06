@@ -146,6 +146,10 @@
   /* Noise texture for Mica/Acrylic */
   --noise-opacity: 0.02;
 
+  /* Theme Gradient - Cyan to Purple */
+  --theme-gradient-start: oklch(0.70 0.15 200);  /* Cyan #3dd8ff */
+  --theme-gradient-end: oklch(0.68 0.20 285);    /* Purple #9b87ff */
+
   /* Sidebar */
   --sidebar: var(--mica-base);
   --sidebar-foreground: oklch(0.25 0.01 260);
@@ -225,6 +229,10 @@
   --shadow-lg: 0 8px 16px 0 oklch(0 0 0 / 0.40), 0 4px 8px 0 oklch(0 0 0 / 0.3);
   --shadow-xl: 0 16px 32px 0 oklch(0 0 0 / 0.45), 0 8px 16px 0 oklch(0 0 0 / 0.35);
   --shadow-2xl: 0 24px 48px 0 oklch(0 0 0 / 0.50), 0 12px 24px 0 oklch(0 0 0 / 0.40);
+
+  /* Theme Gradient - Cyan to Purple (brighter in dark) */
+  --theme-gradient-start: oklch(0.75 0.17 200);  /* Cyan #50e3ff */
+  --theme-gradient-end: oklch(0.72 0.22 285);    /* Purple #a798ff */
 
   /* Sidebar */
   --sidebar: var(--mica-base);

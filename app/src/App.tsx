@@ -8,13 +8,14 @@ import { ThemeProvider } from '@/lib/theme-context'
 import { FluentProviderWrapper } from '@/components/providers/fluent-provider'
 import { AntdProvider } from '@/components/providers/antd-provider'
 import { PageBreadcrumb } from '@/components/PageBreadcrumb'
-import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow'
+import { safeOpenDevTools } from '@/lib/tauri-utils'
 
 // Pages
 import ModernLoginPageV2 from '@/pages/ModernLoginPageV2'
 import ModernHomePageV2 from '@/pages/ModernHomePageV2'
 import ModernPreviewPage from '@/pages/ModernPreviewPage'
 import PrintersPage from '@/pages/PrintersPage'
+import PrintQueuePage from '@/pages/PrintQueuePage'
 import JobsPage from '@/pages/JobsPage'
 import HelpPage from '@/pages/HelpPage'
 import SettingsPage from '@/pages/SettingsPage'
@@ -29,16 +30,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
 
       if (isDevToolsShortcut) {
         e.preventDefault()
-        try {
-          const window = getCurrentWebviewWindow()
-          // @ts-ignore - openDevtools exists but may not be in types
-          if (window.openDevtools) {
-            // @ts-ignore
-            await window.openDevtools()
-          }
-        } catch (error) {
-          console.error('Failed to open DevTools:', error)
-        }
+        await safeOpenDevTools()
       }
     }
 
@@ -149,6 +141,7 @@ export default function App() {
           <Route path="/home" element={<ModernHomePageV2 />} />
           <Route path="/preview" element={<ModernPreviewPage />} />
           <Route path="/printers" element={<PrintersPage />} />
+          <Route path="/queue" element={<PrintQueuePage />} />
           <Route path="/jobs" element={<JobsPage />} />
           <Route path="/help" element={<HelpPage />} />
           <Route path="/settings" element={<SettingsPage />} />

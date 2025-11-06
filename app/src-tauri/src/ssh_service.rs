@@ -3,6 +3,7 @@ use ssh2::Session;
 use std::io::Read;
 use std::net::TcpStream;
 use std::path::Path;
+use std::time::Duration;
 
 /// Test SSH connection with given configuration
 #[tauri::command]
@@ -50,10 +51,61 @@ pub fn ssh_check_printer_queue(config: SSHConfig, printer: String) -> ApiRespons
 
 // ========== Internal Implementation ==========
 
+const MAX_RETRIES: u32 = 3;
+const CONNECTION_TIMEOUT_SECS: u64 = 30;  // Increased from 10s to 30s
+const RETRY_DELAY_MS: u64 = 2000;  // Increased from 1s to 2s
+
 fn create_ssh_session(config: &SSHConfig) -> Result<Session, Box<dyn std::error::Error>> {
-    let tcp = TcpStream::connect(format!("{}:{}", config.host, config.port))?;
+    create_ssh_session_with_retry(config, MAX_RETRIES)
+}
+
+fn create_ssh_session_with_retry(
+    config: &SSHConfig,
+    max_retries: u32,
+) -> Result<Session, Box<dyn std::error::Error>> {
+    let mut last_error: Option<Box<dyn std::error::Error>> = None;
+
+    for attempt in 1..=max_retries {
+        match try_create_ssh_session(config) {
+            Ok(session) => return Ok(session),
+            Err(e) => {
+                last_error = Some(e);
+                if attempt < max_retries {
+                    std::thread::sleep(Duration::from_millis(RETRY_DELAY_MS));
+                }
+            }
+        }
+    }
+
+    Err(format!(
+        "Failed to connect after {} attempts: {}",
+        max_retries,
+        last_error.unwrap()
+    )
+    .into())
+}
+
+fn try_create_ssh_session(config: &SSHConfig) -> Result<Session, Box<dyn std::error::Error>> {
+    use std::net::ToSocketAddrs;
+
+    // Resolve hostname to socket address
+    let addr_string = format!("{}:{}", config.host, config.port);
+    let mut addrs = addr_string.to_socket_addrs()
+        .map_err(|e| format!("Failed to resolve hostname {}: {}", config.host, e))?;
+
+    let socket_addr = addrs.next()
+        .ok_or_else(|| format!("No IP address found for hostname: {}", config.host))?;
+
+    // Connect with timeout
+    let tcp = TcpStream::connect_timeout(&socket_addr, Duration::from_secs(CONNECTION_TIMEOUT_SECS))?;
+
+    // Set read/write timeouts
+    tcp.set_read_timeout(Some(Duration::from_secs(CONNECTION_TIMEOUT_SECS)))?;
+    tcp.set_write_timeout(Some(Duration::from_secs(CONNECTION_TIMEOUT_SECS)))?;
+
     let mut sess = Session::new()?;
     sess.set_tcp_stream(tcp);
+    sess.set_timeout(CONNECTION_TIMEOUT_SECS as u32 * 1000); // milliseconds
     sess.handshake()?;
 
     match &config.auth_type {
@@ -174,8 +226,41 @@ pub fn submit_print_job_ssh(
         Orientation::Portrait => lpr_command.push_str(" -o portrait"),
     }
 
+    // Add paper size (media)
+    // Common media names are generally accepted by CUPS/LPD. Map directly for A4, A3.
+    let media = match settings.paper_size {
+        PaperSize::A4 => Some("A4"),
+        PaperSize::A3 => Some("A3"),
+    };
+    if let Some(m) = media {
+        lpr_command.push_str(&format!(" -o media={}", m));
+    }
+
     // Note: pages_per_sheet should be handled via pdfjam BEFORE uploading
     // We don't use -o number-up in lpr as pdfjam does better job
+
+    // Page ranges (CUPS)
+    match &settings.page_range {
+        PageRange::All => {}
+        PageRange::Range { start, end } => {
+            if *start >= 1 && *end >= *start {
+                lpr_command.push_str(&format!(" -o page-ranges={}-{}", start, end));
+            }
+        }
+        PageRange::Selection { pages } => {
+            if !pages.is_empty() {
+                let list = pages
+                    .iter()
+                    .filter(|p| **p >= 1)
+                    .map(|p| p.to_string())
+                    .collect::<Vec<_>>()
+                    .join(",");
+                if !list.is_empty() {
+                    lpr_command.push_str(&format!(" -o page-ranges={}", list));
+                }
+            }
+        }
+    }
 
     // Add the file
     lpr_command.push_str(&format!(" {}", remote_file_path));

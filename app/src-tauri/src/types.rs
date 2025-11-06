@@ -66,8 +66,6 @@ pub enum PageRange {
 pub enum PaperSize {
     A4,
     A3,
-    Letter,
-    Legal,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -92,6 +90,7 @@ pub struct Printer {
     pub paper_level: Option<u32>,
     pub supports_duplex: bool,
     pub supports_color: bool,
+    pub supported_paper_sizes: Vec<PaperSize>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

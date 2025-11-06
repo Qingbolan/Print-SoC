@@ -1,5 +1,5 @@
 import { useLocation, Link } from 'react-router-dom'
-import { Home, Printer, FileText, HelpCircle, Settings, Eye } from 'lucide-react'
+import { Home, Printer, FileText, HelpCircle, Settings, Eye, ListOrdered } from 'lucide-react'
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -8,6 +8,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb'
+import { ConnectionStatusBadge } from '@/components/ConnectionStatusBadge'
 
 interface RouteConfig {
   name: string
@@ -19,6 +20,7 @@ const routeConfig: Record<string, RouteConfig> = {
   '/home': { name: 'Home', icon: <Home className="w-3.5 h-3.5" /> },
   '/login': { name: 'Login' },
   '/printers': { name: 'Printers', icon: <Printer className="w-3.5 h-3.5" /> },
+  '/queue': { name: 'Print Queue', icon: <ListOrdered className="w-3.5 h-3.5" /> },
   '/jobs': { name: 'Print Jobs', icon: <FileText className="w-3.5 h-3.5" /> },
   '/help': { name: 'Help', icon: <HelpCircle className="w-3.5 h-3.5" /> },
   '/settings': { name: 'Settings', icon: <Settings className="w-3.5 h-3.5" /> },
@@ -69,34 +71,37 @@ export function PageBreadcrumb() {
 
   return (
     <div className="px-6 py-3 border-b border-border/50 bg-background/50 backdrop-blur-sm">
-      <Breadcrumb>
-        <BreadcrumbList>
-          {breadcrumbItems.map((item, index) => {
-            const isLast = index === breadcrumbItems.length - 1
+      <div className="flex items-center justify-between">
+        <Breadcrumb>
+          <BreadcrumbList>
+            {breadcrumbItems.map((item, index) => {
+              const isLast = index === breadcrumbItems.length - 1
 
-            return (
-              <div key={item.path} className="contents">
-                <BreadcrumbItem>
-                  {isLast ? (
-                    <BreadcrumbPage className="flex items-center gap-1.5">
-                      {item.icon}
-                      <span>{item.name}</span>
-                    </BreadcrumbPage>
-                  ) : (
-                    <BreadcrumbLink asChild>
-                      <Link to={item.path} className="flex items-center gap-1.5">
+              return (
+                <div key={item.path} className="contents">
+                  <BreadcrumbItem>
+                    {isLast ? (
+                      <BreadcrumbPage className="flex items-center gap-1.5">
                         {item.icon}
                         <span>{item.name}</span>
-                      </Link>
-                    </BreadcrumbLink>
-                  )}
-                </BreadcrumbItem>
-                {!isLast && <BreadcrumbSeparator />}
-              </div>
-            )
-          })}
-        </BreadcrumbList>
-      </Breadcrumb>
+                      </BreadcrumbPage>
+                    ) : (
+                      <BreadcrumbLink asChild>
+                        <Link to={item.path} className="flex items-center gap-1.5">
+                          {item.icon}
+                          <span>{item.name}</span>
+                        </Link>
+                      </BreadcrumbLink>
+                    )}
+                  </BreadcrumbItem>
+                  {!isLast && <BreadcrumbSeparator />}
+                </div>
+              )
+            })}
+          </BreadcrumbList>
+        </Breadcrumb>
+        <ConnectionStatusBadge />
+      </div>
     </div>
   )
 }

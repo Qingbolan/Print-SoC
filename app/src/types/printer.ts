@@ -41,7 +41,7 @@ export type PageRange =
   | { type: 'Range'; start: number; end: number }
   | { type: 'Selection'; pages: number[] }
 
-export type PaperSize = 'A4' | 'A3' | 'Letter' | 'Legal'
+export type PaperSize = 'A4' | 'A3'
 
 export type PrintJobStatus =
   | 'Pending'
@@ -62,6 +62,7 @@ export interface Printer {
   paper_level?: number
   supports_duplex: boolean
   supports_color: boolean
+  supported_paper_sizes: PaperSize[]
 }
 
 export interface PrinterLocation {

@@ -2,6 +2,12 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { SSHConfig, PrintJob, Printer } from '@/types/printer'
 
+export type ConnectionStatus =
+  | { type: 'disconnected' }
+  | { type: 'connecting'; attempt: number; maxAttempts: number; elapsedSeconds: number }
+  | { type: 'connected'; connectedAt: Date }
+  | { type: 'error'; message: string; lastAttempt: Date }
+
 interface PrinterState {
   // SSH Configuration
   sshConfig: SSHConfig | null
@@ -25,7 +31,11 @@ interface PrinterState {
   currentFilePath: string | null
   setCurrentFile: (file: File | null, path: string | null) => void
 
-  // UI State
+  // Connection State
+  connectionStatus: ConnectionStatus
+  setConnectionStatus: (status: ConnectionStatus) => void
+
+  // Legacy UI State (kept for compatibility)
   isConnected: boolean
   setIsConnected: (connected: boolean) => void
 }
@@ -64,6 +74,10 @@ export const usePrinterStore = create<PrinterState>()(
       currentFilePath: null,
       setCurrentFile: (file, path) =>
         set({ currentFile: file, currentFilePath: path }),
+
+      // Connection State
+      connectionStatus: { type: 'disconnected' },
+      setConnectionStatus: (status) => set({ connectionStatus: status }),
 
       // UI State
       isConnected: false,

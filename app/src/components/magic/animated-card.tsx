@@ -17,8 +17,9 @@ export function AnimatedCard({ className, delay = 0, children, ...props }: Anima
         delay,
         ease: [0.4, 0, 0.2, 1],
       }}
+      className="h-full w-full"
     >
-      <Card className={className} {...props}>
+      <Card className={cn("h-full w-full", className)} {...props}>
         {children}
       </Card>
     </motion.div>

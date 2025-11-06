@@ -1,6 +1,6 @@
 import { Link, useLocation } from "react-router-dom"
 import { GlobeIcon } from "@/components/icons"
-import { Home, Printer, MapPin, History, HelpCircle, Settings as SettingsIcon, PanelLeftIcon, Upload } from "lucide-react"
+import { Home, Printer, MapPin, History, HelpCircle, Settings as SettingsIcon, PanelLeftIcon, Upload, ListOrdered } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useI18n } from "@/lib/i18n"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -29,6 +29,12 @@ export function AppSidebar() {
       href: "/printers",
       icon: MapPin,
       showAlways: false,
+    },
+    {
+      name: "Queue",
+      href: "/queue",
+      icon: ListOrdered,
+      showAlways: true,
     },
     {
       name: "Jobs",
@@ -94,7 +100,7 @@ export function AppSidebar() {
           </div>
           {!collapsed && (
             <div className="flex flex-col">
-              <span className="text-base font-semibold whitespace-nowrap overflow-hidden bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
+              <span className="text-base font-semibold whitespace-nowrap overflow-hidden bg-gradient-to-r from-[var(--theme-gradient-start)] to-[var(--theme-gradient-end)] bg-clip-text text-transparent">
                 Print@SoC
               </span>
             </div>
@@ -128,14 +134,10 @@ export function AppSidebar() {
                 "group relative flex items-center rounded-xl py-3 text-sm font-medium fluent-transition overflow-hidden",
                 collapsed ? "justify-center px-3" : "gap-3 px-4",
                 isActive
-                  ? "bg-gradient-to-r from-primary/15 to-primary/10 text-primary border border-primary/20 fluent-shadow-sm"
+                  ? "bg-gradient-to-r from-[var(--theme-gradient-start)]/15 to-[var(--theme-gradient-end)]/10 text-[var(--theme-gradient-start)] border border-[var(--theme-gradient-start)]/20 fluent-shadow-sm"
                   : "text-sidebar-foreground hover:bg-sidebar-accent/70 border border-transparent hover:border-sidebar-border/30",
               )}
             >
-              {/* Active indicator */}
-              {isActive && (
-                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-primary rounded-r-full" />
-              )}
               <item.icon className={cn(
                 "h-6 w-6 flex-shrink-0 transition-transform duration-167",
                 isActive && "scale-110"
@@ -144,7 +146,7 @@ export function AppSidebar() {
                 <span className="font-medium">{item.name}</span>
               )}
               {/* Hover effect */}
-              <div className="absolute inset-0 bg-gradient-to-r from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-167 pointer-events-none" />
+              <div className="absolute inset-0 bg-gradient-to-r from-[var(--theme-gradient-start)]/5 to-[var(--theme-gradient-end)]/5 opacity-0 group-hover:opacity-100 transition-opacity duration-167 pointer-events-none" />
             </Link>
           )
         })}

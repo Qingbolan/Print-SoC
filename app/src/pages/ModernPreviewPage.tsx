@@ -27,7 +27,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import type { PrintSettings, BookletLayout, Printer } from '@/types/printer'
+import type { PrintSettings, BookletLayout, Printer, PageRange } from '@/types/printer'
 import 'react-pdf/dist/Page/AnnotationLayer.css'
 import 'react-pdf/dist/Page/TextLayer.css'
 
@@ -69,6 +69,19 @@ export default function ModernPreviewPage() {
     booklet: false,
     paper_size: 'A4',
   })
+
+  // Helpers for Page Range editing UI
+  const [rangeStart, setRangeStart] = useState<number>(1)
+  const [rangeEnd, setRangeEnd] = useState<number>(1)
+  const [selectionText, setSelectionText] = useState<string>('')
+
+  // keep page range editors in sync with PDF page count
+  useEffect(() => {
+    if (numPages && settings.page_range.type === 'Range') {
+      setRangeStart((s) => Math.max(1, Math.min(s, numPages)))
+      setRangeEnd((e) => Math.max(1, Math.min(Math.max(e, rangeStart), numPages)))
+    }
+  }, [numPages])
 
   const [selectedPrinter, setSelectedPrinter] = useState('')
 
@@ -266,13 +279,12 @@ export default function ModernPreviewPage() {
           ← Back
         </Button>
 
-        <div className="flex items-center gap-6 text-sm text-gray-700">
+        <div className="flex items-center gap-6 text-sm text-foreground">
           {pdfInfo && (
             <>
               <span>{pdfInfo.num_pages} pages</span>
-              <span>${estimate.cost.toFixed(2)}</span>
               {estimate.paperSaved > 0 && (
-                <span className="text-green-700">{estimate.paperSaved} sheets saved</span>
+                <span className="text-green-600 dark:text-green-400">{estimate.paperSaved} sheets saved</span>
               )}
             </>
           )}
@@ -288,7 +300,7 @@ export default function ModernPreviewPage() {
               {loadingPdf ? (
                 <div className="flex items-center justify-center p-16">
                   <div className="text-center">
-                    <Loader2 className="w-8 h-8 animate-spin text-gray-400 mx-auto mb-4" />
+                    <Loader2 className="w-8 h-8 animate-spin text-muted-foreground mx-auto mb-4" />
                     <p className="text-sm text-muted-foreground">Loading PDF file...</p>
                   </div>
                 </div>
@@ -299,11 +311,11 @@ export default function ModernPreviewPage() {
                   onLoadError={handlePDFLoadError}
                   loading={
                     <div className="flex items-center justify-center p-16">
-                      <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
+                      <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
                     </div>
                   }
                   error={
-                    <div className="text-center p-16 text-red-600">
+                    <div className="text-center p-16 text-destructive">
                       <AlertCircle className="w-12 h-12 mx-auto mb-4" />
                       <p className="mb-2 font-semibold">Failed to load PDF</p>
                       <p className="text-sm">See error details in the dialog</p>
@@ -317,7 +329,7 @@ export default function ModernPreviewPage() {
                     renderAnnotationLayer={true}
                     loading={
                       <div className="flex items-center justify-center p-16">
-                        <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+                        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
                       </div>
                     }
                   />
@@ -343,7 +355,7 @@ export default function ModernPreviewPage() {
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </Button>
-                <span className="text-sm text-gray-700">
+                <span className="text-sm text-foreground">
                   Page {pageNumber} of {numPages}
                 </span>
                 <Button
@@ -374,13 +386,13 @@ export default function ModernPreviewPage() {
 
             {/* Print options */}
             <div>
-              <h3 className="text-base font-semibold text-gray-900 mb-4">Print Options</h3>
+              <h3 className="text-base font-semibold text-foreground mb-4">Print Options</h3>
 
               {/* Copies */}
               <div className="mb-6">
                 <div className="flex justify-between items-center mb-2">
-                  <label className="text-sm text-gray-700">Copies</label>
-                  <span className="text-sm font-medium text-gray-900">{settings.copies}</span>
+                  <label className="text-sm text-muted-foreground">Copies</label>
+                  <span className="text-sm font-medium text-foreground">{settings.copies}</span>
                 </div>
                 <Slider
                   value={[settings.copies]}
@@ -393,10 +405,10 @@ export default function ModernPreviewPage() {
               </div>
 
               {/* Double-sided */}
-              <div className="flex justify-between items-center py-3 border-t border-gray-200">
+              <div className="flex justify-between items-center py-3 border-t border-border">
                 <div>
-                  <div className="text-sm font-medium text-gray-900">Double-Sided</div>
-                  <div className="text-xs text-gray-600">Save 50% paper</div>
+                  <div className="text-sm font-medium text-foreground">Double-Sided</div>
+                  <div className="text-xs text-muted-foreground">Save 50% paper</div>
                 </div>
                 <Switch
                   checked={settings.duplex !== 'Simplex'}
@@ -406,11 +418,52 @@ export default function ModernPreviewPage() {
                 />
               </div>
 
-              {/* Booklet */}
-              <div className="flex justify-between items-center py-3 border-t border-gray-200">
+              {/* Paper size */}
+              <div className="flex justify-between items-center py-3 border-t border-border">
                 <div>
-                  <div className="text-sm font-medium text-gray-900">Booklet Mode</div>
-                  <div className="text-xs text-gray-600">Fold-ready layout</div>
+                  <div className="text-sm font-medium text-foreground">Paper Size</div>
+                  <div className="text-xs text-muted-foreground">
+                    {selectedPrinter
+                      ? printers.find((p) => p.queue_name === selectedPrinter)?.supported_paper_sizes.join(', ') || 'A4'
+                      : 'A4, A3'}
+                  </div>
+                </div>
+                <select
+                  className="px-2 py-1 text-sm border border-border rounded bg-background text-foreground"
+                  value={settings.paper_size}
+                  onChange={(e) => setSettings({ ...settings, paper_size: e.target.value as PrintSettings['paper_size'] })}
+                >
+                  {(selectedPrinter
+                    ? (printers.find((p) => p.queue_name === selectedPrinter)?.supported_paper_sizes || ['A4'])
+                    : (['A4', 'A3'] as const)
+                  ).map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Orientation */}
+              <div className="flex justify-between items-center py-3 border-t border-border">
+                <div>
+                  <div className="text-sm font-medium text-foreground">Orientation</div>
+                  <div className="text-xs text-muted-foreground">Portrait or Landscape</div>
+                </div>
+                <select
+                  className="px-2 py-1 text-sm border border-border rounded bg-background text-foreground"
+                  value={settings.orientation}
+                  onChange={(e) => setSettings({ ...settings, orientation: e.target.value as PrintSettings['orientation'] })}
+                >
+                  {(['Portrait','Landscape'] as const).map((o) => (
+                    <option key={o} value={o}>{o}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Booklet */}
+              <div className="flex justify-between items-center py-3 border-t border-border">
+                <div>
+                  <div className="text-sm font-medium text-foreground">Booklet Mode</div>
+                  <div className="text-xs text-muted-foreground">Fold-ready layout</div>
                 </div>
                 <Switch
                   checked={settings.booklet}
@@ -419,15 +472,15 @@ export default function ModernPreviewPage() {
               </div>
 
               {/* Pages per sheet */}
-              <div className="flex justify-between items-center py-3 border-t border-gray-200">
+              <div className="flex justify-between items-center py-3 border-t border-border">
                 <div>
-                  <div className="text-sm font-medium text-gray-900">Pages per Sheet</div>
-                  <div className="text-xs text-gray-600">
+                  <div className="text-sm font-medium text-foreground">Pages per Sheet</div>
+                  <div className="text-xs text-muted-foreground">
                     {settings.pages_per_sheet === 1 ? 'Standard' : `${settings.pages_per_sheet}-up`}
                   </div>
                 </div>
                 <select
-                  className="px-2 py-1 text-sm border border-gray-300 rounded bg-white"
+                  className="px-2 py-1 text-sm border border-border rounded bg-background text-foreground"
                   value={settings.pages_per_sheet}
                   onChange={(e) =>
                     setSettings({ ...settings, pages_per_sheet: parseInt(e.target.value) })
@@ -440,24 +493,98 @@ export default function ModernPreviewPage() {
                   ))}
                 </select>
               </div>
+
+              {/* Page range */}
+              <div className="py-3 border-t border-border space-y-2">
+                <div className="text-sm font-medium text-foreground">Page Range</div>
+                <select
+                  className="w-full px-2 py-1 text-sm border border-border rounded bg-background text-foreground"
+                  value={settings.page_range.type}
+                  onChange={(e) => {
+                    const t = e.target.value as PageRange['type']
+                    if (t === 'All') setSettings({ ...settings, page_range: { type: 'All' } })
+                    else if (t === 'Range') setSettings({ ...settings, page_range: { type: 'Range', start: 1, end: Math.max(1, numPages || 1) } })
+                    else setSettings({ ...settings, page_range: { type: 'Selection', pages: [] } })
+                  }}
+                >
+                  <option value="All">All</option>
+                  <option value="Range">Range</option>
+                  <option value="Selection">Selection</option>
+                </select>
+
+                {settings.page_range.type === 'Range' && (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min={1}
+                      max={numPages || 9999}
+                      value={rangeStart}
+                      onChange={(e) => setRangeStart(Math.max(1, Math.min(Number(e.target.value || 1), numPages || 9999)))}
+                      onBlur={() => {
+                        const start = rangeStart
+                        const end = Math.max(start, rangeEnd)
+                        setRangeEnd(end)
+                        setSettings({ ...settings, page_range: { type: 'Range', start, end } })
+                      }}
+                      className="w-20 px-2 py-1 text-sm border border-border rounded bg-background text-foreground"
+                    />
+                    <span className="text-muted-foreground text-sm">to</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={numPages || 9999}
+                      value={rangeEnd}
+                      onChange={(e) => setRangeEnd(Math.max(1, Math.min(Number(e.target.value || 1), numPages || 9999)))}
+                      onBlur={() => {
+                        const start = Math.min(rangeStart, rangeEnd)
+                        const end = Math.max(rangeStart, rangeEnd)
+                        setRangeStart(start)
+                        setRangeEnd(end)
+                        setSettings({ ...settings, page_range: { type: 'Range', start, end } })
+                      }}
+                      className="w-20 px-2 py-1 text-sm border border-border rounded bg-background text-foreground"
+                    />
+                  </div>
+                )}
+
+                {settings.page_range.type === 'Selection' && (
+                  <div className="space-y-1">
+                    <input
+                      type="text"
+                      placeholder="e.g. 1,3,5"
+                      value={selectionText}
+                      onChange={(e) => setSelectionText(e.target.value)}
+                      onBlur={() => {
+                        const pages = selectionText
+                          .split(',')
+                          .map((s) => Number(s.trim()))
+                          .filter((n) => Number.isFinite(n) && n >= 1 && (!numPages || n <= numPages))
+                        setSettings({ ...settings, page_range: { type: 'Selection', pages } })
+                      }}
+                      className="w-full px-2 py-1 text-sm border border-border rounded bg-background text-foreground"
+                    />
+                    <div className="text-xs text-muted-foreground">Comma-separated page numbers</div>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Printer selection */}
             <div>
-              <h3 className="text-base font-semibold text-gray-900 mb-4">Printer</h3>
+              <h3 className="text-base font-semibold text-foreground mb-4">Printer</h3>
 
               {recommendedPrinter && (
-                <div className="mb-4 p-3 bg-gray-50 border border-gray-200">
-                  <div className="text-xs text-gray-600 mb-1">Recommended</div>
-                  <div className="text-sm font-medium text-gray-900">{recommendedPrinter.name}</div>
-                  <div className="text-xs text-gray-600">
+                <div className="mb-4 p-3 bg-muted/50 border border-border rounded-lg">
+                  <div className="text-xs text-muted-foreground mb-1">Recommended</div>
+                  <div className="text-sm font-medium text-foreground">{recommendedPrinter.name}</div>
+                  <div className="text-xs text-muted-foreground">
                     {recommendedPrinter.location.building} - {recommendedPrinter.location.room}
                   </div>
                 </div>
               )}
 
               <select
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded bg-white"
+                className="w-full px-3 py-2 text-sm border border-border rounded bg-background text-foreground"
                 value={selectedPrinter}
                 onChange={(e) => setSelectedPrinter(e.target.value)}
               >

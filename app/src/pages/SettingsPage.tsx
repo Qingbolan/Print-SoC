@@ -1,28 +1,68 @@
-import { Settings, Terminal } from "lucide-react"
+import { Settings, Terminal, Wifi } from "lucide-react"
 import { PageHeader } from "@/components/PageHeader"
 import { usePrinterStore } from "@/store/printer-store"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow'
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { safeOpenDevTools } from '@/lib/tauri-utils'
+import { useSSHConnection } from '@/hooks/useSSHConnection'
 import { toast } from 'sonner'
+import { useState } from 'react'
+import type { SSHConfig } from '@/types/printer'
 
 export default function SettingsPage() {
-  const { sshConfig, isConnected } = usePrinterStore()
+  const { sshConfig, setSshConfig, connectionStatus } = usePrinterStore()
+  const { connectWithRetry, disconnect, isConnecting } = useSSHConnection()
+
+  const [formData, setFormData] = useState<SSHConfig>(
+    sshConfig || {
+      host: 'sunfire.comp.nus.edu.sg',
+      port: 22,
+      username: '',
+      auth_type: { type: 'Password', password: '' },
+    }
+  )
 
   const handleOpenDevTools = async () => {
-    try {
-      const window = getCurrentWebviewWindow()
-      // @ts-ignore - openDevtools exists but may not be in types
-      if (window.openDevtools) {
-        // @ts-ignore
-        await window.openDevtools()
-        toast.success('Developer Tools opened')
-      } else {
-        toast.error('Developer Tools not available')
-      }
-    } catch (error) {
-      console.error('Failed to open DevTools:', error)
-      toast.error('Failed to open Developer Tools: ' + String(error))
+    const success = await safeOpenDevTools()
+    if (success) {
+      toast.success('Developer Tools opened')
+    } else {
+      toast.info('Developer Tools not available. Use browser DevTools (F12) instead.')
+    }
+  }
+
+  const handleTestConnection = async () => {
+    if (!formData.username || (formData.auth_type.type === 'Password' && !formData.auth_type.password)) {
+      toast.error('Please fill in all fields')
+      return
+    }
+
+    const result = await connectWithRetry(formData)
+    if (result.success) {
+      setSshConfig(formData)
+      toast.success('Connection successful!')
+    } else {
+      toast.error(result.error || 'Connection failed')
+    }
+  }
+
+  const handleDisconnect = () => {
+    disconnect()
+    toast.info('Disconnected')
+  }
+
+  const handleInputChange = (field: string, value: string | number) => {
+    if (field === 'username' || field === 'host') {
+      setFormData({ ...formData, [field]: value })
+    } else if (field === 'port') {
+      setFormData({ ...formData, port: Number(value) })
+    } else if (field === 'password' && formData.auth_type.type === 'Password') {
+      setFormData({
+        ...formData,
+        auth_type: { type: 'Password', password: value as string },
+      })
     }
   }
 
@@ -39,28 +79,93 @@ export default function SettingsPage() {
 
           {/* Connection Settings */}
           <section>
-            <h2 className="text-xl font-semibold mb-4">Connection</h2>
+            <h2 className="text-xl font-semibold mb-4">SSH Connection</h2>
             <div className="space-y-4">
+              {/* Current Status */}
               <div className="p-4 border border-border rounded-lg bg-muted/30">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium">Status</span>
-                  {isConnected ? (
-                    <Badge variant="secondary" className="bg-success/10 text-success border-success/30">
-                      Connected
-                    </Badge>
-                  ) : (
-                    <Badge variant="secondary" className="bg-destructive/10 text-destructive border-destructive/30">
-                      Disconnected
-                    </Badge>
-                  )}
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">Current Status</span>
+                  <div className="flex items-center gap-2">
+                    {connectionStatus.type === 'connected' && (
+                      <Button
+                        onClick={handleDisconnect}
+                        variant="outline"
+                        size="sm"
+                      >
+                        Disconnect
+                      </Button>
+                    )}
+                  </div>
                 </div>
-                {sshConfig && (
-                  <div className="text-sm text-muted-foreground">
-                    <div>Host: {sshConfig.host}</div>
-                    <div>Port: {sshConfig.port}</div>
-                    <div>Username: {sshConfig.username}</div>
+                {connectionStatus.type === 'connecting' && (
+                  <div className="mt-2 text-xs text-muted-foreground">
+                    Retry {connectionStatus.attempt}/{connectionStatus.maxAttempts} •
+                    Elapsed: {connectionStatus.elapsedSeconds}s
                   </div>
                 )}
+              </div>
+
+              {/* SSH Configuration Form */}
+              <div className="p-4 border border-border rounded-lg bg-muted/30 space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="host">Host</Label>
+                  <Input
+                    id="host"
+                    type="text"
+                    value={formData.host}
+                    onChange={(e) => handleInputChange('host', e.target.value)}
+                    placeholder="sunfire.comp.nus.edu.sg"
+                    disabled={isConnecting || connectionStatus.type === 'connected'}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="port">Port</Label>
+                  <Input
+                    id="port"
+                    type="number"
+                    value={formData.port}
+                    onChange={(e) => handleInputChange('port', e.target.value)}
+                    placeholder="22"
+                    disabled={isConnecting || connectionStatus.type === 'connected'}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="username">Username</Label>
+                  <Input
+                    id="username"
+                    type="text"
+                    value={formData.username}
+                    onChange={(e) => handleInputChange('username', e.target.value)}
+                    placeholder="Your NUS username"
+                    disabled={isConnecting || connectionStatus.type === 'connected'}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="password">Password</Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    value={formData.auth_type.type === 'Password' ? formData.auth_type.password : ''}
+                    onChange={(e) => handleInputChange('password', e.target.value)}
+                    placeholder="Your NUS password"
+                    disabled={isConnecting || connectionStatus.type === 'connected'}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Your password is only stored locally and never sent anywhere except to the SSH server
+                  </p>
+                </div>
+
+                <Button
+                  onClick={handleTestConnection}
+                  disabled={isConnecting || connectionStatus.type === 'connected'}
+                  className="w-full"
+                >
+                  <Wifi className="w-4 h-4 mr-2" />
+                  {isConnecting ? 'Connecting...' : connectionStatus.type === 'connected' ? 'Connected' : 'Test Connection'}
+                </Button>
               </div>
             </div>
           </section>
