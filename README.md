@@ -1,6 +1,6 @@
 # Print@SoC
 
-> **Formerly known as NUS Llama Printer**, this project began as an experimental solution to simplify printing for NUS School of Computing students. It has evolved into **Print@SoC**, a secure, zero-configuration web-based printing tool designed for NUS students and staff.
+> This project began as an experimental solution to simplify printing for NUS School of Computing students. It has evolved into **Print@SoC**, a secure, zero-configuration web-based printing tool designed for NUS students and staff.
 
 **Smart, Secure, and Simple Printing for NUS School of Computing.**
 
