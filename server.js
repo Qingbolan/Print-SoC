@@ -34,7 +34,12 @@ app.use(session({
   })(),
   resave: false,
   saveUninitialized: false,
-  cookie: { maxAge: 3600000 } // 1 hour
+  cookie: { 
+    maxAge: 3600000, // 1 hour
+    secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
+    httpOnly: true, // Prevent XSS attacks
+    sameSite: 'strict' // Prevent CSRF attacks
+  }
 }));
 app.use(express.static('public'));
 
@@ -84,6 +89,15 @@ function generateBookletLayout(totalPages) {
 // Process PDF for booklet printing
 async function processPDFForBooklet(inputPath, outputPath) {
   try {
+    // Validate paths are in the uploads directory
+    const uploadsDir = path.resolve('uploads');
+    const resolvedInput = path.resolve(inputPath);
+    const resolvedOutput = path.resolve(outputPath);
+    
+    if (!resolvedInput.startsWith(uploadsDir) || !resolvedOutput.startsWith(uploadsDir)) {
+      throw new Error('Invalid file path');
+    }
+    
     const existingPdfBytes = fs.readFileSync(inputPath);
     const pdfDoc = await PDFDocument.load(existingPdfBytes);
     const totalPages = pdfDoc.getPageCount();
@@ -234,6 +248,8 @@ function submitPrintJob(host, username, password, filePath, printerOptions) {
 }
 
 // Routes
+// NOTE: For production deployment, add rate limiting middleware (e.g., express-rate-limit)
+// to prevent abuse of file uploads and API endpoints
 
 // Serve main page
 app.get('/', (req, res) => {
@@ -245,6 +261,16 @@ app.post('/api/booklet-layout', upload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
+    }
+    
+    // Validate file path is in uploads directory
+    const uploadsDir = path.resolve('uploads');
+    const resolvedFilePath = path.resolve(req.file.path);
+    if (!resolvedFilePath.startsWith(uploadsDir)) {
+      if (fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
+      return res.status(400).json({ error: 'Invalid file path' });
     }
     
     const pdfBytes = fs.readFileSync(req.file.path);
@@ -267,6 +293,16 @@ app.post('/api/submit-job', upload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
+    }
+    
+    // Validate file path is in uploads directory
+    const uploadsDir = path.resolve('uploads');
+    const resolvedFilePath = path.resolve(req.file.path);
+    if (!resolvedFilePath.startsWith(uploadsDir)) {
+      if (fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
+      return res.status(400).json({ error: 'Invalid file path' });
     }
     
     const { server, username, password, enableBooklet, duplex, copies } = req.body;
