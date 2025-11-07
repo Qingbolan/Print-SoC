@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { usePrinterStore } from '@/store/printer-store'
 import { PRINTERS } from '@/data/printers'
@@ -22,6 +22,10 @@ import {
   FileText,
   Upload,
   Printer,
+  ZoomIn,
+  ZoomOut,
+  Maximize2,
+  Move,
 } from 'lucide-react'
 import {
   AlertDialog,
@@ -70,6 +74,17 @@ export default function ModernPreviewPage() {
   const [pageNumber, setPageNumber] = useState(1)
   const [submitting, setSubmitting] = useState(false)
   const [recommendedPrinter, setRecommendedPrinter] = useState<PrinterType | null>(null)
+  const [pageWidth, setPageWidth] = useState<number | undefined>(undefined)
+  const [pageHeight, setPageHeight] = useState<number | undefined>(undefined)
+
+  // Zoom and pan controls
+  const [zoomLevel, setZoomLevel] = useState(1.0)
+  const [panPosition, setPanPosition] = useState({ x: 0, y: 0 })
+  const [isPanning, setIsPanning] = useState(false)
+  const [panStart, setPanStart] = useState({ x: 0, y: 0 })
+
+  // Ref for PDF container to calculate optimal size
+  const pdfContainerRef = useRef<HTMLDivElement>(null)
 
   const [errorDialog, setErrorDialog] = useState<{
     open: boolean
@@ -111,12 +126,119 @@ export default function ModernPreviewPage() {
     [fileQueue, selectedFileId]
   )
 
+  // Calculate which pages will be printed based on page_range
+  const pagesToPrint = useMemo(() => {
+    if (!selectedFile?.pdfInfo) return new Set<number>()
+
+    const totalPages = selectedFile.pdfInfo.num_pages
+    const pages = new Set<number>()
+
+    switch (settings.page_range.type) {
+      case 'All':
+        for (let i = 1; i <= totalPages; i++) {
+          pages.add(i)
+        }
+        break
+      case 'Range':
+        const start = Math.max(1, settings.page_range.start || 1)
+        const end = Math.min(totalPages, settings.page_range.end || totalPages)
+        for (let i = start; i <= end; i++) {
+          pages.add(i)
+        }
+        break
+      case 'Selection':
+        (settings.page_range.pages || []).forEach(p => {
+          if (p >= 1 && p <= totalPages) {
+            pages.add(p)
+          }
+        })
+        break
+    }
+
+    return pages
+  }, [selectedFile, settings.page_range])
+
+  // Calculate effective page count after n-up
+  const effectivePageCount = useMemo(() => {
+    const pagesCount = pagesToPrint.size
+    if (settings.pages_per_sheet > 1) {
+      return Math.ceil(pagesCount / settings.pages_per_sheet)
+    }
+    return pagesCount
+  }, [pagesToPrint, settings.pages_per_sheet])
+
   // Initialize with file from location state
   useEffect(() => {
     if (initialFilePath) {
       addFileToQueue(initialFilePath, initialPdfInfo)
     }
     setPrinters(PRINTERS)
+  }, [])
+
+  // Reset page number when switching files
+  useEffect(() => {
+    if (selectedFileId) {
+      setPageNumber(1)
+    }
+  }, [selectedFileId])
+
+  // Auto-navigate to first printable page if current page is not in range
+  useEffect(() => {
+    if (pagesToPrint.size > 0 && !pagesToPrint.has(pageNumber)) {
+      const firstPage = Math.min(...Array.from(pagesToPrint))
+      setPageNumber(firstPage)
+    }
+  }, [pagesToPrint, pageNumber])
+
+  // Reset page dimensions when file changes
+  useEffect(() => {
+    setPageWidth(undefined)
+    setPageHeight(undefined)
+  }, [selectedFile, pageNumber])
+
+  // Reset zoom and pan when file or page changes
+  useEffect(() => {
+    setZoomLevel(1.0)
+    setPanPosition({ x: 0, y: 0 })
+  }, [selectedFile, pageNumber])
+
+  // Zoom control functions
+  const handleZoomIn = useCallback(() => {
+    setZoomLevel(prev => Math.min(prev + 0.25, 3.0))
+  }, [])
+
+  const handleZoomOut = useCallback(() => {
+    setZoomLevel(prev => Math.max(prev - 0.25, 0.5))
+  }, [])
+
+  const handleResetView = useCallback(() => {
+    setZoomLevel(1.0)
+    setPanPosition({ x: 0, y: 0 })
+  }, [])
+
+  // Pan control functions
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (zoomLevel > 1.0) {
+      setIsPanning(true)
+      setPanStart({ x: e.clientX - panPosition.x, y: e.clientY - panPosition.y })
+    }
+  }, [zoomLevel, panPosition])
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (isPanning) {
+      setPanPosition({
+        x: e.clientX - panStart.x,
+        y: e.clientY - panStart.y,
+      })
+    }
+  }, [isPanning, panStart])
+
+  const handleMouseUp = useCallback(() => {
+    setIsPanning(false)
+  }, [])
+
+  const handleMouseLeave = useCallback(() => {
+    setIsPanning(false)
   }, [])
 
   // Add file to queue
@@ -256,6 +378,22 @@ export default function ModernPreviewPage() {
       message: 'The PDF file could not be loaded in the preview.',
       technicalDetails: error.stack,
     })
+  }, [])
+
+  const handlePageLoadSuccess = useCallback((page: any) => {
+    if (!pdfContainerRef.current) return
+
+    const viewport = page.getViewport({ scale: 1 })
+    const containerWidth = pdfContainerRef.current.clientWidth
+    const containerHeight = pdfContainerRef.current.clientHeight
+
+    // Calculate scale to fit both width and height
+    const scaleWidth = (containerWidth * 0.95) / viewport.width
+    const scaleHeight = (containerHeight * 0.95) / viewport.height
+    const scale = Math.min(scaleWidth, scaleHeight, 2.0) // Cap at 2x
+
+    setPageWidth(viewport.width * scale)
+    setPageHeight(viewport.height * scale)
   }, [])
 
   const estimate = useMemo(() => {
@@ -409,87 +547,113 @@ export default function ModernPreviewPage() {
 
   return (
     <div className="h-full flex flex-col">
+      {/* File queue - horizontal at top (only show if multiple files) */}
+      {fileQueue.length > 1 && (
+        <div className="border-b border-border/50 bg-muted/30">
+          <div className="flex items-center gap-2 px-4 py-2 overflow-x-auto">
+            <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">
+              {fileQueue.length} files:
+            </span>
+            {fileQueue.map((file) => (
+              <div
+                key={file.id}
+                onClick={() => setSelectedFileId(file.id)}
+                className={cn(
+                  'group relative flex items-center gap-2 px-3 py-1.5 rounded-md border cursor-pointer transition-all whitespace-nowrap',
+                  selectedFileId === file.id
+                    ? 'bg-primary/10 border-primary'
+                    : 'border-border hover:bg-accent'
+                )}
+              >
+                <FileText className="w-3 h-3 flex-shrink-0 text-muted-foreground" />
+                <span className="text-xs font-medium text-foreground">
+                  {file.name}
+                </span>
+                {file.pdfInfo && (
+                  <span className="text-xs text-muted-foreground">
+                    ({file.pdfInfo.num_pages}p)
+                  </span>
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    removeFile(file.id)
+                  }}
+                  className="opacity-0 group-hover:opacity-100 h-4 w-4 p-0 ml-1"
+                >
+                  <X className="w-2.5 h-2.5" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Main content - 3 column layout */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Left sidebar - File Queue */}
-        <div className="w-72 border-r border-border/50 flex flex-col">
-          {/* Upload area */}
-          <div className="p-4 border-b border-border/50">
-            <div
-              onDrop={handleDrop}
-              onDragOver={(e) => { e.preventDefault(); setIsDragging(true) }}
-              onDragLeave={() => setIsDragging(false)}
-              className={cn(
-                'border-2 border-dashed rounded-lg p-6 text-center transition-colors cursor-pointer',
-                isDragging
-                  ? 'border-primary bg-primary/10'
-                  : 'border-border hover:border-primary/50'
-              )}
-              onClick={handleFileSelect}
-            >
-              <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
-              <p className="text-sm font-medium text-foreground">Add Files</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Click or drop PDF files
-              </p>
-            </div>
+        {/* Left sidebar - Page Thumbnails */}
+        <div className="w-48 border-r border-border/50 flex flex-col bg-muted/20">
+          <div className="p-3 border-b border-border/50">
+            <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider">
+              Preview
+            </h3>
+            <p className="text-xs text-muted-foreground mt-1">
+              {pagesToPrint.size} {pagesToPrint.size === 1 ? 'page' : 'pages'}
+            </p>
           </div>
 
-          {/* File list */}
-          <div className="flex-1 overflow-y-auto p-2">
-            <div className="space-y-1">
-              {fileQueue.map((file) => (
-                <div
-                  key={file.id}
-                  onClick={() => setSelectedFileId(file.id)}
-                  className={cn(
-                    'group relative p-3 rounded-lg border cursor-pointer transition-all',
-                    selectedFileId === file.id
-                      ? 'bg-primary/10 border-primary'
-                      : 'border-border hover:bg-accent'
-                  )}
-                >
-                  <div className="flex items-start gap-2">
-                    <FileText className="w-4 h-4 mt-0.5 flex-shrink-0 text-muted-foreground" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate">
-                        {file.name}
-                      </p>
-                      {file.loading && (
-                        <p className="text-xs text-muted-foreground">Loading...</p>
-                      )}
-                      {file.error && (
-                        <p className="text-xs text-red-500">{file.error}</p>
-                      )}
-                      {file.pdfInfo && !file.loading && (
-                        <p className="text-xs text-muted-foreground">
-                          {file.pdfInfo.num_pages} pages
-                        </p>
+          {selectedFile && selectedFile.pdfInfo && (
+            <div className="flex-1 overflow-y-auto p-2">
+              <div className="space-y-2">
+                {Array.from(pagesToPrint).sort((a, b) => a - b).map((pageNum) => (
+                  <div
+                    key={pageNum}
+                    onClick={() => setPageNumber(pageNum)}
+                    className={cn(
+                      'group relative cursor-pointer rounded border transition-all',
+                      pageNumber === pageNum
+                        ? 'border-primary ring-2 ring-primary/20'
+                        : 'border-border hover:border-primary/50'
+                    )}
+                  >
+                    <div className="bg-white rounded overflow-hidden flex items-center justify-center">
+                      {selectedFile.pdfUrl && (
+                        <Document
+                          file={selectedFile.pdfUrl}
+                          loading={<div className="w-full h-full flex items-center justify-center bg-muted"><Loader2 className="w-4 h-4 animate-spin" /></div>}
+                        >
+                          <Page
+                            pageNumber={pageNum}
+                            width={160}
+                            renderTextLayer={false}
+                            renderAnnotationLayer={false}
+                          />
+                        </Document>
                       )}
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        removeFile(file.id)
-                      }}
-                      className="opacity-0 group-hover:opacity-100 h-6 w-6 p-0"
-                    >
-                      <X className="w-3 h-3" />
-                    </Button>
+                    <div className={cn(
+                      'absolute bottom-1 right-1 px-1.5 py-0.5 rounded text-xs font-medium',
+                      pageNumber === pageNum
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-black/60 text-white'
+                    )}>
+                      {pageNum}
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* Queue summary */}
-          <div className="p-4 border-t border-border/50">
-            <div className="text-sm text-muted-foreground">
-              {fileQueue.length} {fileQueue.length === 1 ? 'file' : 'files'} in queue
+          {!selectedFile && (
+            <div className="flex-1 flex items-center justify-center p-4 text-center">
+              <p className="text-xs text-muted-foreground">
+                Select a file to view pages
+              </p>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Center - PDF Preview */}
@@ -497,75 +661,158 @@ export default function ModernPreviewPage() {
           {selectedFile ? (
             <>
               {/* Page navigation at top */}
-              <div className="flex items-center justify-between px-6 py-3 border-b border-border/50 bg-card/50">
-                <div className="flex items-center gap-4">
-                  <Button
-                    onClick={() => setPageNumber((p) => Math.max(1, p - 1))}
-                    disabled={pageNumber <= 1}
-                    variant="outline"
-                    size="sm"
-                  >
-                    <ChevronLeft className="w-4 h-4 mr-1" />
-                    Previous
-                  </Button>
-                  <span className="text-sm font-medium">
-                    Page {pageNumber} of {numPages}
-                  </span>
-                  <Button
-                    onClick={() => setPageNumber((p) => Math.min(numPages, p + 1))}
-                    disabled={pageNumber >= numPages}
-                    variant="outline"
-                    size="sm"
-                  >
-                    Next
-                    <ChevronRight className="w-4 h-4 ml-1" />
-                  </Button>
-                </div>
+              <div className="px-6 py-3 border-b border-border/50 bg-card/50">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <Button
+                      onClick={() => {
+                        const pagesArray = Array.from(pagesToPrint).sort((a, b) => a - b)
+                        const currentIndex = pagesArray.indexOf(pageNumber)
+                        if (currentIndex > 0) {
+                          setPageNumber(pagesArray[currentIndex - 1])
+                        }
+                      }}
+                      disabled={!pagesToPrint.has(pageNumber) || Array.from(pagesToPrint).sort((a, b) => a - b).indexOf(pageNumber) === 0}
+                      variant="outline"
+                      size="sm"
+                    >
+                      <ChevronLeft className="w-4 h-4 mr-1" />
+                      Previous
+                    </Button>
+                    <span className="text-sm font-medium">
+                      Page {pageNumber} of {selectedFile.pdfInfo?.num_pages || numPages}
+                    </span>
+                    <Button
+                      onClick={() => {
+                        const pagesArray = Array.from(pagesToPrint).sort((a, b) => a - b)
+                        const currentIndex = pagesArray.indexOf(pageNumber)
+                        if (currentIndex < pagesArray.length - 1) {
+                          setPageNumber(pagesArray[currentIndex + 1])
+                        }
+                      }}
+                      disabled={!pagesToPrint.has(pageNumber) || Array.from(pagesToPrint).sort((a, b) => a - b).indexOf(pageNumber) === Array.from(pagesToPrint).length - 1}
+                      variant="outline"
+                      size="sm"
+                    >
+                      Next
+                      <ChevronRight className="w-4 h-4 ml-1" />
+                    </Button>
+                  </div>
 
-                <div className="text-sm text-muted-foreground">
-                  {selectedFile.name}
+                  <div className="flex items-center gap-4">
+                    {/* Zoom controls */}
+                    <div className="flex items-center gap-2 border-r border-border pr-4">
+                      <Button
+                        onClick={handleZoomOut}
+                        disabled={zoomLevel <= 0.5}
+                        variant="outline"
+                        size="sm"
+                        title="缩小"
+                      >
+                        <ZoomOut className="w-4 h-4" />
+                      </Button>
+                      <span className="text-xs font-medium w-12 text-center">
+                        {Math.round(zoomLevel * 100)}%
+                      </span>
+                      <Button
+                        onClick={handleZoomIn}
+                        disabled={zoomLevel >= 3.0}
+                        variant="outline"
+                        size="sm"
+                        title="放大"
+                      >
+                        <ZoomIn className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        onClick={handleResetView}
+                        variant="outline"
+                        size="sm"
+                        title="归位"
+                      >
+                        <Maximize2 className="w-4 h-4" />
+                      </Button>
+                      {zoomLevel > 1.0 && (
+                        <span className="text-xs text-muted-foreground flex items-center gap-1">
+                          <Move className="w-3 h-3" />
+                          拖动移动
+                        </span>
+                      )}
+                    </div>
+
+                    {(settings.pages_per_sheet > 1 || settings.booklet) && (
+                      <div className="text-xs text-muted-foreground">
+                        {settings.booklet && <span>📖 Booklet mode</span>}
+                        {settings.pages_per_sheet > 1 && <span>📄 {settings.pages_per_sheet}-up → {effectivePageCount} sheets</span>}
+                      </div>
+                    )}
+                    <div className="text-sm text-muted-foreground">
+                      {selectedFile.name}
+                    </div>
+                  </div>
                 </div>
               </div>
 
               {/* PDF viewer */}
-              <div className="flex-1 overflow-y-auto bg-muted/20 p-6">
-                <div className="max-w-3xl mx-auto">
-                  {selectedFile.loading ? (
-                    <div className="flex items-center justify-center py-32">
-                      <div className="text-center">
-                        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground mx-auto mb-4" />
-                        <p className="text-sm text-muted-foreground">Loading PDF...</p>
-                      </div>
+              <div
+                ref={pdfContainerRef}
+                className={cn(
+                  "flex-1 overflow-hidden bg-muted/20 flex items-center justify-center py-8 px-4",
+                  zoomLevel > 1.0 && "cursor-move"
+                )}
+                onMouseDown={handleMouseDown}
+                onMouseMove={handleMouseMove}
+                onMouseUp={handleMouseUp}
+                onMouseLeave={handleMouseLeave}
+              >
+                {selectedFile.loading ? (
+                  <div className="flex items-center justify-center w-full h-full">
+                    <div className="text-center">
+                      <Loader2 className="w-8 h-8 animate-spin text-muted-foreground mx-auto mb-4" />
+                      <p className="text-sm text-muted-foreground">Loading PDF...</p>
                     </div>
-                  ) : selectedFile.pdfUrl ? (
-                    <div className="bg-card shadow-lg rounded-lg border border-border/50 overflow-hidden">
-                      <Document
-                        file={selectedFile.pdfUrl}
-                        onLoadSuccess={({ numPages }: { numPages: number }) => setNumPages(numPages)}
-                        onLoadError={handlePDFLoadError}
-                        loading={
-                          <div className="flex items-center justify-center p-16">
-                            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-                          </div>
-                        }
-                      >
-                        <Page
-                          pageNumber={pageNumber}
-                          width={650}
-                          renderTextLayer={true}
-                          renderAnnotationLayer={true}
-                        />
-                      </Document>
+                  </div>
+                ) : selectedFile.pdfUrl && pagesToPrint.has(pageNumber) ? (
+                  <div
+                    className={cn(
+                      "shadow-2xl bg-white",
+                      !isPanning && "transition-transform duration-200",
+                      isPanning && "select-none"
+                    )}
+                    style={{
+                      transform: `translate(${panPosition.x}px, ${panPosition.y}px) scale(${zoomLevel})`,
+                      transformOrigin: 'center center',
+                      userSelect: isPanning ? 'none' : 'auto',
+                    }}
+                  >
+                    <Document
+                      file={selectedFile.pdfUrl}
+                      onLoadSuccess={({ numPages }: { numPages: number }) => setNumPages(numPages)}
+                      onLoadError={handlePDFLoadError}
+                      loading={
+                        <div className="flex items-center justify-center p-16">
+                          <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+                        </div>
+                      }
+                    >
+                      <Page
+                        pageNumber={pageNumber}
+                        width={pageWidth}
+                        height={pageHeight}
+                        onLoadSuccess={handlePageLoadSuccess}
+                        renderTextLayer={false}
+                        renderAnnotationLayer={false}
+                      />
+                    </Document>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center w-full h-full">
+                    <div className="text-center text-muted-foreground">
+                      <AlertCircle className="w-12 h-12 mx-auto mb-4" />
+                      <p>No pages to display</p>
+                      <p className="text-sm mt-2">Adjust page range in settings</p>
                     </div>
-                  ) : (
-                    <div className="flex items-center justify-center py-32">
-                      <div className="text-center text-muted-foreground">
-                        <AlertCircle className="w-12 h-12 mx-auto mb-4" />
-                        <p>Failed to load PDF</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
             </>
           ) : (
@@ -723,10 +970,6 @@ export default function ModernPreviewPage() {
       {/* Bottom action bar */}
       <div className="border-t border-border/50 bg-card/50 px-6 py-4">
         <div className="flex items-center justify-between max-w-7xl mx-auto">
-          <div className="text-sm text-muted-foreground">
-            {fileQueue.length} {fileQueue.length === 1 ? 'file' : 'files'} ready to print
-          </div>
-
           <div className="flex gap-3">
             <Button
               variant="outline"
@@ -742,14 +985,16 @@ export default function ModernPreviewPage() {
               <Printer className="w-4 h-4 mr-2" />
               Print Current
             </Button>
-            <Button
-              onClick={handlePrintAll}
-              disabled={fileQueue.length === 0 || !selectedPrinter || submitting}
-              className="bg-green-600 hover:bg-green-700"
-            >
-              <Printer className="w-4 h-4 mr-2" />
-              Print All ({fileQueue.length})
-            </Button>
+            {fileQueue.length > 1 && (
+              <Button
+                onClick={handlePrintAll}
+                disabled={fileQueue.length === 0 || !selectedPrinter || submitting}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                <Printer className="w-4 h-4 mr-2" />
+                Print All ({fileQueue.length})
+              </Button>
+            )}
           </div>
         </div>
       </div>

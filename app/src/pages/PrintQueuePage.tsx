@@ -1,14 +1,12 @@
-import { useEffect, useState, useRef } from 'react'
+import { useState } from 'react'
 import { usePrinterStore } from '@/store/printer-store'
-import { PRINTERS } from '@/data/printers'
-import { checkPrinterQueue } from '@/lib/printer-api'
-import type { PrinterGroup, PrinterStatus } from '@/types/printer'
+import { refreshPrinters } from '@/hooks/useBackgroundMonitor'
+import type { PrinterStatus } from '@/types/printer'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { RefreshCw, MapPin, Printer as PrinterIcon, CheckCircle, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { PrinterGridSkeleton } from '@/components/PrinterCardSkeleton'
 import { SimpleCard, SimpleCardHeader, SimpleCardTitle, SimpleCardDescription, SimpleCardContent } from '@/components/ui/simple-card'
 import { PageHeader } from '@/components/PageHeader'
 import { StatGroup, StatItem } from '@/components/ui/stat-item'
@@ -45,92 +43,18 @@ const statusConfig: Record<
 }
 
 export default function PrintQueuePage() {
-  const { printers, printerGroups, setPrinters, updatePrinterStatus, sshConfig, isConnected } = usePrinterStore()
+  const { printers, printerGroups, sshConfig, isConnected, isRefreshing } = usePrinterStore()
   const [selectedGroup, setSelectedGroup] = useState<string | null>('info')
-  const [isRefreshing, setIsRefreshing] = useState(false)
-  const [isInitialLoading, setIsInitialLoading] = useState(true)
-  const isLoadingRef = useRef(false)
-  const hasInitializedRef = useRef(false)
 
-  // Initialize printers on mount
-  useEffect(() => {
-    setPrinters(PRINTERS)
-  }, [setPrinters])
-
-  // Auto-refresh only when on this page and connected
-  useEffect(() => {
-    if (!isConnected || !sshConfig) {
-      hasInitializedRef.current = false
-      setIsInitialLoading(true)
+  const handleRefresh = async () => {
+    if (!sshConfig) {
+      toast.error('Not connected to SSH')
       return
     }
 
-    // Load data once when entering the page
-    if (!hasInitializedRef.current) {
-      hasInitializedRef.current = true
-      setIsInitialLoading(true)
-      setTimeout(() => {
-        loadAllQueues(true, true) // silent = true, isInitial = true
-      }, 500)
-    }
-
-    // Set up auto-refresh every 30 seconds
-    const interval = setInterval(() => {
-      if (!isLoadingRef.current) {
-        loadAllQueues(true, false) // silent = true, isInitial = false
-      }
-    }, 30000)
-
-    return () => {
-      clearInterval(interval)
-    }
-  }, [isConnected, sshConfig])
-
-  const loadAllQueues = (silent = false, isInitial = false) => {
-    if (!sshConfig || isLoadingRef.current) {
-      if (!silent) toast.error('Not connected to SSH')
-      return
-    }
-
-    isLoadingRef.current = true
-    if (!isInitial) setIsRefreshing(true)
-    if (!silent) toast.info('Refreshing printer data...')
-
-    // Fire off all requests in parallel, don't wait for them
-    // Each printer updates independently as it completes
-    const promises = PRINTERS.map(async (printer) => {
-      try {
-        const result = await checkPrinterQueue(sshConfig, printer.queue_name)
-        const queueCount = result.success ? (result.data?.length || 0) : 0
-        const status = result.success ? 'Online' : 'Error'
-        updatePrinterStatus(printer.id, status, queueCount)
-        return { success: true, printer: printer.name }
-      } catch (error) {
-        updatePrinterStatus(printer.id, 'Error', 0)
-        return { success: false, printer: printer.name, error }
-      }
-    })
-
-    // Handle completion in background, don't block UI
-    Promise.allSettled(promises).then((results) => {
-      const successCount = results.filter(r => r.status === 'fulfilled').length
-
-      if (isInitial) {
-        setIsInitialLoading(false)
-      }
-      setIsRefreshing(false)
-      isLoadingRef.current = false
-
-      if (!silent) {
-        if (successCount === PRINTERS.length) {
-          toast.success('All printers refreshed')
-        } else if (successCount > 0) {
-          toast.warning(`Refreshed ${successCount}/${PRINTERS.length} printers`)
-        } else {
-          toast.error('Failed to refresh printers')
-        }
-      }
-    })
+    toast.info('Refreshing printer data...')
+    await refreshPrinters()
+    toast.success('Printer data refreshed')
   }
 
   // Use Info as a special view showing all groups
@@ -171,7 +95,7 @@ export default function PrintQueuePage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => loadAllQueues(false, false)}
+            onClick={handleRefresh}
             disabled={isRefreshing}
           >
             <RefreshCw className={`w-4 h-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
@@ -237,11 +161,8 @@ export default function PrintQueuePage() {
 
       {/* Printer Cards Grid */}
       <div className="flex-1 overflow-y-auto p-6">
-        {isInitialLoading ? (
-          <PrinterGridSkeleton count={9} />
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-7xl">
-            {displayPrinters.map((printer) => {
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-7xl">
+          {displayPrinters.map((printer) => {
             const queueCount = printer.queue_count || 0
 
             return (
@@ -311,10 +232,9 @@ export default function PrintQueuePage() {
               </SimpleCard>
             )
           })}
-          </div>
-        )}
+        </div>
 
-        {!isInitialLoading && displayPrinters.length === 0 && (
+        {displayPrinters.length === 0 && (
           <div className="text-center py-12 text-muted-foreground">
             <p className="text-lg">No printers available</p>
           </div>

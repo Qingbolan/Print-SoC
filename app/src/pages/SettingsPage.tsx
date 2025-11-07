@@ -15,6 +15,8 @@ import type { SSHConfig } from '@/types/printer'
 import {
   Select,
   SelectContent,
+  SelectGroup,
+  SelectLabel,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -252,13 +254,14 @@ export default function SettingsPage() {
                     </SelectTrigger>
                     <SelectContent>
                       {printerGroups.map((group) => (
-                        <optgroup key={group.id} label={group.display_name}>
+                        <SelectGroup key={group.id}>
+                          <SelectLabel>{group.display_name}</SelectLabel>
                           {group.printers.map((printer) => (
                             <SelectItem key={printer.queue_name} value={printer.queue_name}>
                               {printer.name} {printer.variant && `(${printer.variant})`}
                             </SelectItem>
                           ))}
-                        </optgroup>
+                        </SelectGroup>
                       ))}
                     </SelectContent>
                   </Select>

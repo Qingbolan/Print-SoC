@@ -56,6 +56,12 @@ interface PrinterState {
   getPrinterGroups: () => PrinterGroup[]
   updatePrinterStatus: (printerId: string, status: Printer['status'], queueCount?: number) => void
 
+  // Printer refresh state
+  isRefreshing: boolean
+  setIsRefreshing: (refreshing: boolean) => void
+  lastRefreshTime: Date | null
+  setLastRefreshTime: (time: Date | null) => void
+
   // Current upload/print state
   currentFile: File | null
   currentFilePath: string | null
@@ -139,6 +145,12 @@ export const usePrinterStore = create<PrinterState>()(
           const groups = groupPrinters(updatedPrinters)
           return { printers: updatedPrinters, printerGroups: groups }
         }),
+
+      // Printer refresh state
+      isRefreshing: false,
+      setIsRefreshing: (refreshing) => set({ isRefreshing: refreshing }),
+      lastRefreshTime: null,
+      setLastRefreshTime: (time) => set({ lastRefreshTime: time }),
 
       // Current upload/print state
       currentFile: null,
