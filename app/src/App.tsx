@@ -9,7 +9,6 @@ import { FluentProviderWrapper } from '@/components/providers/fluent-provider'
 import { AntdProvider } from '@/components/providers/antd-provider'
 import { PageBreadcrumb } from '@/components/PageBreadcrumb'
 import { safeOpenDevTools } from '@/lib/tauri-utils'
-import { useBackgroundMonitor } from '@/hooks/useBackgroundMonitor'
 
 // Pages
 import ModernLoginPageV2 from '@/pages/ModernLoginPageV2'
@@ -22,8 +21,6 @@ import HelpPage from '@/pages/HelpPage'
 import SettingsPage from '@/pages/SettingsPage'
 
 function AppLayout({ children }: { children: React.ReactNode }) {
-  // Enable background monitoring for printer queues
-  useBackgroundMonitor()
 
   useEffect(() => {
     const handleKeyDown = async (e: KeyboardEvent) => {

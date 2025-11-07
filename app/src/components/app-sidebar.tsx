@@ -41,7 +41,7 @@ export function AppSidebar() {
       name: "Jobs",
       href: "/jobs",
       icon: History,
-      showAlways: false,
+      showAlways: true,
     },
     {
       name: "Help",

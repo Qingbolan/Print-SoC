@@ -113,12 +113,12 @@ pub fn print_delete_job(job_id: String) -> ApiResponse<String> {
 pub fn print_submit_job(job_id: String, ssh_config: SSHConfig) -> ApiResponse<String> {
     let mut jobs = PRINT_JOBS.lock().unwrap();
 
-    let (file_path, printer_name, job_name) = {
+    let (file_path, printer_name, job_name, settings) = {
         match jobs.get_mut(&job_id) {
             Some(job) => {
                 job.status = PrintJobStatus::Uploading;
                 job.updated_at = Utc::now();
-                (job.file_path.clone(), job.printer.clone(), job.name.clone())
+                (job.file_path.clone(), job.printer.clone(), job.name.clone(), job.settings.clone())
             }
             None => return ApiResponse::error("Job not found".to_string()),
         }
@@ -127,11 +127,52 @@ pub fn print_submit_job(job_id: String, ssh_config: SSHConfig) -> ApiResponse<St
     // Release lock before SSH operations
     drop(jobs);
 
+    // Preprocess PDF if needed (n-up layout or booklet)
+    let processed_file_path = if settings.pages_per_sheet > 1 {
+        // Use NUS SoC recommended pdfjam for n-up layout
+        let temp_dir = std::env::temp_dir();
+        let output_path = temp_dir.join(format!("processed_{}", job_name));
+        let output_str = output_path.to_string_lossy().to_string();
+
+        match crate::pdf_service::create_nup_pdf_internal(&file_path, &output_str, settings.pages_per_sheet) {
+            Ok(_) => output_str,
+            Err(e) => {
+                let mut jobs = PRINT_JOBS.lock().unwrap();
+                if let Some(job) = jobs.get_mut(&job_id) {
+                    job.status = PrintJobStatus::Failed;
+                    job.error = Some(format!("PDF preprocessing failed: {}", e));
+                    job.updated_at = Utc::now();
+                }
+                return ApiResponse::error(format!("Failed to process PDF: {}", e));
+            }
+        }
+    } else if settings.booklet {
+        // Use booklet layout
+        let temp_dir = std::env::temp_dir();
+        let output_path = temp_dir.join(format!("booklet_{}", job_name));
+        let output_str = output_path.to_string_lossy().to_string();
+
+        match crate::pdf_service::create_booklet_pdf_internal(&file_path, &output_str) {
+            Ok(_) => output_str,
+            Err(e) => {
+                let mut jobs = PRINT_JOBS.lock().unwrap();
+                if let Some(job) = jobs.get_mut(&job_id) {
+                    job.status = PrintJobStatus::Failed;
+                    job.error = Some(format!("Booklet creation failed: {}", e));
+                    job.updated_at = Utc::now();
+                }
+                return ApiResponse::error(format!("Failed to create booklet: {}", e));
+            }
+        }
+    } else {
+        file_path.clone()
+    };
+
     // Generate remote file path and upload
     let remote_path = format!("/tmp/{}", job_name);
     let upload_result = crate::ssh_service::ssh_upload_file(
         ssh_config.clone(),
-        file_path,
+        processed_file_path,
         remote_path.clone(),
     );
 

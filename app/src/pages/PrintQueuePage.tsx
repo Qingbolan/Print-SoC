@@ -1,52 +1,130 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { usePrinterStore } from '@/store/printer-store'
 import { PRINTERS } from '@/data/printers'
 import { checkPrinterQueue } from '@/lib/printer-api'
-import type { PrinterGroup } from '@/types/printer'
+import type { PrinterGroup, PrinterStatus } from '@/types/printer'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
-import { RefreshCw } from 'lucide-react'
+import { RefreshCw, MapPin, Printer as PrinterIcon, CheckCircle, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { PrinterGridSkeleton } from '@/components/PrinterCardSkeleton'
-import { AnimatedCard } from '@/components/magic/animated-card'
+import { SimpleCard, SimpleCardHeader, SimpleCardTitle, SimpleCardDescription, SimpleCardContent } from '@/components/ui/simple-card'
+
+const statusConfig: Record<
+  PrinterStatus,
+  { color: string; label: string; icon: React.ReactNode }
+> = {
+  Online: {
+    color: 'bg-green-500',
+    label: 'Online',
+    icon: <CheckCircle className="w-4 h-4" />,
+  },
+  Offline: {
+    color: 'bg-gray-500',
+    label: 'Offline',
+    icon: <AlertCircle className="w-4 h-4" />,
+  },
+  Busy: {
+    color: 'bg-yellow-500',
+    label: 'Busy',
+    icon: <AlertCircle className="w-4 h-4" />,
+  },
+  OutOfPaper: {
+    color: 'bg-red-500',
+    label: 'Out of Paper',
+    icon: <AlertCircle className="w-4 h-4" />,
+  },
+  Error: {
+    color: 'bg-red-500',
+    label: 'Error',
+    icon: <AlertCircle className="w-4 h-4" />,
+  },
+}
 
 export default function PrintQueuePage() {
-  const { printerGroups, updatePrinterStatus, sshConfig, isConnected } = usePrinterStore()
+  const { printerGroups, setPrinters, updatePrinterStatus, sshConfig, isConnected } = usePrinterStore()
   const [selectedGroup, setSelectedGroup] = useState<string | null>('info')
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const isLoadingRef = useRef(false)
+  const hasInitializedRef = useRef(false)
 
-  // Check if we have actual data loaded (not just Unknown status)
-  const hasLoadedData = printerGroups.length > 0 && printerGroups.some(g =>
-    g.printers.some(p => p.status !== 'Unknown')
-  )
+  // Initialize printers on mount
+  useEffect(() => {
+    setPrinters(PRINTERS)
+  }, [setPrinters])
 
-  const loadAllQueues = async () => {
-    if (!sshConfig) {
-      toast.error('Not connected to SSH')
+  // Auto-refresh only when on this page and connected
+  useEffect(() => {
+    if (!isConnected || !sshConfig) {
+      hasInitializedRef.current = false
       return
     }
 
-    setIsRefreshing(true)
-    toast.info('Refreshing printer data...')
+    // Load data once when entering the page
+    if (!hasInitializedRef.current) {
+      hasInitializedRef.current = true
+      setTimeout(() => {
+        loadAllQueues(true) // silent = true for initial load
+      }, 500)
+    }
 
-    // Fetch queue data for each printer (don't await, let it run in background)
-    Promise.all(
-      PRINTERS.map(async (printer) => {
-        try {
-          const result = await checkPrinterQueue(sshConfig, printer.queue_name)
-          const queueCount = result.success ? (result.data?.length || 0) : 0
-          const status = result.success ? 'Online' : 'Error'
-          updatePrinterStatus(printer.id, status, queueCount)
-        } catch (error) {
-          updatePrinterStatus(printer.id, 'Error', 0)
+    // Set up auto-refresh every 30 seconds
+    const interval = setInterval(() => {
+      if (!isLoadingRef.current) {
+        loadAllQueues(true) // silent = true for background refresh
+      }
+    }, 30000)
+
+    return () => {
+      clearInterval(interval)
+    }
+  }, [isConnected, sshConfig])
+
+  // Check if we have printers loaded
+  const hasLoadedData = printerGroups.length > 0
+
+  const loadAllQueues = (silent = false) => {
+    if (!sshConfig || isLoadingRef.current) {
+      if (!silent) toast.error('Not connected to SSH')
+      return
+    }
+
+    isLoadingRef.current = true
+    setIsRefreshing(true)
+    if (!silent) toast.info('Refreshing printer data...')
+
+    // Fire off all requests in parallel, don't wait for them
+    // Each printer updates independently as it completes
+    const promises = PRINTERS.map(async (printer) => {
+      try {
+        const result = await checkPrinterQueue(sshConfig, printer.queue_name)
+        const queueCount = result.success ? (result.data?.length || 0) : 0
+        const status = result.success ? 'Online' : 'Error'
+        updatePrinterStatus(printer.id, status, queueCount)
+        return { success: true, printer: printer.name }
+      } catch (error) {
+        updatePrinterStatus(printer.id, 'Error', 0)
+        return { success: false, printer: printer.name, error }
+      }
+    })
+
+    // Handle completion in background, don't block UI
+    Promise.allSettled(promises).then((results) => {
+      const successCount = results.filter(r => r.status === 'fulfilled').length
+
+      setIsRefreshing(false)
+      isLoadingRef.current = false
+
+      if (!silent) {
+        if (successCount === PRINTERS.length) {
+          toast.success('All printers refreshed')
+        } else if (successCount > 0) {
+          toast.warning(`Refreshed ${successCount}/${PRINTERS.length} printers`)
+        } else {
+          toast.error('Failed to refresh printers')
         }
-      })
-    ).then(() => {
-      setIsRefreshing(false)
-      toast.success('Queue data refreshed')
-    }).catch(() => {
-      setIsRefreshing(false)
-      toast.error('Failed to refresh some printers')
+      }
     })
   }
 
@@ -86,7 +164,7 @@ export default function PrintQueuePage() {
         <Button
           variant="outline"
           size="sm"
-          onClick={() => loadAllQueues()}
+          onClick={() => loadAllQueues(false)}
           disabled={isRefreshing}
         >
           <RefreshCw className={`w-4 h-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
@@ -143,61 +221,97 @@ export default function PrintQueuePage() {
         {!hasLoadedData ? (
           <PrinterGridSkeleton count={9} />
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-7xl">
-            {displayPrinters.map((printer, index) => {
-            const isOnline = printer.status === 'Online'
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-7xl">
+            {displayPrinters.map((printer) => {
             const queueCount = printer.queue_count || 0
 
             return (
-              <AnimatedCard
-                key={printer.id}
-                delay={index * 0.05}
-                className="border-border/50 hover:border-border transition-colors overflow-hidden"
-              >
-                <div className="p-6 flex items-center justify-between">
-                  {/* Printer Name */}
-                  <h2 className="text-2xl font-bold">
-                    {printer.name}
-                  </h2>
-
-                  {/* Queue Count Badge */}
-                  <div
-                    className={cn(
-                      'min-w-[48px] h-10 rounded-md flex items-center justify-center px-3 text-white font-bold text-lg shadow-md',
-                      isOnline && queueCount === 0
-                        ? 'bg-green-600 dark:bg-green-700'
-                        : !isOnline
-                        ? 'bg-red-600 dark:bg-red-700'
-                        : 'bg-yellow-500 dark:bg-yellow-600'
-                    )}
-                  >
-                    {queueCount}
-                  </div>
-                </div>
-
-                {/* Additional Info */}
-                <div className="px-6 pb-4 pt-2 border-t border-border/50">
-                  <div className="text-sm text-muted-foreground">
-                    <div className="flex items-center justify-between">
-                      <span>Status:</span>
-                      <span className={cn(
-                        'font-medium',
-                        isOnline ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
-                      )}>
-                        {printer.status}
-                      </span>
+              <SimpleCard key={printer.id} variant="default" hoverable>
+                <SimpleCardHeader>
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <SimpleCardTitle className="flex items-center gap-2">
+                        <PrinterIcon className="w-5 h-5" />
+                        {printer.name}
+                      </SimpleCardTitle>
+                      <SimpleCardDescription className="mt-1">
+                        Queue: {printer.queue_name}
+                      </SimpleCardDescription>
                     </div>
-                    {printer.variant && (
-                      <div className="flex items-center justify-between mt-1">
-                        <span>Variant:</span>
-                        <span className="font-medium text-foreground uppercase">
-                          {printer.variant}
-                        </span>
+                    <div className="flex flex-col items-end gap-2">
+                      <Badge
+                        variant="secondary"
+                        className={`${statusConfig[printer.status].color} text-white`}
+                      >
+                        {statusConfig[printer.status].icon}
+                        <span className="ml-1">{statusConfig[printer.status].label}</span>
+                      </Badge>
+                      {/* Queue Count Badge */}
+                      <div
+                        className={cn(
+                          'min-w-[48px] h-9 rounded-md flex items-center justify-center px-3 text-white font-bold text-base shadow-md',
+                          printer.status === 'Online' && queueCount === 0
+                            ? 'bg-green-600 dark:bg-green-700'
+                            : printer.status !== 'Online'
+                            ? 'bg-red-600 dark:bg-red-700'
+                            : 'bg-yellow-500 dark:bg-yellow-600'
+                        )}
+                      >
+                        {queueCount}
                       </div>
+                    </div>
+                  </div>
+                </SimpleCardHeader>
+                <SimpleCardContent className="space-y-4">
+                  {/* Location */}
+                  <div className="flex items-start gap-2 text-sm">
+                    <MapPin className="w-4 h-4 mt-0.5 text-muted-foreground" />
+                    <div>
+                      <div className="font-medium">{printer.location.building}</div>
+                      <div className="text-muted-foreground">
+                        {printer.location.room} • Floor {printer.location.floor}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Features & Variant */}
+                  <div className="flex flex-wrap gap-2">
+                    {printer.supports_duplex && (
+                      <Badge variant="outline">Duplex</Badge>
+                    )}
+                    {printer.supports_color && (
+                      <Badge variant="outline">Color</Badge>
+                    )}
+                    {printer.variant && (
+                      <Badge variant="outline" className="uppercase">
+                        {printer.variant}
+                      </Badge>
                     )}
                   </div>
-                </div>
-              </AnimatedCard>
+
+                  {/* Paper Level */}
+                  {printer.paper_level !== undefined && (
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Paper Level</span>
+                        <span className="font-medium">{printer.paper_level}%</span>
+                      </div>
+                      <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full transition-all ${
+                            printer.paper_level > 50
+                              ? 'bg-green-500'
+                              : printer.paper_level > 20
+                              ? 'bg-yellow-500'
+                              : 'bg-red-500'
+                          }`}
+                          style={{ width: `${printer.paper_level}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </SimpleCardContent>
+              </SimpleCard>
             )
           })}
           </div>

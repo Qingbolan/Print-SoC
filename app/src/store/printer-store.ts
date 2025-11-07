@@ -16,6 +16,13 @@ export interface SavedCredentials {
   rememberMe: boolean
 }
 
+export interface AppSettings {
+  defaultPrinter: string | null
+  cacheLocation: string | null
+  autoClearCache: boolean
+  maxCacheSize: number // in MB
+}
+
 interface PrinterState {
   // SSH Configuration
   sshConfig: SSHConfig | null
@@ -26,12 +33,17 @@ interface PrinterState {
   setSavedCredentials: (credentials: SavedCredentials | null) => void
   clearSavedCredentials: () => void
 
+  // App Settings
+  settings: AppSettings
+  setSettings: (settings: Partial<AppSettings>) => void
+
   // Print Jobs
   printJobs: PrintJob[]
   setPrintJobs: (jobs: PrintJob[]) => void
   addPrintJob: (job: PrintJob) => void
   updatePrintJob: (jobId: string, updates: Partial<PrintJob>) => void
   removePrintJob: (jobId: string) => void
+  clearAllJobs: () => void
 
   // Printers
   printers: Printer[]
@@ -56,6 +68,9 @@ interface PrinterState {
   // Legacy UI State (kept for compatibility)
   isConnected: boolean
   setIsConnected: (connected: boolean) => void
+
+  // Logout
+  logout: () => void
 }
 
 export const usePrinterStore = create<PrinterState>()(
@@ -69,6 +84,18 @@ export const usePrinterStore = create<PrinterState>()(
       savedCredentials: null,
       setSavedCredentials: (credentials) => set({ savedCredentials: credentials }),
       clearSavedCredentials: () => set({ savedCredentials: null }),
+
+      // App Settings
+      settings: {
+        defaultPrinter: null,
+        cacheLocation: null,
+        autoClearCache: false,
+        maxCacheSize: 100, // 100MB default
+      },
+      setSettings: (newSettings) =>
+        set((state) => ({
+          settings: { ...state.settings, ...newSettings },
+        })),
 
       // Print Jobs
       printJobs: [],
@@ -85,6 +112,7 @@ export const usePrinterStore = create<PrinterState>()(
         set((state) => ({
           printJobs: state.printJobs.filter((job) => job.id !== jobId),
         })),
+      clearAllJobs: () => set({ printJobs: [] }),
 
       // Printers
       printers: [],
@@ -125,6 +153,18 @@ export const usePrinterStore = create<PrinterState>()(
       // UI State
       isConnected: false,
       setIsConnected: (connected) => set({ isConnected: connected }),
+
+      // Logout
+      logout: () =>
+        set({
+          sshConfig: null,
+          savedCredentials: null,
+          connectionStatus: { type: 'disconnected' },
+          isConnected: false,
+          selectedPrinter: null,
+          currentFile: null,
+          currentFilePath: null,
+        }),
     }),
     {
       name: 'printer-storage',
@@ -132,6 +172,7 @@ export const usePrinterStore = create<PrinterState>()(
         sshConfig: state.sshConfig,
         selectedPrinter: state.selectedPrinter,
         savedCredentials: state.savedCredentials,
+        settings: state.settings,
       }),
     }
   )

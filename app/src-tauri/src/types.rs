@@ -56,6 +56,7 @@ pub enum Orientation {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
 pub enum PageRange {
     All,
     Range { start: u32, end: u32 },

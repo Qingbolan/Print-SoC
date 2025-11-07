@@ -226,7 +226,6 @@ export default function ModernHomePageV2() {
               </div>
             ) : (
               <div className="text-center">
-                <div className="text-5xl mb-4">📄</div>
                 <h2 className="text-xl font-semibold text-foreground mb-2">
                   Upload PDF Document
                 </h2>

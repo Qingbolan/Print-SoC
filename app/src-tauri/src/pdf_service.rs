@@ -117,7 +117,7 @@ fn generate_booklet_layout_internal(num_pages: u32) -> BookletLayout {
     }
 }
 
-fn create_booklet_pdf_internal(
+pub fn create_booklet_pdf_internal(
     input_path: &str,
     output_path: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -128,7 +128,7 @@ fn create_booklet_pdf_internal(
     Ok(())
 }
 
-fn create_nup_pdf_internal(
+pub fn create_nup_pdf_internal(
     input_path: &str,
     output_path: &str,
     pages_per_sheet: u32,

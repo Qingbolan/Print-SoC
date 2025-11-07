@@ -5,27 +5,29 @@
 ## 症状与根因
 
 - 现象 1：`tauri::generate_context!()` 在构建阶段 panic，报错 UnknownPermission，如：
+
   - `failed to resolve ACL: UnknownPermission { key: "core:window", permission: "allow-listen" }`
   - 原因：Tauri v2 的权限清单不再存在 `core:window/allow-listen` 这一项。
-
 - 现象 2：Rust 侧编译错误找不到 v1 的 API：
+
   - `tauri::window::FileDropEvent`、`WebviewWindow.on_file_drop` 在 v2 已删除。
   - v2 将拖拽改为事件流（drag-enter/over/drop/leave），前端通过 `@tauri-apps/api` 监听。
-
 - 现象 3：前端监听 `tauri://file-drop*` 无回调。
+
   - v2 的推荐方式是使用 `onDragDropEvent` 包装器，并且需要显式开启事件监听权限。
 
 ## 关键修改
 
 - app/src-tauri/tauri.conf.json:16
+
   - 为唯一窗口显式设置 label：`"label": "main"`
   - 目的：确保能力（capability）的 `windows: ["main"]` 匹配正确窗口。
-
 - app/src-tauri/tauri.conf.json:37
+
   - 在权限清单中加入：`"core:event:allow-listen"`
   - 目的：允许前端 `listen/once/onDragDropEvent` 等事件订阅行为。
-
 - app/src/pages/ModernHomePageV2.tsx:155 起
+
   - 统一改为 v2 API：
     ```ts
     const { getCurrentWebviewWindow } = await import('@tauri-apps/api/webviewWindow')
@@ -41,8 +43,8 @@
     })
     ```
   - 不再监听 `tauri://file-drop*`，而是由包装器统一转发四种拖拽事件。
-
 - app/src-tauri/src/lib.rs:58
+
   - 使用 `window.on_window_event` 打印窗口事件，便于调试；不再使用 v1 的 `on_file_drop`。
 
 ## 原理说明（Tauri v2 权限与事件）
@@ -73,4 +75,3 @@
 
 - 进一步收紧权限：只给必要窗口赋予 `core:event:allow-listen`。
 - 如需在后端（Rust）也处理拖拽，可在 `on_window_event` 中匹配 drag 相关事件并 `emit` 给前端，但 v2 前端包装器已足够。
-

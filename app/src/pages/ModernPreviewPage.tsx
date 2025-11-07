@@ -1,23 +1,43 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { usePrinterStore } from '@/store/printer-store'
+import { PRINTERS } from '@/data/printers'
 import { Document, Page, pdfjs } from 'react-pdf'
 import {
   createPrintJob,
   submitPrintJob,
-  getPrinters,
   generateBookletLayout,
 } from '@/lib/printer-api'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Slider } from '@/components/ui/slider'
+import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import {
   Loader2,
   ChevronLeft,
   ChevronRight,
   AlertCircle,
+  GripVertical,
+  RotateCcw,
 } from 'lucide-react'
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -34,16 +54,91 @@ import 'react-pdf/dist/Page/TextLayer.css'
 // Use local worker file instead of CDN for Tauri app
 pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs'
 
+// Sortable thumbnail component
+function SortableThumbnail({
+  page,
+  isActive,
+  pdfUrl,
+  onClick,
+  displayOrder
+}: {
+  page: number
+  isActive: boolean
+  pdfUrl: string
+  onClick: () => void
+  displayOrder: number
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: page })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  }
+
+  return (
+    <div ref={setNodeRef} style={style} className="relative">
+      <button
+        onClick={onClick}
+        className={cn(
+          'w-full rounded-lg border-2 transition-all overflow-hidden relative',
+          isActive
+            ? 'border-primary ring-2 ring-primary/20'
+            : 'border-border/50 hover:border-border'
+        )}
+      >
+        <div className="relative">
+          <Document file={pdfUrl}>
+            <Page
+              pageNumber={page}
+              width={160}
+              renderTextLayer={false}
+              renderAnnotationLayer={false}
+            />
+          </Document>
+          <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-xs py-1 px-2 flex items-center justify-between">
+            <span className="flex-1 text-center">Page {page}</span>
+          </div>
+          {displayOrder !== page && (
+            <div className="absolute top-1 right-1 bg-orange-500 text-white text-xs font-bold px-1.5 py-0.5 rounded">
+              #{displayOrder}
+            </div>
+          )}
+        </div>
+      </button>
+      {/* Drag handle */}
+      <div
+        {...attributes}
+        {...listeners}
+        className="absolute top-1 left-1 bg-black/50 hover:bg-black/70 text-white rounded p-1 cursor-grab active:cursor-grabbing"
+      >
+        <GripVertical className="w-4 h-4" />
+      </div>
+    </div>
+  )
+}
+
 export default function ModernPreviewPage() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { sshConfig, printers, setPrinters, addPrintJob } = usePrinterStore()
+  const { sshConfig, printerGroups, setPrinters, addPrintJob } = usePrinterStore()
+
+  // Get all printers from groups
+  const printers = printerGroups.flatMap(g => g.printers)
 
   const filePath = location.state?.filePath
   const pdfInfo = location.state?.pdfInfo
 
   const [numPages, setNumPages] = useState(0)
   const [pageNumber, setPageNumber] = useState(1)
+  const [pageOrder, setPageOrder] = useState<number[]>([])
   const [bookletLayout, setBookletLayout] = useState<BookletLayout | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [recommendedPrinter, setRecommendedPrinter] = useState<Printer | null>(null)
@@ -58,6 +153,16 @@ export default function ModernPreviewPage() {
     open: false,
     title: '',
     message: '',
+  })
+  const [printDialog, setPrintDialog] = useState<{
+    open: boolean
+    status: 'submitting' | 'success' | 'error'
+    jobName?: string
+    printer?: string
+    error?: string
+  }>({
+    open: false,
+    status: 'submitting',
   })
 
   const [settings, setSettings] = useState<PrintSettings>({
@@ -85,14 +190,48 @@ export default function ModernPreviewPage() {
 
   const [selectedPrinter, setSelectedPrinter] = useState('')
 
+  // Initialize page order when PDF loads
+  useEffect(() => {
+    if (numPages > 0) {
+      setPageOrder(Array.from({ length: numPages }, (_, i) => i + 1))
+    }
+  }, [numPages])
+
+  // Drag and drop sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  )
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+
+    if (over && active.id !== over.id) {
+      setPageOrder((items) => {
+        const oldIndex = items.indexOf(active.id as number)
+        const newIndex = items.indexOf(over.id as number)
+        return arrayMove(items, oldIndex, newIndex)
+      })
+      toast.success('Page order updated')
+    }
+  }
+
+  const resetPageOrder = () => {
+    setPageOrder(Array.from({ length: numPages }, (_, i) => i + 1))
+    toast.success('Page order reset to default')
+  }
+
   useEffect(() => {
     if (!filePath) {
       navigate('/home')
       return
     }
-    loadPrinters()
+    // Initialize printers from PRINTERS data
+    setPrinters(PRINTERS)
     loadPdfFile()
-  }, [filePath, navigate])
+  }, [filePath, navigate, setPrinters])
 
   const loadPdfFile = async () => {
     if (!filePath) return
@@ -157,18 +296,20 @@ export default function ModernPreviewPage() {
     }
   }, [settings.booklet, pdfInfo])
 
-  const loadPrinters = async () => {
-    const result = await getPrinters()
-    if (result.success && result.data) {
-      setPrinters(result.data)
-      const online = result.data.filter((p) => p.status === 'Online')
+  // Set recommended printer when printers are loaded
+  useEffect(() => {
+    if (printers.length > 0 && !selectedPrinter) {
+      const online = printers.filter((p) => p.status === 'Online')
       if (online.length > 0) {
         const recommended = online.sort((a, b) => (b.paper_level || 0) - (a.paper_level || 0))[0]
         setRecommendedPrinter(recommended)
         setSelectedPrinter(recommended.queue_name)
+      } else {
+        // If no online printers, select the first one
+        setSelectedPrinter(printers[0].queue_name)
       }
     }
-  }
+  }, [printers, selectedPrinter])
 
   const loadBookletLayout = async () => {
     if (!pdfInfo) return
@@ -240,9 +381,26 @@ export default function ModernPreviewPage() {
     if (!filePath || !selectedPrinter || !sshConfig) return
 
     setSubmitting(true)
+    const fileName = filePath.split('/').pop() || 'document.pdf'
+
+    // Show submitting dialog
+    setPrintDialog({
+      open: true,
+      status: 'submitting',
+      jobName: fileName,
+      printer: selectedPrinter,
+    })
+
     try {
-      const fileName = filePath.split('/').pop() || 'document.pdf'
-      const createResult = await createPrintJob(fileName, filePath, selectedPrinter, settings)
+      // Check if page order has been customized
+      const isCustomOrder = pageOrder.some((page, index) => page !== index + 1)
+
+      // If custom order, override page_range setting
+      const finalSettings = isCustomOrder
+        ? { ...settings, page_range: { type: 'Selection' as const, pages: pageOrder } }
+        : settings
+
+      const createResult = await createPrintJob(fileName, filePath, selectedPrinter, finalSettings)
 
       if (!createResult.success || !createResult.data) {
         throw new Error(createResult.error || 'Failed to create job')
@@ -254,17 +412,42 @@ export default function ModernPreviewPage() {
       const submitResult = await submitPrintJob(job.id, sshConfig)
 
       if (submitResult.success) {
-        toast.success('Print job submitted')
-        navigate('/jobs')
+        // Show success dialog
+        setPrintDialog({
+          open: true,
+          status: 'success',
+          jobName: fileName,
+          printer: selectedPrinter,
+        })
+
+        // Auto close after 3 seconds and navigate
+        setTimeout(() => {
+          setPrintDialog({ open: false, status: 'success' })
+          navigate('/jobs')
+        }, 3000)
       } else {
-        toast.error(submitResult.error || 'Submission failed')
+        // Show error dialog
+        setPrintDialog({
+          open: true,
+          status: 'error',
+          jobName: fileName,
+          printer: selectedPrinter,
+          error: submitResult.error || 'Submission failed',
+        })
       }
     } catch (error) {
-      toast.error('Error: ' + String(error))
+      // Show error dialog
+      setPrintDialog({
+        open: true,
+        status: 'error',
+        jobName: fileName,
+        printer: selectedPrinter,
+        error: error instanceof Error ? error.message : String(error),
+      })
     } finally {
       setSubmitting(false)
     }
-  }, [filePath, selectedPrinter, sshConfig, settings, addPrintJob, navigate])
+  }, [filePath, selectedPrinter, sshConfig, settings, pageOrder, addPrintJob, navigate])
 
   return (
     <div className="h-full flex flex-col">
@@ -293,9 +476,97 @@ export default function ModernPreviewPage() {
 
       {/* Main content */}
       <div className="flex-1 flex overflow-hidden">
-        {/* PDF viewer - left side */}
+        {/* Thumbnail sidebar - left */}
+        {numPages > 0 && pdfUrl && pageOrder.length > 0 && (
+          <div className="w-48 border-r border-border/50 overflow-y-auto p-3 space-y-2">
+            <div className="flex items-center justify-between mb-2 px-1">
+              <div className="text-xs font-semibold text-muted-foreground">
+                Pages ({numPages})
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={resetPageOrder}
+                className="h-6 px-2 text-xs"
+                title="Reset page order"
+              >
+                <RotateCcw className="w-3 h-3" />
+              </Button>
+            </div>
+            <div className="text-xs text-muted-foreground mb-2 px-1">
+              Drag to reorder
+            </div>
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext
+                items={pageOrder}
+                strategy={verticalListSortingStrategy}
+              >
+                <div className="space-y-2">
+                  {pageOrder.map((page, index) => (
+                    <SortableThumbnail
+                      key={page}
+                      page={page}
+                      isActive={pageNumber === page}
+                      pdfUrl={pdfUrl}
+                      onClick={() => setPageNumber(page)}
+                      displayOrder={index + 1}
+                    />
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
+          </div>
+        )}
+
+        {/* PDF viewer - center */}
         <div className="flex-1 overflow-y-auto p-8">
           <div className="max-w-4xl mx-auto">
+            {/* Preview mode indicator */}
+            {numPages > 0 && pageOrder.some((page, index) => page !== index + 1) && (
+              <div className="mb-4 p-3 bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800 rounded-lg">
+                <div className="text-sm text-orange-900 dark:text-orange-100 flex items-center justify-between">
+                  <span>Custom page order: {pageOrder.join(', ')}</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={resetPageOrder}
+                    className="h-6 px-2 text-xs ml-2"
+                  >
+                    <RotateCcw className="w-3 h-3 mr-1" />
+                    Reset
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {numPages > 0 && settings.pages_per_sheet > 1 && (
+              <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg">
+                <div className="text-sm text-blue-900 dark:text-blue-100">
+                  Preview shows single pages. Print output will be {settings.pages_per_sheet}-up layout.
+                </div>
+              </div>
+            )}
+
+            {settings.booklet && (
+              <div className="mb-4 p-3 bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 rounded-lg">
+                <div className="text-sm text-purple-900 dark:text-purple-100">
+                  Preview shows single pages. Print output will be booklet format.
+                </div>
+              </div>
+            )}
+
+            {settings.duplex !== 'Simplex' && (
+              <div className="mb-4 p-3 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg">
+                <div className="text-sm text-green-900 dark:text-green-100">
+                  Double-sided printing enabled. Queue: {selectedPrinter?.replace('-sx', '')}
+                </div>
+              </div>
+            )}
+
             <div className="backdrop-blur-sm bg-card/40 shadow-lg rounded-xl border border-border/50">
               {loadingPdf ? (
                 <div className="flex items-center justify-center p-16">
@@ -588,12 +859,23 @@ export default function ModernPreviewPage() {
                 value={selectedPrinter}
                 onChange={(e) => setSelectedPrinter(e.target.value)}
               >
-                {printers.map((p) => (
-                  <option key={p.id} value={p.queue_name}>
-                    {p.name} - {p.location.building}
-                  </option>
+                {printerGroups.map((group) => (
+                  <optgroup key={group.id} label={group.display_name}>
+                    {group.printers.map((p) => (
+                      <option key={p.id} value={p.queue_name}>
+                        {p.name} {p.variant && `(${p.variant})`}
+                      </option>
+                    ))}
+                  </optgroup>
                 ))}
               </select>
+
+              {printers.length > 0 && selectedPrinter && (
+                <div className="mt-2 text-xs text-muted-foreground">
+                  {printers.find(p => p.queue_name === selectedPrinter)?.location.building} -
+                  {' '}{printers.find(p => p.queue_name === selectedPrinter)?.location.room}
+                </div>
+              )}
             </div>
 
             {/* Submit button */}
@@ -647,6 +929,137 @@ export default function ModernPreviewPage() {
               OK
             </AlertDialogAction>
           </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Print Status Dialog */}
+      <AlertDialog
+        open={printDialog.open}
+        onOpenChange={(open) => {
+          if (printDialog.status !== 'submitting') {
+            setPrintDialog({ ...printDialog, open })
+          }
+        }}
+      >
+        <AlertDialogContent>
+          {printDialog.status === 'submitting' && (
+            <>
+              <AlertDialogHeader>
+                <div className="flex items-center gap-3">
+                  <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                  <AlertDialogTitle>Submitting Print Job</AlertDialogTitle>
+                </div>
+                <AlertDialogDescription>
+                  Uploading file and queuing print job...
+                </AlertDialogDescription>
+                <div className="text-left space-y-2 pt-2">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Document:</span>
+                    <span className="font-medium">{printDialog.jobName}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Printer:</span>
+                    <span className="font-medium">{printDialog.printer}</span>
+                  </div>
+                </div>
+              </AlertDialogHeader>
+            </>
+          )}
+
+          {printDialog.status === 'success' && (
+            <>
+              <AlertDialogHeader>
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+                    <svg className="w-6 h-6 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                  <AlertDialogTitle className="text-green-700 dark:text-green-400">
+                    Print Job Submitted Successfully
+                  </AlertDialogTitle>
+                </div>
+                <AlertDialogDescription>
+                  Your document has been sent to the printer queue. You can monitor the progress in the Jobs page.
+                </AlertDialogDescription>
+                <div className="text-left space-y-3 pt-4">
+                  <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Document:</span>
+                      <span className="font-medium text-foreground">{printDialog.jobName}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Printer:</span>
+                      <span className="font-medium text-foreground">{printDialog.printer}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Status:</span>
+                      <span className="font-medium text-green-600 dark:text-green-400">Queued</span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Redirecting to Jobs page in 3 seconds...
+                  </p>
+                </div>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogAction onClick={() => {
+                  setPrintDialog({ open: false, status: 'success' })
+                  navigate('/jobs')
+                }}>
+                  View Jobs
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </>
+          )}
+
+          {printDialog.status === 'error' && (
+            <>
+              <AlertDialogHeader>
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                    <AlertCircle className="w-6 h-6 text-red-600 dark:text-red-400" />
+                  </div>
+                  <AlertDialogTitle className="text-red-700 dark:text-red-400">
+                    Print Job Failed
+                  </AlertDialogTitle>
+                </div>
+                <AlertDialogDescription>
+                  An error occurred while submitting your print job. Please review the details below and try again.
+                </AlertDialogDescription>
+                <div className="text-left space-y-3 pt-4">
+                  <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Document:</span>
+                      <span className="font-medium text-foreground">{printDialog.jobName}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Printer:</span>
+                      <span className="font-medium text-foreground">{printDialog.printer}</span>
+                    </div>
+                  </div>
+                  <div className="bg-muted rounded-lg p-3">
+                    <div className="text-sm font-medium text-foreground mb-1">Error:</div>
+                    <div className="text-sm text-red-600 dark:text-red-400">{printDialog.error}</div>
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    <strong>Possible solutions:</strong>
+                    <ul className="list-disc list-inside mt-1 space-y-1">
+                      <li>Check if you're connected to SSH</li>
+                      <li>Verify the printer is online and available</li>
+                      <li>Make sure the file is not corrupted</li>
+                      <li>Try again or contact support</li>
+                    </ul>
+                  </div>
+                </div>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogAction onClick={() => setPrintDialog({ open: false, status: 'error' })}>
+                  Close
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </>
+          )}
         </AlertDialogContent>
       </AlertDialog>
     </div>

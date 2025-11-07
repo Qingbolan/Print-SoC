@@ -198,27 +198,43 @@ pub fn submit_print_job_ssh(
     remote_file_path: &str,
     settings: &PrintSettings,
 ) -> Result<String, Box<dyn std::error::Error>> {
+    // NUS SoC Rule: Duplex is controlled by queue name, not lpr options
+    // - Duplex (double-sided): use queues without -sx suffix (e.g., psts, pstsb)
+    // - Simplex (single-sided): use queues with -sx suffix (e.g., psts-sx, pstsb-sx)
+
+    let actual_printer = match settings.duplex {
+        DuplexMode::Simplex => {
+            // Single-sided: ensure queue has -sx suffix
+            if printer.ends_with("-sx") {
+                printer.to_string()
+            } else if printer.ends_with("-nb") {
+                // Keep -nb suffix, don't change
+                printer.to_string()
+            } else {
+                // Add -sx suffix for single-sided
+                format!("{}-sx", printer)
+            }
+        }
+        DuplexMode::DuplexLongEdge | DuplexMode::DuplexShortEdge => {
+            // Double-sided: ensure queue does NOT have -sx suffix
+            if printer.ends_with("-sx") {
+                // Remove -sx suffix for double-sided
+                printer.trim_end_matches("-sx").to_string()
+            } else {
+                printer.to_string()
+            }
+        }
+    };
+
     // Build lpr command according to NUS SoC documentation
-    let mut lpr_command = format!("lpr -P {}", printer);
+    let mut lpr_command = format!("lpr -P {}", actual_printer);
 
     // Add copies (using -# notation as per SoC docs)
     if settings.copies > 1 {
         lpr_command.push_str(&format!(" -\\# {}", settings.copies));
     }
 
-    // Add duplex options
-    // Note: Single-sided queues have -sx suffix, double-sided don't
-    match settings.duplex {
-        DuplexMode::DuplexLongEdge => {
-            lpr_command.push_str(" -o sides=two-sided-long-edge");
-        }
-        DuplexMode::DuplexShortEdge => {
-            lpr_command.push_str(" -o sides=two-sided-short-edge");
-        }
-        DuplexMode::Simplex => {
-            lpr_command.push_str(" -o sides=one-sided");
-        }
-    }
+    // Do NOT add -o sides options - NUS SoC controls this via queue selection
 
     // Add orientation
     match settings.orientation {
