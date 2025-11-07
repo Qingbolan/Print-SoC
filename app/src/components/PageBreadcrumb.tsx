@@ -19,6 +19,7 @@ const routeConfig: Record<string, RouteConfig> = {
   '/': { name: 'Home', icon: <Home className="w-3.5 h-3.5" /> },
   '/home': { name: 'Home', icon: <Home className="w-3.5 h-3.5" /> },
   '/login': { name: 'Login' },
+  '/printer': { name: 'Printer', icon: <Printer className="w-3.5 h-3.5" /> },
   '/printers': { name: 'Printers', icon: <Printer className="w-3.5 h-3.5" /> },
   '/queue': { name: 'Print Queue', icon: <ListOrdered className="w-3.5 h-3.5" /> },
   '/jobs': { name: 'Print Jobs', icon: <FileText className="w-3.5 h-3.5" /> },
@@ -70,7 +71,7 @@ export function PageBreadcrumb() {
   }
 
   return (
-    <div className="px-6 py-3 border-b border-border/50 bg-background/50 backdrop-blur-sm">
+    <div className="sticky top-0 z-20 px-6 py-3 border-b border-border/50">
       <div className="flex items-center justify-between">
         <Breadcrumb>
           <BreadcrumbList>

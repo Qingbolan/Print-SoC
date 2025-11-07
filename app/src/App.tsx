@@ -141,8 +141,8 @@ export default function App() {
           <Route path="/login" element={<ModernLoginPageV2 />} />
           <Route path="/home" element={<ModernHomePageV2 />} />
           <Route path="/preview" element={<ModernPreviewPage />} />
+          <Route path="/printer" element={<PrintQueuePage />} />
           <Route path="/printers" element={<PrintersPage />} />
-          <Route path="/monitor" element={<PrintQueuePage />} />
           <Route path="/jobs" element={<JobsPage />} />
           <Route path="/help" element={<HelpPage />} />
           <Route path="/settings" element={<SettingsPage />} />

@@ -124,28 +124,6 @@ export default function PrintersPage() {
                 )}
               </div>
 
-              {/* Paper Level */}
-              {printer.paper_level !== undefined && (
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Paper Level</span>
-                    <span className="font-medium">{printer.paper_level}%</span>
-                  </div>
-                  <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full transition-all ${
-                        printer.paper_level > 50
-                          ? 'bg-green-500'
-                          : printer.paper_level > 20
-                          ? 'bg-yellow-500'
-                          : 'bg-red-500'
-                      }`}
-                      style={{ width: `${printer.paper_level}%` }}
-                    />
-                  </div>
-                </div>
-              )}
-
               {/* Actions */}
               <Button
                 variant="outline"

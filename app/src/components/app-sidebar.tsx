@@ -1,6 +1,6 @@
 import { Link, useLocation } from "react-router-dom"
 import { GlobeIcon } from "@/components/icons"
-import { Home, Printer, MapPin, History, HelpCircle, Settings as SettingsIcon, PanelLeftIcon, Upload, Monitor } from "lucide-react"
+import { Home, Printer, MapPin, History, HelpCircle, Settings as SettingsIcon, PanelLeftIcon, Upload } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useI18n } from "@/lib/i18n"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -31,9 +31,9 @@ export function AppSidebar() {
       showAlways: false,
     },
     {
-      name: "Monitor",
-      href: "/monitor",
-      icon: Monitor,
+      name: "Printer",
+      href: "/printer",
+      icon: Printer,
       showAlways: true, // Show in main navigation
       requiresSSH: true, // Only show when SSH is connected
     },
@@ -53,7 +53,7 @@ export function AppSidebar() {
       name: "Settings",
       href: "/settings",
       icon: SettingsIcon,
-      showAlways: false,
+      showAlways: true,
     },
   ]
 

@@ -10,6 +10,8 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { PrinterGridSkeleton } from '@/components/PrinterCardSkeleton'
 import { SimpleCard, SimpleCardHeader, SimpleCardTitle, SimpleCardDescription, SimpleCardContent } from '@/components/ui/simple-card'
+import { PageHeader } from '@/components/PageHeader'
+import { StatGroup, StatItem } from '@/components/ui/stat-item'
 
 const statusConfig: Record<
   PrinterStatus,
@@ -43,9 +45,10 @@ const statusConfig: Record<
 }
 
 export default function PrintQueuePage() {
-  const { printerGroups, setPrinters, updatePrinterStatus, sshConfig, isConnected } = usePrinterStore()
+  const { printers, printerGroups, setPrinters, updatePrinterStatus, sshConfig, isConnected } = usePrinterStore()
   const [selectedGroup, setSelectedGroup] = useState<string | null>('info')
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [isInitialLoading, setIsInitialLoading] = useState(true)
   const isLoadingRef = useRef(false)
   const hasInitializedRef = useRef(false)
 
@@ -58,21 +61,23 @@ export default function PrintQueuePage() {
   useEffect(() => {
     if (!isConnected || !sshConfig) {
       hasInitializedRef.current = false
+      setIsInitialLoading(true)
       return
     }
 
     // Load data once when entering the page
     if (!hasInitializedRef.current) {
       hasInitializedRef.current = true
+      setIsInitialLoading(true)
       setTimeout(() => {
-        loadAllQueues(true) // silent = true for initial load
+        loadAllQueues(true, true) // silent = true, isInitial = true
       }, 500)
     }
 
     // Set up auto-refresh every 30 seconds
     const interval = setInterval(() => {
       if (!isLoadingRef.current) {
-        loadAllQueues(true) // silent = true for background refresh
+        loadAllQueues(true, false) // silent = true, isInitial = false
       }
     }, 30000)
 
@@ -81,17 +86,14 @@ export default function PrintQueuePage() {
     }
   }, [isConnected, sshConfig])
 
-  // Check if we have printers loaded
-  const hasLoadedData = printerGroups.length > 0
-
-  const loadAllQueues = (silent = false) => {
+  const loadAllQueues = (silent = false, isInitial = false) => {
     if (!sshConfig || isLoadingRef.current) {
       if (!silent) toast.error('Not connected to SSH')
       return
     }
 
     isLoadingRef.current = true
-    setIsRefreshing(true)
+    if (!isInitial) setIsRefreshing(true)
     if (!silent) toast.info('Refreshing printer data...')
 
     // Fire off all requests in parallel, don't wait for them
@@ -113,6 +115,9 @@ export default function PrintQueuePage() {
     Promise.allSettled(promises).then((results) => {
       const successCount = results.filter(r => r.status === 'fulfilled').length
 
+      if (isInitial) {
+        setIsInitialLoading(false)
+      }
       setIsRefreshing(false)
       isLoadingRef.current = false
 
@@ -154,22 +159,40 @@ export default function PrintQueuePage() {
 
   return (
     <div className="h-full flex flex-col">
-      {/* Header */}
-      <div className="border-b border-border/50 py-4 px-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Printer Monitor</h1>
-          <p className="text-xs text-muted-foreground mt-1">Auto-refreshes every 30 seconds</p>
+      {/* Header Section */}
+      <div className="p-8 space-y-8 border-b border-border/50">
+        {/* Header with Refresh Button */}
+        <div className="flex items-start justify-between">
+          <PageHeader
+            title="Available Printers"
+            description="Browse and select from SoC printers across campus"
+            icon={<PrinterIcon className="w-8 h-8" />}
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => loadAllQueues(false, false)}
+            disabled={isRefreshing}
+          >
+            <RefreshCw className={`w-4 h-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
         </div>
 
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => loadAllQueues(false)}
-          disabled={isRefreshing}
-        >
-          <RefreshCw className={`w-4 h-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
-          Refresh Now
-        </Button>
+        {/* Stats */}
+        <StatGroup>
+          <StatItem
+            icon={CheckCircle}
+            value={printers.filter((p) => p.status === 'Online').length}
+            label="Online"
+          />
+          <div className="w-px h-8 bg-border/50" />
+          <StatItem
+            icon={PrinterIcon}
+            value={printers.length}
+            label="Total Printers"
+          />
+        </StatGroup>
       </div>
 
       {/* Navigation Tabs */}
@@ -202,12 +225,8 @@ export default function PrintQueuePage() {
             >
               <span>{group.name}</span>
               <span
-                className={cn(
-                  'min-w-[32px] h-7 rounded-md flex items-center justify-center px-2 text-white font-bold text-sm',
-                  group.total_queue_count === 0
-                    ? 'bg-red-800'
-                    : 'bg-red-600'
-                )}
+                className="w-7 h-7 rounded-full flex items-center justify-center text-white font-semibold text-sm"
+                style={{ backgroundColor: '#EF7C00' }}
               >
                 {group.total_queue_count}
               </span>
@@ -218,7 +237,7 @@ export default function PrintQueuePage() {
 
       {/* Printer Cards Grid */}
       <div className="flex-1 overflow-y-auto p-6">
-        {!hasLoadedData ? (
+        {isInitialLoading ? (
           <PrinterGridSkeleton count={9} />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-7xl">
@@ -288,28 +307,6 @@ export default function PrintQueuePage() {
                       </Badge>
                     )}
                   </div>
-
-                  {/* Paper Level */}
-                  {printer.paper_level !== undefined && (
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Paper Level</span>
-                        <span className="font-medium">{printer.paper_level}%</span>
-                      </div>
-                      <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full transition-all ${
-                            printer.paper_level > 50
-                              ? 'bg-green-500'
-                              : printer.paper_level > 20
-                              ? 'bg-yellow-500'
-                              : 'bg-red-500'
-                          }`}
-                          style={{ width: `${printer.paper_level}%` }}
-                        />
-                      </div>
-                    </div>
-                  )}
                 </SimpleCardContent>
               </SimpleCard>
             )
@@ -317,7 +314,7 @@ export default function PrintQueuePage() {
           </div>
         )}
 
-        {hasLoadedData && displayPrinters.length === 0 && (
+        {!isInitialLoading && displayPrinters.length === 0 && (
           <div className="text-center py-12 text-muted-foreground">
             <p className="text-lg">No printers available</p>
           </div>

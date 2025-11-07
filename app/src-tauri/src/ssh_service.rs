@@ -42,7 +42,41 @@ pub fn ssh_check_printer_queue(config: SSHConfig, printer: String) -> ApiRespons
     let command = format!("lpq -P {}", printer);
     match execute_ssh_command_internal(&config, &command) {
         Ok(output) => {
-            let jobs: Vec<String> = output.lines().map(|s| s.to_string()).collect();
+            // Parse lpq output to extract actual print jobs
+            // lpq output format:
+            // Printer: printer@host
+            // Queue: X printable jobs (or "no printable jobs in queue")
+            // Rank    Owner   Job     File(s)                         Total Size
+            // 1st     user1   123     document.pdf                    1024 bytes
+            // 2nd     user2   124     file.pdf                        2048 bytes
+
+            let jobs: Vec<String> = output
+                .lines()
+                .filter(|line| {
+                    let trimmed = line.trim();
+                    // Skip empty lines
+                    if trimmed.is_empty() {
+                        return false;
+                    }
+                    // Skip header lines
+                    if trimmed.starts_with("Printer:") ||
+                       trimmed.starts_with("Queue:") ||
+                       trimmed.starts_with("Rank") {
+                        return false;
+                    }
+                    // Check if line starts with a rank indicator
+                    // Valid ranks: 1st, 2nd, 3rd, 4th, 5th, ..., 21st, 22nd, etc.
+                    if let Some(first_word) = trimmed.split_whitespace().next() {
+                        return first_word.ends_with("st") ||
+                               first_word.ends_with("nd") ||
+                               first_word.ends_with("rd") ||
+                               first_word.ends_with("th");
+                    }
+                    false
+                })
+                .map(|s| s.to_string())
+                .collect();
+
             ApiResponse::success(jobs)
         }
         Err(e) => ApiResponse::error(e.to_string()),
