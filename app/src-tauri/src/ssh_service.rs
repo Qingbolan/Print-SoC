@@ -33,6 +33,7 @@ impl SSHConnectionManager {
         self.last_activity = Instant::now();
     }
 
+    #[allow(dead_code)]
     fn get_config(&self) -> Option<SSHConfig> {
         self.config.clone()
     }
