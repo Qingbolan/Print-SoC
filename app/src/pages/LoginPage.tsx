@@ -203,10 +203,10 @@ export default function LoginPage() {
                     setServerType('stf')
                     setStep('credentials')
                   }}
-                  className="p-8 rounded-xl border-2 border-border bg-card hover:border-purple-500 hover:bg-purple-500/10 fluent-transition fluent-shadow-xs hover:fluent-shadow-sm group"
+                  className="p-8 rounded-xl border-2 border-border bg-card hover:border-primary hover:bg-primary/10 fluent-transition fluent-shadow-xs hover:fluent-shadow-sm group"
                   aria-label="Select staff server: stf.comp.nus.edu.sg"
                 >
-                  <Briefcase className="w-10 h-10 mx-auto mb-4 text-purple-400 group-hover:scale-110 transition-transform" aria-hidden="true" />
+                  <Briefcase className="w-10 h-10 mx-auto mb-4 text-primary group-hover:scale-110 transition-transform" aria-hidden="true" />
                   <div className="font-bold text-xl mb-2 text-foreground">Staff</div>
                   <div className="text-sm text-muted-foreground">stf.comp.nus.edu.sg</div>
                 </motion.button>

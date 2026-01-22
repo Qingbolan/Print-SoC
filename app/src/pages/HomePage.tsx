@@ -4,9 +4,11 @@ import { usePrinterStore } from '@/store/printer-store'
 import { getAllPrintJobs, getPDFInfo } from '@/lib/printer-api'
 import { safeDialogOpen } from '@/lib/tauri-utils'
 import { toast } from 'sonner'
-import { FileText, AlertCircle } from 'lucide-react'
+import { FileText, AlertCircle, Clock, Printer, Edit3, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { AnimatedCard } from '@/components/magic/animated-card'
+import { PageHeader } from '@/components/layout/PageHeader'
+import { SimpleCard, SimpleCardContent } from '@/components/ui/simple-card'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,18 +21,18 @@ import {
 import type { PrintJobStatus } from '@/types/printer'
 
 const statusColors: Record<PrintJobStatus, string> = {
-  Pending: 'text-gray-600 dark:text-gray-400',
-  Uploading: 'text-blue-600 dark:text-blue-400',
-  Queued: 'text-yellow-600 dark:text-yellow-400',
-  Printing: 'text-purple-600 dark:text-purple-400',
-  Completed: 'text-green-600 dark:text-green-400',
-  Failed: 'text-red-600 dark:text-red-400',
-  Cancelled: 'text-gray-600 dark:text-gray-400',
+  Pending: 'text-muted-foreground',
+  Uploading: 'text-accent',
+  Queued: 'text-warning',
+  Printing: 'text-primary',
+  Completed: 'text-success',
+  Failed: 'text-destructive',
+  Cancelled: 'text-muted-foreground',
 }
 
 export default function ModernHomePageV2() {
   const navigate = useNavigate()
-  const { isConnected, printJobs, setPrintJobs, setCurrentFile, sshConfig } = usePrinterStore()
+  const { isConnected, printJobs, setPrintJobs, setCurrentFile, draftJobs, removeDraftJob } = usePrinterStore()
   const [loading, setLoading] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [errorDialog, setErrorDialog] = useState<{
@@ -43,7 +45,6 @@ export default function ModernHomePageV2() {
     title: '',
     message: '',
   })
-  const connectionStatus = isConnected ? 'connected' : 'disconnected'
 
   const loadJobs = async () => {
     const result = await getAllPrintJobs()
@@ -106,6 +107,25 @@ export default function ModernHomePageV2() {
     }
   }, [handleFileSelect])
 
+  const handleContinueDraft = useCallback((draft: typeof draftJobs[0]) => {
+    // Navigate to preview with draft data
+    const sessionId = Math.random().toString(36).substring(2, 10)
+    navigate(`/preview/${sessionId}`, {
+      state: {
+        filePath: draft.file_path,
+        pdfInfo: draft.pdf_info,
+        draftSettings: draft.settings,
+        draftPrinter: draft.selected_printer,
+      }
+    })
+  }, [navigate])
+
+  const handleDeleteDraft = useCallback((draftId: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    removeDraftJob(draftId)
+    toast.success('Draft removed')
+  }, [removeDraftJob])
+
   useEffect(() => {
     if (!isConnected) {
       navigate('/login')
@@ -154,55 +174,22 @@ export default function ModernHomePageV2() {
 
   const recentJobs = useMemo(() => printJobs.slice(0, 10), [printJobs])
 
-  const stats = useMemo(() => {
-    const completed = printJobs.filter((j) => j.status === 'Completed').length
-    const active = printJobs.filter((j) =>
-      ['Pending', 'Uploading', 'Queued', 'Printing'].includes(j.status)
-    ).length
-    return { total: printJobs.length, completed, active }
-  }, [printJobs])
-
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
-      <div className="border-b border-border/50 backdrop-blur-sm bg-card/50">
-        <div className="px-8 py-4 flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-semibold text-foreground">Print@SoC</h1>
-            <p className="text-sm text-muted-foreground">NUS SoC Printing Service</p>
-          </div>
-          {connectionStatus === 'connected' && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <span className="w-2 h-2 bg-green-600 rounded-full" />
-              Connected to {sshConfig?.host?.includes('stu') ? 'STU' : 'STF'}
-            </div>
-          )}
-        </div>
+      <div className="p-8 border-b border-border/50">
+        <PageHeader
+          title="Print@SoC"
+          description="NUS School of Computing Printing Service"
+          icon={<Printer className="w-8 h-8" />}
+        />
       </div>
 
-      {/* Stats bar */}
-      <div className="border-b border-border/50 backdrop-blur-sm bg-card/30">
-        <div className="px-8 py-3 flex items-center gap-8 text-sm">
-          <div>
-            <span className="text-muted-foreground">Total: </span>
-            <span className="font-medium text-foreground">{stats.total}</span>
-          </div>
-          <div>
-            <span className="text-muted-foreground">Completed: </span>
-            <span className="font-medium text-green-700 dark:text-green-400">{stats.completed}</span>
-          </div>
-          <div>
-            <span className="text-muted-foreground">Active: </span>
-            <span className="font-medium text-blue-700 dark:text-blue-400">{stats.active}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Main content - Left/Right layout with full height */}
+      {/* Main content - Left/Right layout */}
       <div className="flex-1 flex overflow-hidden">
 
-        {/* Left side - Upload area (占满宽度和高度) */}
-        <div className="flex-1 p-8 overflow-y-auto">
+        {/* Left side - Upload area */}
+        <div className="flex-1 p-6 overflow-y-auto">
           <AnimatedCard
             className={`h-full flex items-center justify-center border-2 border-dashed backdrop-blur-sm fluent-transition ${
               isDragging
@@ -248,20 +235,68 @@ export default function ModernHomePageV2() {
           </AnimatedCard>
         </div>
 
-        {/* Right side - Recent jobs table (占满宽度和高度) */}
-        <div className="w-96 border-l border-border/50 backdrop-blur-sm bg-card/30 flex flex-col">
-          <div className="px-6 py-4 border-b border-border/50">
-            <h3 className="text-base font-semibold text-foreground">
+        {/* Right side - Drafts & Recent jobs */}
+        <div className="w-80 border-l border-border/50 bg-card/30 flex flex-col">
+          {/* Drafts Section */}
+          {draftJobs.length > 0 && (
+            <>
+              <div className="px-4 py-3 border-b border-border/50 bg-warning/5">
+                <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                  <Edit3 className="w-4 h-4 text-warning" />
+                  Unsaved Drafts
+                  <span className="ml-auto text-xs text-warning bg-warning/20 px-1.5 py-0.5 rounded-full">
+                    {draftJobs.length}
+                  </span>
+                </h3>
+              </div>
+              <div className="divide-y divide-border/50 border-b border-border/50">
+                {draftJobs.slice(0, 3).map((draft) => (
+                  <Button
+                    key={draft.id}
+                    onClick={() => handleContinueDraft(draft)}
+                    variant="ghost"
+                    className="w-full h-auto px-4 py-3 justify-start rounded-none hover:bg-warning/10 fluent-transition overflow-hidden group"
+                  >
+                    <div className="flex items-center gap-3 w-full overflow-hidden">
+                      <FileText className="w-4 h-4 text-warning flex-shrink-0" />
+                      <div className="flex-1 min-w-0 overflow-hidden text-left">
+                        <div className="text-sm font-medium text-foreground truncate">
+                          {draft.name}
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-0.5">
+                          {draft.pdf_info.num_pages} pages · {draft.settings.copies} copies
+                        </div>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={(e) => handleDeleteDraft(draft.id, e)}
+                      >
+                        <X className="w-3 h-3 text-muted-foreground hover:text-destructive" />
+                      </Button>
+                    </div>
+                  </Button>
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* Recent Jobs Section */}
+          <div className="px-4 py-3 border-b border-border/50">
+            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+              <Clock className="w-4 h-4 text-muted-foreground" />
               Recent Print Jobs
             </h3>
           </div>
 
           <div className="flex-1 overflow-y-auto">
             {recentJobs.length === 0 ? (
-              <div className="flex items-center justify-center h-full px-6">
+              <div className="flex items-center justify-center h-full px-4">
                 <div className="text-center text-muted-foreground">
-                  <p className="text-sm">No print history yet</p>
-                  <p className="text-xs mt-1">Start by uploading a PDF</p>
+                  <FileText className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">No print history</p>
+                  <p className="text-xs mt-1">Upload a PDF to start</p>
                 </div>
               </div>
             ) : (
@@ -270,7 +305,6 @@ export default function ModernHomePageV2() {
                   <Button
                     key={job.id}
                     onClick={() => {
-                      // Navigate to preview with the original file
                       if (job.file_path) {
                         handleFileSelect(job.file_path)
                       } else {
@@ -278,24 +312,26 @@ export default function ModernHomePageV2() {
                       }
                     }}
                     variant="ghost"
-                    className="w-full h-auto px-6 py-4 justify-start rounded-none hover:bg-accent/80 fluent-transition overflow-hidden"
+                    className="w-full h-auto px-4 py-3 justify-start rounded-none hover:bg-accent/50 fluent-transition overflow-hidden"
                   >
-                    <div className="flex items-start gap-3 w-full overflow-hidden">
-                      <FileText className="w-4 h-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                    <div className="flex items-center gap-3 w-full overflow-hidden">
+                      <FileText className="w-4 h-4 text-muted-foreground flex-shrink-0" />
                       <div className="flex-1 min-w-0 overflow-hidden text-left">
-                        <div className="text-sm font-medium text-foreground truncate max-w-full">
+                        <div className="text-sm font-medium text-foreground truncate">
                           {job.name}
                         </div>
-                        <div className="text-xs text-muted-foreground mt-1">
-                          {new Date(job.created_at).toLocaleString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </div>
-                        <div className={`text-xs font-medium mt-1 ${statusColors[job.status]}`}>
-                          {job.status}
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-xs text-muted-foreground">
+                            {new Date(job.created_at).toLocaleString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </span>
+                          <span className={`text-xs font-medium ${statusColors[job.status]}`}>
+                            {job.status}
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -306,14 +342,14 @@ export default function ModernHomePageV2() {
           </div>
 
           {printJobs.length > 10 && (
-            <div className="px-6 py-4 border-t border-border/50 text-center">
+            <div className="px-4 py-3 border-t border-border/50">
               <Button
                 onClick={() => navigate('/jobs')}
                 variant="ghost"
                 size="sm"
-                className="text-sm fluent-transition"
+                className="w-full text-sm fluent-transition"
               >
-                View all {printJobs.length} jobs →
+                View all {printJobs.length} jobs
               </Button>
             </div>
           )}
@@ -329,7 +365,7 @@ export default function ModernHomePageV2() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <div className="flex items-center gap-2">
-              <AlertCircle className="w-5 h-5 text-red-600" />
+              <AlertCircle className="w-5 h-5 text-destructive" />
               <AlertDialogTitle>{errorDialog.title}</AlertDialogTitle>
             </div>
             <AlertDialogDescription className="text-left">

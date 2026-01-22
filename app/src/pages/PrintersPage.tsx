@@ -17,27 +17,27 @@ const statusConfig: Record<
   { color: string; label: string; icon: React.ReactNode }
 > = {
   Online: {
-    color: 'bg-green-500',
+    color: 'bg-success',
     label: 'Online',
     icon: <CheckCircle className="w-4 h-4" />,
   },
   Offline: {
-    color: 'bg-gray-500',
+    color: 'bg-muted-foreground',
     label: 'Offline',
     icon: <AlertCircle className="w-4 h-4" />,
   },
   Busy: {
-    color: 'bg-yellow-500',
+    color: 'bg-warning text-warning-foreground',
     label: 'Busy',
     icon: <AlertCircle className="w-4 h-4" />,
   },
   OutOfPaper: {
-    color: 'bg-red-500',
+    color: 'bg-destructive',
     label: 'Out of Paper',
     icon: <AlertCircle className="w-4 h-4" />,
   },
   Error: {
-    color: 'bg-red-500',
+    color: 'bg-destructive',
     label: 'Error',
     icon: <AlertCircle className="w-4 h-4" />,
   },
@@ -197,10 +197,10 @@ export default function PrintQueuePage() {
                         className={cn(
                           'min-w-[48px] h-9 rounded-md flex items-center justify-center px-3 text-white font-bold text-base shadow-md',
                           printer.status === 'Online' && queueCount === 0
-                            ? 'bg-green-600 dark:bg-green-700'
+                            ? 'bg-success'
                             : printer.status !== 'Online'
-                            ? 'bg-red-600 dark:bg-red-700'
-                            : 'bg-yellow-500 dark:bg-yellow-600'
+                            ? 'bg-destructive'
+                            : 'bg-warning text-warning-foreground'
                         )}
                       >
                         {queueCount}

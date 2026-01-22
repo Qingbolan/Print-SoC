@@ -34,44 +34,56 @@ export function PageBreadcrumb() {
   // Build breadcrumb items from path
   const breadcrumbItems: Array<{ path: string; name: string; icon?: React.ReactNode }> = []
 
-  // Always add home as first item if we're not on home page
-  if (location.pathname !== '/home' && location.pathname !== '/') {
+  // For home page, just show Home as current page
+  const isHomePage = location.pathname === '/home' || location.pathname === '/'
+
+  if (isHomePage) {
     breadcrumbItems.push({
       path: '/home',
       name: routeConfig['/home'].name,
       icon: routeConfig['/home'].icon,
     })
-  }
+  } else {
+    // For other pages, add home as first item
+    breadcrumbItems.push({
+      path: '/home',
+      name: routeConfig['/home'].name,
+      icon: routeConfig['/home'].icon,
+    })
 
-  // Build path progressively
-  let currentPath = ''
-  pathSegments.forEach((segment, index) => {
-    currentPath += `/${segment}`
-    const config = routeConfig[currentPath]
+    // Build path progressively for non-home pages
+    let currentPath = ''
+    pathSegments.forEach((segment, index) => {
+      currentPath += `/${segment}`
+      const config = routeConfig[currentPath]
 
-    if (config) {
-      breadcrumbItems.push({
-        path: currentPath,
-        name: config.name,
-        icon: config.icon,
-      })
-    } else {
-      // Handle dynamic segments (e.g., /preview/:sessionId)
-      const parentPath = '/' + pathSegments.slice(0, index).join('/')
-      const parentConfig = routeConfig[parentPath]
-      if (parentConfig && index > 0) {
-        // This is a dynamic segment after a known route
+      // Skip if this is the home path (already added)
+      if (currentPath === '/home') return
+
+      if (config) {
         breadcrumbItems.push({
           path: currentPath,
-          name: segment, // Show the session ID or dynamic value
-          icon: undefined,
+          name: config.name,
+          icon: config.icon,
         })
+      } else {
+        // Handle dynamic segments (e.g., /preview/:sessionId)
+        const parentPath = '/' + pathSegments.slice(0, index).join('/')
+        const parentConfig = routeConfig[parentPath]
+        if (parentConfig && index > 0) {
+          // This is a dynamic segment after a known route
+          breadcrumbItems.push({
+            path: currentPath,
+            name: segment, // Show the session ID or dynamic value
+            icon: undefined,
+          })
+        }
       }
-    }
-  })
+    })
+  }
 
-  // Don't show breadcrumb on login page or home page (they have custom layouts)
-  const excludedPaths = ['/login', '/home', '/']
+  // Don't show breadcrumb on login page
+  const excludedPaths = ['/login']
   if (excludedPaths.includes(location.pathname)) {
     return null
   }

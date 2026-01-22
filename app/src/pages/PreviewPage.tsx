@@ -62,13 +62,15 @@ export default function ModernPreviewPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const { sessionId } = useParams<{ sessionId?: string }>()
-  const { sshConfig, printerGroups, setPrinters, addPrintJob } = usePrinterStore()
+  const { sshConfig, printerGroups, setPrinters, addPrintJob, addDraftJob, removeDraftJob } = usePrinterStore()
 
   // Get all printers from groups
   const printers = printerGroups.flatMap((g: PrinterGroup) => g.printers)
 
   const initialFilePath = location.state?.filePath
   const initialPdfInfo = location.state?.pdfInfo
+  const draftSettings = location.state?.draftSettings
+  const draftPrinter = location.state?.draftPrinter
 
   // File queue management
   const [fileQueue, setFileQueue] = useState<QueuedFile[]>([])
@@ -109,7 +111,7 @@ export default function ModernPreviewPage() {
     status: 'submitting',
   })
 
-  const [settings, setSettings] = useState<PrintSettings>({
+  const [settings, setSettings] = useState<PrintSettings>(draftSettings || {
     copies: 1,
     duplex: 'DuplexLongEdge',
     orientation: 'Portrait',
@@ -119,7 +121,7 @@ export default function ModernPreviewPage() {
     paper_size: 'A4',
   })
 
-  const [selectedPrinter, setSelectedPrinter] = useState('')
+  const [selectedPrinter, setSelectedPrinter] = useState(draftPrinter || '')
 
   // Get selected file
   const selectedFile = useMemo(() =>
@@ -308,6 +310,23 @@ export default function ModernPreviewPage() {
   useEffect(() => {
     setZoomLevel(1.0)
   }, [selectedFile, settings.pages_per_sheet, settings.orientation])
+
+  // Auto-save draft when settings change
+  useEffect(() => {
+    if (selectedFile?.pdfInfo && selectedFile.path) {
+      const draft = {
+        id: selectedFile.id,
+        name: selectedFile.name,
+        file_path: selectedFile.path,
+        pdf_info: selectedFile.pdfInfo,
+        settings: settings,
+        selected_printer: selectedPrinter || undefined,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }
+      addDraftJob(draft)
+    }
+  }, [selectedFile, settings, selectedPrinter, addDraftJob])
 
   // Zoom control functions
   const handleZoomIn = useCallback(() => {
@@ -589,6 +608,9 @@ export default function ModernPreviewPage() {
         }
       }
 
+      // Remove draft after successful print
+      removeDraftJob(file.id)
+
       if (!silent) {
         setPrintDialog({
           open: true,
@@ -725,7 +747,7 @@ export default function ModernPreviewPage() {
                           // Calculate thumbnail page width based on grid
                           const thumbWidth = Math.max(30, Math.floor(130 / nupGrid.cols))
                           return (
-                            <div key={i} className="bg-gray-100 rounded-sm overflow-hidden flex items-center justify-center">
+                            <div key={i} className="bg-muted rounded-sm overflow-hidden flex items-center justify-center">
                               {pageNum && selectedFile.pdfUrl ? (
                                 <Document file={selectedFile.pdfUrl} loading={null}>
                                   <Page
@@ -736,7 +758,7 @@ export default function ModernPreviewPage() {
                                   />
                                 </Document>
                               ) : (
-                                <span className="text-[8px] text-gray-300">-</span>
+                                <span className="text-[8px] text-muted-foreground/50">-</span>
                               )}
                             </div>
                           )
@@ -869,7 +891,7 @@ export default function ModernPreviewPage() {
                       </span>
                     )}
                     {settings.duplex !== 'Simplex' && (
-                      <span className="bg-green-500/20 text-green-600 dark:text-green-400 px-2 py-1 rounded font-medium">
+                      <span className="bg-success/20 text-success px-2 py-1 rounded font-medium">
                         Duplex
                       </span>
                     )}
@@ -933,7 +955,7 @@ export default function ModernPreviewPage() {
                               key={i}
                               className={cn(
                                 "flex items-center justify-center relative",
-                                settings.pages_per_sheet > 1 && "bg-gray-50 rounded border border-gray-200 overflow-hidden"
+                                settings.pages_per_sheet > 1 && "bg-muted/50 rounded border border-border overflow-hidden"
                               )}
                             >
                               {pageNum ? (
@@ -953,8 +975,8 @@ export default function ModernPreviewPage() {
                                   />
                                 </Document>
                               ) : (
-                                <div className="w-full h-full flex items-center justify-center bg-gray-100/50">
-                                  <span className="text-xs text-gray-300">Empty</span>
+                                <div className="w-full h-full flex items-center justify-center bg-muted/50">
+                                  <span className="text-xs text-muted-foreground/50">Empty</span>
                                 </div>
                               )}
                               {/* Page number indicator for n-up */}
@@ -975,8 +997,8 @@ export default function ModernPreviewPage() {
                       <div className={cn(
                         "absolute bottom-2 left-2 text-xs px-2 py-1 rounded-full font-medium",
                         viewingBack
-                          ? "bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300"
-                          : "bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300"
+                          ? "bg-warning/20 text-warning"
+                          : "bg-accent/20 text-accent"
                       )}>
                         {viewingBack ? 'Back Side' : 'Front Side'}
                       </div>
@@ -1146,7 +1168,7 @@ export default function ModernPreviewPage() {
               onClick={handlePrintAll}
               disabled={fileQueue.length === 0 || !selectedPrinter || submitting}
               size="lg"
-              className="px-6 bg-green-600 hover:bg-green-700"
+              className="px-6 bg-success hover:bg-success-hover"
             >
               <Printer className="w-4 h-4 mr-2" />
               Print All ({fileQueue.length})
@@ -1163,7 +1185,7 @@ export default function ModernPreviewPage() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <div className="flex items-center gap-2">
-              <AlertCircle className="w-5 h-5 text-red-600" />
+              <AlertCircle className="w-5 h-5 text-destructive" />
               <AlertDialogTitle>{errorDialog.title}</AlertDialogTitle>
             </div>
             <AlertDialogDescription>{errorDialog.message}</AlertDialogDescription>
@@ -1214,12 +1236,12 @@ export default function ModernPreviewPage() {
             <>
               <AlertDialogHeader>
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
-                    <svg className="w-6 h-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <div className="w-12 h-12 rounded-full bg-success/20 flex items-center justify-center">
+                    <svg className="w-6 h-6 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
                   </div>
-                  <AlertDialogTitle className="text-green-700 dark:text-green-400">
+                  <AlertDialogTitle className="text-success">
                     Print Job Submitted
                   </AlertDialogTitle>
                 </div>
@@ -1242,8 +1264,8 @@ export default function ModernPreviewPage() {
             <>
               <AlertDialogHeader>
                 <div className="flex items-center gap-3">
-                  <AlertCircle className="w-6 h-6 text-red-600" />
-                  <AlertDialogTitle className="text-red-700 dark:text-red-400">
+                  <AlertCircle className="w-6 h-6 text-destructive" />
+                  <AlertDialogTitle className="text-destructive">
                     Print Job Failed
                   </AlertDialogTitle>
                 </div>

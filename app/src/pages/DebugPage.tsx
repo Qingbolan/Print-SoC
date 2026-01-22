@@ -176,7 +176,7 @@ export default function DebugPage() {
             <Button onClick={handleDisconnect} disabled={isLoading || !isConnected} variant="outline">
               Disconnect
             </Button>
-            <span className={`ml-4 self-center ${isConnected ? 'text-green-600' : 'text-gray-400'}`}>
+            <span className={`ml-4 self-center ${isConnected ? 'text-success' : 'text-muted-foreground'}`}>
               {isConnected ? 'Connected' : 'Not connected'}
             </span>
           </div>

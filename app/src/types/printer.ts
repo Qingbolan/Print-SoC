@@ -104,6 +104,18 @@ export interface ApiResponse<T> {
   error?: string
 }
 
+// ========== Draft Print Job ==========
+export interface DraftPrintJob {
+  id: string
+  name: string
+  file_path: string
+  pdf_info: PDFInfo
+  settings: PrintSettings
+  selected_printer?: string
+  created_at: string
+  updated_at: string
+}
+
 // ========== PDF Processing ==========
 export interface PDFInfo {
   num_pages: number

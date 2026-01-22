@@ -1,11 +1,13 @@
-import { useEffect, useCallback } from 'react'
+import { useEffect, useCallback, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePrinterStore } from '@/store/printer-store'
 import { getAllPrintJobs, cancelPrintJob, deletePrintJob, getPDFInfo } from '@/lib/printer-api'
 import { SimpleCard, SimpleCardHeader, SimpleCardTitle, SimpleCardDescription, SimpleCardContent } from '@/components/ui/simple-card'
-import { SectionHeader, Section, PageContainer } from '@/components/ui/section-header'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { PageHeader } from '@/components/layout/PageHeader'
+import { StatGroup, StatItem } from '@/components/ui/stat-item'
+import { cn } from '@/lib/utils'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,6 +30,8 @@ import {
   Trash2,
   Ban,
   Eye,
+  RefreshCw,
+  History,
 } from 'lucide-react'
 import type { PrintJobStatus } from '@/types/printer'
 
@@ -36,37 +40,37 @@ const statusConfig: Record<
   { color: string; icon: React.ReactNode; label: string }
 > = {
   Pending: {
-    color: 'bg-gray-500',
+    color: 'bg-muted-foreground',
     icon: <Clock className="w-4 h-4" />,
     label: 'Pending',
   },
   Uploading: {
-    color: 'bg-blue-500',
+    color: 'bg-accent',
     icon: <Upload className="w-4 h-4" />,
     label: 'Uploading',
   },
   Queued: {
-    color: 'bg-yellow-500',
+    color: 'bg-warning text-warning-foreground',
     icon: <Clock className="w-4 h-4" />,
     label: 'Queued',
   },
   Printing: {
-    color: 'bg-purple-500',
+    color: 'bg-primary',
     icon: <PrinterIcon className="w-4 h-4" />,
     label: 'Printing',
   },
   Completed: {
-    color: 'bg-green-500',
+    color: 'bg-success',
     icon: <CheckCircle2 className="w-4 h-4" />,
     label: 'Completed',
   },
   Failed: {
-    color: 'bg-red-500',
+    color: 'bg-destructive',
     icon: <XCircle className="w-4 h-4" />,
     label: 'Failed',
   },
   Cancelled: {
-    color: 'bg-gray-500',
+    color: 'bg-muted-foreground',
     icon: <XCircle className="w-4 h-4" />,
     label: 'Cancelled',
   },
@@ -75,16 +79,20 @@ const statusConfig: Record<
 export default function JobsPage() {
   const navigate = useNavigate()
   const { printJobs, setPrintJobs, removePrintJob, sshConfig } = usePrinterStore()
+  const [selectedTab, setSelectedTab] = useState<'active' | 'history'>('active')
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
   useEffect(() => {
     loadJobs()
   }, [])
 
   const loadJobs = async () => {
+    setIsRefreshing(true)
     const result = await getAllPrintJobs()
     if (result.success && result.data) {
       setPrintJobs(result.data)
     }
+    setIsRefreshing(false)
   }
 
   const handlePreviewJob = useCallback(async (filePath: string) => {
@@ -139,182 +147,229 @@ export default function JobsPage() {
       job.status === 'Completed' || job.status === 'Failed' || job.status === 'Cancelled'
   )
 
+  const displayJobs = selectedTab === 'active' ? activeJobs : completedJobs
+
   return (
-    <PageContainer>
-      <SectionHeader
-        title="Print Jobs"
-        description="Manage and track your print jobs"
-        icon={FileText}
-        action={
-          <Button onClick={() => navigate('/print/new')}>
-            <Upload className="w-4 h-4 mr-2" />
-            New Print Job
-          </Button>
-        }
-      />
+    <div className="h-full flex flex-col">
+      {/* Header Section */}
+      <div className="p-8 space-y-8 border-b border-border/50">
+        {/* Header with Action Buttons */}
+        <div className="flex items-start justify-between">
+          <PageHeader
+            title="Print Jobs"
+            description="Manage and track your print jobs"
+            icon={<FileText className="w-8 h-8" />}
+          />
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={loadJobs}
+              disabled={isRefreshing}
+            >
+              <RefreshCw className={`w-4 h-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+            <Button onClick={() => navigate('/home')}>
+              <Upload className="w-4 h-4 mr-2" />
+              New Print Job
+            </Button>
+          </div>
+        </div>
 
-      <Section>
-        {/* Active Jobs */}
-        <div className="space-y-4">
-          <h3 className="text-lg font-semibold">
-            Active Jobs
-            <span className="text-sm font-normal text-muted-foreground ml-2">
-              Currently printing or in queue ({activeJobs.length})
+        {/* Stats */}
+        <StatGroup>
+          <StatItem
+            icon={Clock}
+            value={activeJobs.length}
+            label="Active"
+          />
+          <div className="w-px h-8 bg-border/50" />
+          <StatItem
+            icon={CheckCircle2}
+            value={completedJobs.filter(j => j.status === 'Completed').length}
+            label="Completed"
+          />
+          <div className="w-px h-8 bg-border/50" />
+          <StatItem
+            icon={XCircle}
+            value={completedJobs.filter(j => j.status === 'Failed').length}
+            label="Failed"
+          />
+        </StatGroup>
+      </div>
+
+      {/* Navigation Tabs */}
+      <div className="border-b border-border/50 px-4 py-3">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setSelectedTab('active')}
+            className={cn(
+              'px-6 py-2 rounded-md font-medium transition-colors flex items-center gap-2',
+              selectedTab === 'active'
+                ? 'bg-accent text-foreground'
+                : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
+            )}
+          >
+            <PrinterIcon className="w-4 h-4" />
+            <span>Active</span>
+            <span
+              className={cn(
+                "w-7 h-7 rounded-full flex items-center justify-center font-semibold text-sm",
+                activeJobs.length > 0
+                  ? "bg-warning text-warning-foreground"
+                  : "bg-muted text-muted-foreground"
+              )}
+            >
+              {activeJobs.length}
             </span>
-          </h3>
-          <SimpleCard variant="bordered" padding="md">
-          {activeJobs.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              No active print jobs
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {activeJobs.map((job) => (
-                <div
-                  key={job.id}
-                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/30 transition-colors"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                      <FileText className="w-5 h-5 text-primary" />
-                    </div>
-                    <div>
-                      <div className="font-medium">{job.name}</div>
-                      <div className="text-sm text-muted-foreground">
+          </button>
+
+          <button
+            onClick={() => setSelectedTab('history')}
+            className={cn(
+              'px-6 py-2 rounded-md font-medium transition-colors flex items-center gap-2',
+              selectedTab === 'history'
+                ? 'bg-accent text-foreground'
+                : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
+            )}
+          >
+            <History className="w-4 h-4" />
+            <span>History</span>
+            <span
+              className="w-7 h-7 rounded-full flex items-center justify-center font-semibold text-sm bg-muted text-muted-foreground"
+            >
+              {completedJobs.length}
+            </span>
+          </button>
+        </div>
+      </div>
+
+      {/* Job Cards */}
+      <div className="flex-1 overflow-y-auto p-6">
+        {displayJobs.length === 0 ? (
+          <div className="text-center py-12 text-muted-foreground">
+            <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
+            <p className="text-lg font-medium">
+              {selectedTab === 'active' ? 'No active print jobs' : 'No job history'}
+            </p>
+            <p className="text-sm mt-2">
+              {selectedTab === 'active' ? 'Start a new print job from the Home page' : 'Completed jobs will appear here'}
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-7xl">
+            {displayJobs.map((job) => (
+              <SimpleCard key={job.id} variant="default" hoverable>
+                <SimpleCardHeader>
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1 min-w-0">
+                      <SimpleCardTitle className="flex items-center gap-2 truncate">
+                        <FileText className="w-5 h-5 flex-shrink-0" />
+                        <span className="truncate">{job.name}</span>
+                      </SimpleCardTitle>
+                      <SimpleCardDescription className="mt-1">
                         {job.printer} • {job.settings.copies} {job.settings.copies > 1 ? 'copies' : 'copy'}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {new Date(job.created_at).toLocaleString()}
-                      </div>
+                      </SimpleCardDescription>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-3">
                     <Badge
                       variant="secondary"
-                      className={`${statusConfig[job.status].color} text-white`}
+                      className={`${statusConfig[job.status].color} text-white flex-shrink-0`}
                     >
                       {statusConfig[job.status].icon}
                       <span className="ml-1">{statusConfig[job.status].label}</span>
                     </Badge>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handlePreviewJob(job.file_path)}
-                      title="Preview file"
-                    >
-                      <Eye className="w-4 h-4" />
-                    </Button>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="outline" size="sm">
-                          <Ban className="w-4 h-4" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Cancel Print Job?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            This will cancel the print job. This action cannot be undone.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => handleCancelJob(job.id)}>
-                            Confirm
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
-          </SimpleCard>
-        </div>
+                </SimpleCardHeader>
+                <SimpleCardContent className="space-y-4">
+                  {/* Time */}
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Clock className="w-4 h-4" />
+                    {new Date(job.created_at).toLocaleString()}
+                  </div>
 
-        {/* Completed Jobs */}
-        <div className="space-y-4">
-          <h3 className="text-lg font-semibold">
-            History
-            <span className="text-sm font-normal text-muted-foreground ml-2">
-              Past print jobs ({completedJobs.length})
-            </span>
-          </h3>
-          <SimpleCard variant="bordered" padding="md">
-          {completedJobs.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              No completed jobs
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {completedJobs.map((job) => (
-                <div
-                  key={job.id}
-                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/30 transition-colors"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                      <FileText className="w-5 h-5 text-primary" />
+                  {/* Error message */}
+                  {job.error && (
+                    <div className="text-sm text-destructive bg-destructive/10 p-2 rounded">
+                      {job.error}
                     </div>
-                    <div>
-                      <div className="font-medium">{job.name}</div>
-                      <div className="text-sm text-muted-foreground">
-                        {job.printer} • {job.settings.copies} {job.settings.copies > 1 ? 'copies' : 'copy'}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {new Date(job.created_at).toLocaleString()}
-                      </div>
-                      {job.error && (
-                        <div className="text-xs text-red-500 mt-1">{job.error}</div>
-                      )}
-                    </div>
+                  )}
+
+                  {/* Settings badges */}
+                  <div className="flex flex-wrap gap-2">
+                    {job.settings.duplex !== 'Simplex' && (
+                      <Badge variant="outline">Duplex</Badge>
+                    )}
+                    {job.settings.pages_per_sheet > 1 && (
+                      <Badge variant="outline">{job.settings.pages_per_sheet}-up</Badge>
+                    )}
+                    <Badge variant="outline">{job.settings.paper_size}</Badge>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <Badge
-                      variant="secondary"
-                      className={`${statusConfig[job.status].color} text-white`}
-                    >
-                      {statusConfig[job.status].icon}
-                      <span className="ml-1">{statusConfig[job.status].label}</span>
-                    </Badge>
+
+                  {/* Actions */}
+                  <div className="flex items-center gap-2 pt-2 border-t border-border/50">
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={() => handlePreviewJob(job.file_path)}
-                      title="Preview file"
+                      className="flex-1"
                     >
-                      <Eye className="w-4 h-4" />
+                      <Eye className="w-4 h-4 mr-2" />
+                      Preview
                     </Button>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="outline" size="sm">
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Delete Print Job?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            This will remove the job from history. This action cannot be undone.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => handleDeleteJob(job.id)}>
-                            Delete
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
+
+                    {selectedTab === 'active' ? (
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="outline" size="sm" className="text-destructive hover:text-destructive/80">
+                            <Ban className="w-4 h-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Cancel Print Job?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              This will cancel the print job. This action cannot be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => handleCancelJob(job.id)}>
+                              Confirm
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    ) : (
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="outline" size="sm" className="text-destructive hover:text-destructive/80">
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete Print Job?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              This will remove the job from history. This action cannot be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => handleDeleteJob(job.id)}>
+                              Delete
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    )}
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
-          </SimpleCard>
-        </div>
-      </Section>
-    </PageContainer>
+                </SimpleCardContent>
+              </SimpleCard>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
   )
 }

@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { SSHConfig, PrintJob, Printer, PrinterGroup } from '@/types/printer'
+import type { SSHConfig, PrintJob, Printer, PrinterGroup, DraftPrintJob } from '@/types/printer'
 import { groupPrinters, PRINTERS } from '@/data/printers'
 
 export type ConnectionStatus =
@@ -44,6 +44,13 @@ interface PrinterState {
   updatePrintJob: (jobId: string, updates: Partial<PrintJob>) => void
   removePrintJob: (jobId: string) => void
   clearAllJobs: () => void
+
+  // Draft Jobs (unsaved print jobs)
+  draftJobs: DraftPrintJob[]
+  addDraftJob: (draft: DraftPrintJob) => void
+  updateDraftJob: (draftId: string, updates: Partial<DraftPrintJob>) => void
+  removeDraftJob: (draftId: string) => void
+  clearAllDrafts: () => void
 
   // Printers
   printers: Printer[]
@@ -120,6 +127,31 @@ export const usePrinterStore = create<PrinterState>()(
         })),
       clearAllJobs: () => set({ printJobs: [] }),
 
+      // Draft Jobs
+      draftJobs: [],
+      addDraftJob: (draft) =>
+        set((state) => {
+          // Replace existing draft with same file path, or add new one
+          const existingIndex = state.draftJobs.findIndex(d => d.file_path === draft.file_path)
+          if (existingIndex >= 0) {
+            const newDrafts = [...state.draftJobs]
+            newDrafts[existingIndex] = draft
+            return { draftJobs: newDrafts }
+          }
+          return { draftJobs: [draft, ...state.draftJobs] }
+        }),
+      updateDraftJob: (draftId, updates) =>
+        set((state) => ({
+          draftJobs: state.draftJobs.map((draft) =>
+            draft.id === draftId ? { ...draft, ...updates, updated_at: new Date().toISOString() } : draft
+          ),
+        })),
+      removeDraftJob: (draftId) =>
+        set((state) => ({
+          draftJobs: state.draftJobs.filter((draft) => draft.id !== draftId),
+        })),
+      clearAllDrafts: () => set({ draftJobs: [] }),
+
       // Printers - initialized with all printers
       printers: PRINTERS,
       setPrinters: (printers) => {
@@ -185,6 +217,7 @@ export const usePrinterStore = create<PrinterState>()(
         selectedPrinter: state.selectedPrinter,
         savedCredentials: state.savedCredentials,
         settings: state.settings,
+        draftJobs: state.draftJobs,
       }),
     }
   )
