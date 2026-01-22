@@ -114,7 +114,7 @@ pub fn print_delete_job(job_id: String) -> ApiResponse<String> {
 pub fn print_submit_job(job_id: String, ssh_config: SSHConfig) -> ApiResponse<String> {
     let mut jobs = PRINT_JOBS.lock().unwrap();
 
-    let (file_path, printer_name, job_name, settings) = {
+    let (file_path, printer_name, _job_name, settings) = {
         match jobs.get_mut(&job_id) {
             Some(job) => {
                 job.status = PrintJobStatus::Uploading;
@@ -128,34 +128,60 @@ pub fn print_submit_job(job_id: String, ssh_config: SSHConfig) -> ApiResponse<St
     // Release lock before SSH operations
     drop(jobs);
 
-    // Preprocess PDF if needed (n-up layout or booklet)
+    // Verify input file exists
+    if !std::path::Path::new(&file_path).exists() {
+        let mut jobs = PRINT_JOBS.lock().unwrap();
+        if let Some(job) = jobs.get_mut(&job_id) {
+            job.status = PrintJobStatus::Failed;
+            job.error = Some(format!("Source PDF file not found: {}", file_path));
+            job.updated_at = Utc::now();
+        }
+        return ApiResponse::error(format!("PDF file not found: {}", file_path));
+    }
+
+    eprintln!("[Print] Processing job {} with file: {}", job_id, file_path);
+
+    // Use original file directly - scaling will be done on server
+    let base_file_path = file_path.clone();
+
+    // Apply n-up layout or booklet if needed
     let processed_file_path = if settings.pages_per_sheet > 1 {
         // Use NUS SoC recommended pdfjam for n-up layout
         let temp_dir = std::env::temp_dir();
-        let output_path = temp_dir.join(format!("processed_{}", job_name));
+        let output_path = temp_dir.join(format!("nup_{}.pdf", job_id));
         let output_str = output_path.to_string_lossy().to_string();
 
-        match crate::pdf_service::create_nup_pdf_internal(&file_path, &output_str, settings.pages_per_sheet) {
-            Ok(_) => output_str,
+        eprintln!("[Print] Creating {}-up layout: {} -> {}", settings.pages_per_sheet, base_file_path, output_str);
+        match crate::pdf_service::create_nup_pdf_internal(&base_file_path, &output_str, settings.pages_per_sheet) {
+            Ok(_) => {
+                eprintln!("[Print] N-up layout succeeded");
+                output_str
+            }
             Err(e) => {
+                eprintln!("[Print] N-up layout failed: {}", e);
                 let mut jobs = PRINT_JOBS.lock().unwrap();
                 if let Some(job) = jobs.get_mut(&job_id) {
                     job.status = PrintJobStatus::Failed;
-                    job.error = Some(format!("PDF preprocessing failed: {}", e));
+                    job.error = Some(format!("PDF n-up layout failed: {}", e));
                     job.updated_at = Utc::now();
                 }
-                return ApiResponse::error(format!("Failed to process PDF: {}", e));
+                return ApiResponse::error(format!("Failed to create n-up layout: {}", e));
             }
         }
     } else if settings.booklet {
         // Use booklet layout
         let temp_dir = std::env::temp_dir();
-        let output_path = temp_dir.join(format!("booklet_{}", job_name));
+        let output_path = temp_dir.join(format!("booklet_{}.pdf", job_id));
         let output_str = output_path.to_string_lossy().to_string();
 
-        match crate::pdf_service::create_booklet_pdf_internal(&file_path, &output_str) {
-            Ok(_) => output_str,
+        eprintln!("[Print] Creating booklet layout: {} -> {}", base_file_path, output_str);
+        match crate::pdf_service::create_booklet_pdf_internal(&base_file_path, &output_str) {
+            Ok(_) => {
+                eprintln!("[Print] Booklet layout succeeded");
+                output_str
+            }
             Err(e) => {
+                eprintln!("[Print] Booklet layout failed: {}", e);
                 let mut jobs = PRINT_JOBS.lock().unwrap();
                 if let Some(job) = jobs.get_mut(&job_id) {
                     job.status = PrintJobStatus::Failed;
@@ -166,7 +192,8 @@ pub fn print_submit_job(job_id: String, ssh_config: SSHConfig) -> ApiResponse<St
             }
         }
     } else {
-        file_path.clone()
+        eprintln!("[Print] Using original file directly");
+        base_file_path
     };
 
     // Generate remote file path using job_id (UUID, always safe)

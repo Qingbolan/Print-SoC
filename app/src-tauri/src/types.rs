@@ -71,6 +71,15 @@ pub enum PaperSize {
     A3,
 }
 
+impl PaperSize {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            PaperSize::A4 => "A4",
+            PaperSize::A3 => "A3",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum PrintJobStatus {
     Pending,

@@ -43,12 +43,29 @@ pub fn pdf_create_nup(
 // ========== Internal Implementation ==========
 
 fn get_pdf_info_internal(file_path: &str) -> Result<PDFInfo, Box<dyn std::error::Error>> {
-    let doc = Document::load(Path::new(file_path))?;
-    let num_pages = doc.get_pages().len() as u32;
+    // Check if file exists first
+    let path = Path::new(file_path);
+    if !path.exists() {
+        return Err(format!("PDF file not found: {}", file_path).into());
+    }
 
-    // Get file size
-    let metadata = std::fs::metadata(file_path)?;
+    // Get file size first (this always works if file exists)
+    let metadata = std::fs::metadata(file_path)
+        .map_err(|e| format!("Cannot read file metadata for {}: {}", file_path, e))?;
     let file_size = metadata.len();
+
+    if file_size == 0 {
+        return Err(format!("PDF file is empty: {}", file_path).into());
+    }
+
+    // Try to load with lopdf
+    let doc = Document::load(path)
+        .map_err(|e| format!("Failed to parse PDF {}: {}. The file may be corrupted or use unsupported features.", file_path, e))?;
+
+    let num_pages = doc.get_pages().len() as u32;
+    if num_pages == 0 {
+        return Err(format!("PDF has no pages: {}", file_path).into());
+    }
 
     // Default A4 page size
     let page_size = (595.0, 842.0);
@@ -121,10 +138,16 @@ pub fn create_booklet_pdf_internal(
     input_path: &str,
     output_path: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    // Verify input file exists
+    if !Path::new(input_path).exists() {
+        return Err(format!("Input PDF not found for booklet: {}", input_path).into());
+    }
+
     // For now, just copy the document
     // Full implementation would require complex page reordering
-    let mut doc = Document::load(Path::new(input_path))?;
-    doc.save(Path::new(output_path))?;
+    eprintln!("[PDF] Creating booklet (currently just copying original)");
+    std::fs::copy(input_path, output_path)
+        .map_err(|e| format!("Failed to copy PDF for booklet: {}", e))?;
     Ok(())
 }
 
@@ -133,6 +156,11 @@ pub fn create_nup_pdf_internal(
     output_path: &str,
     pages_per_sheet: u32,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    // Verify input file exists
+    if !Path::new(input_path).exists() {
+        return Err(format!("Input PDF not found for n-up: {}", input_path).into());
+    }
+
     // Use pdfjam command for n-up printing
     // pdfjam --nup [columns]x[rows] input.pdf -o output.pdf
 
@@ -143,8 +171,9 @@ pub fn create_nup_pdf_internal(
         9 => (3, 3),
         _ => {
             // Fallback: just copy the document
-            let mut doc = Document::load(Path::new(input_path))?;
-            doc.save(Path::new(output_path))?;
+            eprintln!("[PDF] Unsupported pages_per_sheet {}, copying original", pages_per_sheet);
+            std::fs::copy(input_path, output_path)
+                .map_err(|e| format!("Failed to copy PDF: {}", e))?;
             return Ok(());
         }
     };
@@ -160,16 +189,24 @@ pub fn create_nup_pdf_internal(
         .output();
 
     match output {
-        Ok(result) if result.status.success() => Ok(()),
+        Ok(result) if result.status.success() => {
+            eprintln!("[PDF] pdfjam n-up succeeded");
+            Ok(())
+        }
         Ok(result) => {
             let stderr = String::from_utf8_lossy(&result.stderr);
-            Err(format!("pdfjam failed: {}", stderr).into())
+            eprintln!("[PDF] pdfjam n-up failed: {}", stderr);
+            // Fallback: copy original file
+            eprintln!("[PDF] Falling back to original file (n-up will not be applied)");
+            std::fs::copy(input_path, output_path)
+                .map_err(|e| format!("Failed to copy PDF: {}", e))?;
+            Ok(())
         }
-        Err(_) => {
-            // If pdfjam is not available, fall back to copying
-            // In production, we should log this warning
-            let mut doc = Document::load(Path::new(input_path))?;
-            doc.save(Path::new(output_path))?;
+        Err(e) => {
+            // pdfjam not available, fall back to copying
+            eprintln!("[PDF] pdfjam not available ({}), copying original file", e);
+            std::fs::copy(input_path, output_path)
+                .map_err(|e| format!("Failed to copy PDF: {}", e))?;
             Ok(())
         }
     }
@@ -182,9 +219,33 @@ pub fn extract_page_range(
     output_path: &str,
     _page_range: &PageRange,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    // Verify input file exists
+    if !Path::new(input_path).exists() {
+        return Err(format!("Input PDF not found: {}", input_path).into());
+    }
+
     // For now, just copy the entire document
     // Full implementation would filter pages
-    let mut doc = Document::load(Path::new(input_path))?;
-    doc.save(Path::new(output_path))?;
+    std::fs::copy(input_path, output_path)
+        .map_err(|e| format!("Failed to copy PDF: {}", e))?;
+    Ok(())
+}
+
+/// Copy PDF file for processing
+/// PDF scaling is handled server-side to avoid external dependencies
+pub fn prepare_pdf_for_print(
+    input_path: &str,
+    output_path: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Verify input file exists
+    if !Path::new(input_path).exists() {
+        return Err(format!("Input PDF not found: {}", input_path).into());
+    }
+
+    // Just copy the file - scaling will be done server-side
+    std::fs::copy(input_path, output_path)
+        .map_err(|e| format!("Failed to copy PDF: {}", e))?;
+
+    eprintln!("[PDF] Prepared {} -> {}", input_path, output_path);
     Ok(())
 }

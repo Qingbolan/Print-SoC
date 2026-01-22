@@ -160,53 +160,70 @@ pub fn ssh_check_printer_queue(_config: SSHConfig, printer: String) -> ApiRespon
 
 // ========== Internal Implementation ==========
 
-const MAX_RETRIES: u32 = 3;
-const CONNECTION_TIMEOUT_SECS: u64 = 30;  // Increased from 10s to 30s
-const RETRY_DELAY_MS: u64 = 2000;  // Increased from 1s to 2s
+const CONNECTION_TIMEOUT_SECS: u64 = 5;  // 5 seconds per IP attempt
 
 fn create_ssh_session(config: &SSHConfig) -> Result<Session, Box<dyn std::error::Error>> {
-    create_ssh_session_with_retry(config, MAX_RETRIES)
-}
-
-fn create_ssh_session_with_retry(
-    config: &SSHConfig,
-    max_retries: u32,
-) -> Result<Session, Box<dyn std::error::Error>> {
-    let mut last_error: Option<Box<dyn std::error::Error>> = None;
-
-    for attempt in 1..=max_retries {
-        match try_create_ssh_session(config) {
-            Ok(session) => return Ok(session),
-            Err(e) => {
-                last_error = Some(e);
-                if attempt < max_retries {
-                    std::thread::sleep(Duration::from_millis(RETRY_DELAY_MS));
-                }
-            }
-        }
-    }
-
-    Err(format!(
-        "Failed to connect after {} attempts: {}",
-        max_retries,
-        last_error.unwrap()
-    )
-    .into())
+    // Single attempt, no retries - fail fast with 3s timeout
+    try_create_ssh_session(config)
 }
 
 fn try_create_ssh_session(config: &SSHConfig) -> Result<Session, Box<dyn std::error::Error>> {
     use std::net::ToSocketAddrs;
+    use std::sync::mpsc;
+    use std::thread;
+
+    // Debug: log connection attempt (without password)
+    println!("[SSH] Connecting to {}@{}:{}", config.username, config.host, config.port);
 
     // Resolve hostname to socket address
     let addr_string = format!("{}:{}", config.host, config.port);
-    let mut addrs = addr_string.to_socket_addrs()
-        .map_err(|e| format!("Failed to resolve hostname {}: {}", config.host, e))?;
+    let addrs: Vec<_> = addr_string.to_socket_addrs()
+        .map_err(|e| format!("Failed to resolve hostname {}: {}", config.host, e))?
+        .collect();
 
-    let socket_addr = addrs.next()
-        .ok_or_else(|| format!("No IP address found for hostname: {}", config.host))?;
+    if addrs.is_empty() {
+        return Err(format!("No IP address found for hostname: {}", config.host).into());
+    }
 
-    // Connect with timeout
-    let tcp = TcpStream::connect_timeout(&socket_addr, Duration::from_secs(CONNECTION_TIMEOUT_SECS))?;
+    println!("[SSH] Resolved to {} IP(s): {:?}", addrs.len(), addrs);
+
+    // Try all addresses in parallel, use first successful connection
+    let (tx, rx) = mpsc::channel();
+    let addr_count = addrs.len();
+
+    for addr in addrs {
+        let tx = tx.clone();
+        thread::spawn(move || {
+            println!("[SSH] Trying IP: {}", addr);
+            match TcpStream::connect_timeout(&addr, Duration::from_secs(CONNECTION_TIMEOUT_SECS)) {
+                Ok(stream) => {
+                    println!("[SSH] TCP connection established to {}", addr);
+                    let _ = tx.send(Ok(stream));
+                }
+                Err(e) => {
+                    println!("[SSH] Failed to connect to {}: {}", addr, e);
+                    let _ = tx.send(Err(e.to_string()));
+                }
+            }
+        });
+    }
+
+    // Wait for first successful connection or all failures
+    let mut errors = Vec::new();
+    let mut tcp: Option<TcpStream> = None;
+
+    for _ in 0..addr_count {
+        match rx.recv_timeout(Duration::from_secs(CONNECTION_TIMEOUT_SECS + 1)) {
+            Ok(Ok(stream)) => {
+                tcp = Some(stream);
+                break;
+            }
+            Ok(Err(e)) => errors.push(e),
+            Err(_) => errors.push("timeout".to_string()),
+        }
+    }
+
+    let tcp = tcp.ok_or_else(|| format!("Failed to connect: {}", errors.join(", ")))?;
 
     // Set read/write timeouts
     tcp.set_read_timeout(Some(Duration::from_secs(CONNECTION_TIMEOUT_SECS)))?;
@@ -216,9 +233,11 @@ fn try_create_ssh_session(config: &SSHConfig) -> Result<Session, Box<dyn std::er
     sess.set_tcp_stream(tcp);
     sess.set_timeout(CONNECTION_TIMEOUT_SECS as u32 * 1000); // milliseconds
     sess.handshake()?;
+    println!("[SSH] Handshake completed");
 
     match &config.auth_type {
         SSHAuthType::Password { password } => {
+            println!("[SSH] Authenticating with password (length: {})", password.len());
             sess.userauth_password(&config.username, password)?;
         }
         SSHAuthType::PrivateKey { key_path, passphrase } => {
@@ -252,6 +271,7 @@ fn test_ssh_connection_internal(config: &SSHConfig) -> Result<String, Box<dyn st
 }
 
 /// Submit a print job via SSH lpr command (uses persistent connection)
+/// Scales PDF on server-side using gs before printing
 pub fn submit_print_job_ssh(
     _config: &SSHConfig,
     printer: &str,
@@ -286,24 +306,52 @@ pub fn submit_print_job_ssh(
         }
     };
 
-    // Build lpr command according to NUS SoC documentation
-    // NUS SoC uses basic lpr syntax: lpr -P queue [-# copies] filename
+    // Paper size dimensions in points
+    let (width_pts, height_pts) = match settings.paper_size {
+        PaperSize::A4 => (595, 842),
+        PaperSize::A3 => (842, 1191),
+    };
+
+    // Create scaled PDF path
+    let scaled_path = remote_file_path.replace(".pdf", "_scaled.pdf");
+
+    // Step 1: Scale PDF on server using ghostscript (available on NUS servers)
+    // -dPDFFitPage: scale content to fit page
+    // -dFIXEDMEDIA: force output page size
+    let scale_command = format!(
+        "gs -sDEVICE=pdfwrite -dPDFFitPage -dFIXEDMEDIA \
+         -dDEVICEWIDTHPOINTS={} -dDEVICEHEIGHTPOINTS={} \
+         -dCompatibilityLevel=1.4 -dNOPAUSE -dBATCH -dQUIET \
+         -sOutputFile=\"{}\" \"{}\" 2>/dev/null || cp \"{}\" \"{}\"",
+        width_pts, height_pts, scaled_path, remote_file_path, remote_file_path, scaled_path
+    );
+
+    eprintln!("[SSH] Scaling PDF on server: {} -> {}", remote_file_path, scaled_path);
+    let scale_result = execute_with_persistent_session(&scale_command);
+    if let Err(e) = &scale_result {
+        eprintln!("[SSH] PDF scaling warning: {}", e);
+        // Continue with original file if scaling fails
+    }
+
+    // Step 2: Build lpr command
+    let print_file = &scaled_path;
     let mut lpr_command = format!("lpr -P {}", actual_printer);
 
     // Add copies (using -# notation as per SoC docs)
-    // Note: # needs escaping in shell, use single quotes around the whole number
     if settings.copies > 1 {
         lpr_command.push_str(&format!(" '-#' {}", settings.copies));
     }
 
-    // NUS SoC lpr may not support CUPS -o options
-    // Duplex is controlled via queue name (-sx suffix)
-    // Paper size and orientation are typically handled by the PDF itself
+    // Add the file
+    lpr_command.push_str(&format!(" \"{}\"", print_file));
 
-    // Add the file (quoted to handle spaces in filename)
-    lpr_command.push_str(&format!(" \"{}\"", remote_file_path));
+    eprintln!("[SSH] Submitting print job: {}", lpr_command);
+    let result = execute_with_persistent_session(&lpr_command);
 
-    execute_with_persistent_session(&lpr_command)
+    // Step 3: Cleanup scaled file
+    let _ = execute_with_persistent_session(&format!("rm -f \"{}\"", scaled_path));
+
+    result
 }
 
 // ========== Persistent Connection Implementation ==========
