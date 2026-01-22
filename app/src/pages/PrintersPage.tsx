@@ -9,7 +9,7 @@ import { RefreshCw, MapPin, Printer as PrinterIcon, CheckCircle, AlertCircle } f
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { SimpleCard, SimpleCardHeader, SimpleCardTitle, SimpleCardDescription, SimpleCardContent } from '@/components/ui/simple-card'
-import { PageHeader } from '@/components/PageHeader'
+import { PageHeader } from '@/components/layout/PageHeader'
 import { StatGroup, StatItem } from '@/components/ui/stat-item'
 
 const statusConfig: Record<

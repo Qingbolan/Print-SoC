@@ -1,5 +1,5 @@
 import { Settings, LogOut, Printer, FolderOpen, Trash2, Terminal, Wifi, User } from "lucide-react"
-import { PageHeader } from "@/components/PageHeader"
+import { PageHeader } from "@/components/layout/PageHeader"
 import { usePrinterStore } from "@/store/printer-store"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"

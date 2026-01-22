@@ -1,20 +1,20 @@
 import React, { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { AppSidebar } from '@/components/app-sidebar'
+import { AppSidebar } from '@/components/layout/app-sidebar'
 import { RBSidebarProvider, RBSidebar } from '@/components/reactbits/sidebar'
 import { I18nProvider } from '@/lib/i18n'
 import { AccentColorProvider } from '@/lib/accent-color'
 import { ThemeProvider } from '@/lib/theme-context'
 import { FluentProviderWrapper } from '@/components/providers/fluent-provider'
 import { AntdProvider } from '@/components/providers/antd-provider'
-import { PageBreadcrumb } from '@/components/PageBreadcrumb'
+import { PageBreadcrumb } from '@/components/layout/PageBreadcrumb'
 import { safeOpenDevTools } from '@/lib/tauri-utils'
 
 // Pages
-import ModernLoginPageV2 from '@/pages/ModernLoginPageV2'
-import ModernHomePageV2 from '@/pages/ModernHomePageV2'
-import ModernPreviewPage from '@/pages/ModernPreviewPage'
-import PrintQueuePage from '@/pages/PrintQueuePage'
+import LoginPage from '@/pages/LoginPage'
+import HomePage from '@/pages/HomePage'
+import PreviewPage from '@/pages/PreviewPage'
+import PrintersPage from '@/pages/PrintersPage'
 import JobsPage from '@/pages/JobsPage'
 import HelpPage from '@/pages/HelpPage'
 import SettingsPage from '@/pages/SettingsPage'
@@ -138,10 +138,10 @@ export default function App() {
       <AppLayout>
         <Routes>
           <Route path="/" element={<Navigate to="/login" replace />} />
-          <Route path="/login" element={<ModernLoginPageV2 />} />
-          <Route path="/home" element={<ModernHomePageV2 />} />
-          <Route path="/preview" element={<ModernPreviewPage />} />
-          <Route path="/printer" element={<PrintQueuePage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/home" element={<HomePage />} />
+          <Route path="/preview/:sessionId?" element={<PreviewPage />} />
+          <Route path="/printer" element={<PrintersPage />} />
           <Route path="/jobs" element={<JobsPage />} />
           <Route path="/help" element={<HelpPage />} />
           <Route path="/settings" element={<SettingsPage />} />

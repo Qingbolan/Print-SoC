@@ -58,7 +58,8 @@ export default function ModernHomePageV2() {
       const info = await getPDFInfo(filePath)
       if (info.success && info.data) {
         setCurrentFile(null, filePath)
-        navigate('/preview', { state: { filePath, pdfInfo: info.data } })
+        const sessionId = Math.random().toString(36).substring(2, 10)
+        navigate(`/preview/${sessionId}`, { state: { filePath, pdfInfo: info.data } })
       } else {
         // Show detailed error message from backend
         const errorMsg = info.error || 'Unknown error occurred'

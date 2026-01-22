@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { PageHeader } from '@/components/PageHeader'
+import { PageHeader } from '@/components/layout/PageHeader'
 import { Terminal } from 'lucide-react'
 
 interface ApiResponse<T> {

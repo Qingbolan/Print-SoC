@@ -1,9 +1,9 @@
 import { Link, useLocation } from "react-router-dom"
-import { GlobeIcon } from "@/components/icons"
+import { GlobeIcon } from "@/components/common/icons"
 import { Home, Printer, History, HelpCircle, Settings as SettingsIcon, PanelLeftIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useI18n } from "@/lib/i18n"
-import { ThemeToggle } from "@/components/theme-toggle"
+import { ThemeToggle } from "@/components/common/theme-toggle"
 import { useRBSidebar } from "@/components/reactbits/sidebar"
 import { usePrinterStore } from "@/store/printer-store"
 

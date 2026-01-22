@@ -1,27 +1,84 @@
-import { useState, useEffect, useCallback, memo } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Card } from '@/components/ui/card'
-import { testSSHConnection } from '@/lib/printer-api'
+import { useSSHConnection } from '@/hooks/useSSHConnection'
 import { usePrinterStore } from '@/store/printer-store'
 import { toast } from 'sonner'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Loader2, ChevronRight, GraduationCap, Briefcase } from 'lucide-react'
 
-export default function ModernLoginPageV2() {
+export default function LoginPage() {
   const navigate = useNavigate()
-  const { setSshConfig, setIsConnected, savedCredentials, setSavedCredentials } = usePrinterStore()
+  const { setSshConfig, savedCredentials, setSavedCredentials } = usePrinterStore()
+  const { connect, isConnecting } = useSSHConnection()
 
   const [step, setStep] = useState<'welcome' | 'server' | 'credentials'>('welcome')
   const [serverType, setServerType] = useState<'stu' | 'stf' | null>(null)
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
-  const [rememberMe, setRememberMe] = useState(true) // Default checked
-  const [loading, setLoading] = useState(false)
+  const [rememberMe, setRememberMe] = useState(true)
   const [autoLoginAttempted, setAutoLoginAttempted] = useState(false)
 
-  // Auto-login effect: check for saved credentials on mount
+  // Build SSH config from current state
+  const buildConfig = (server: 'stu' | 'stf', user: string, pass: string) => ({
+    host: server === 'stu' ? 'stu.comp.nus.edu.sg' : 'stf.comp.nus.edu.sg',
+    port: 22,
+    username: user,
+    auth_type: { type: 'Password' as const, password: pass },
+  })
+
+  // Perform login with given config
+  const performLogin = async (
+    config: ReturnType<typeof buildConfig>,
+    server: 'stu' | 'stf',
+    user: string,
+    pass: string,
+    remember: boolean,
+    isAutoLogin: boolean
+  ) => {
+    const isDebugMode = import.meta.env.VITE_DEBUG_OFFLINE === 'true'
+
+    if (isDebugMode) {
+      // Debug mode: skip actual SSH connection
+      console.log('🔧 Debug mode - Skipping SSH connection')
+      toast.info('🔧 Debug Mode: Skipping SSH connection')
+      setSshConfig(config)
+      if (remember) {
+        setSavedCredentials({ serverType: server, username: user, password: pass, rememberMe: true })
+      }
+      navigate('/home')
+      return
+    }
+
+    if (!isAutoLogin) {
+      toast.info(`Connecting to ${server.toUpperCase()} server...`)
+    }
+
+    // Backend handles retries - single call
+    const result = await connect(config)
+
+    if (result.success) {
+      setSshConfig(config)
+      if (remember) {
+        setSavedCredentials({ serverType: server, username: user, password: pass, rememberMe: true })
+      } else {
+        setSavedCredentials(null)
+      }
+      toast.success(`Connected to ${server.toUpperCase()}!`)
+      navigate('/home')
+    } else {
+      const errorMsg = result.error || 'Connection failed'
+      if (isAutoLogin) {
+        toast.error('Auto-login failed. Please login manually.')
+      } else {
+        toast.error(errorMsg)
+      }
+      console.error('SSH connection error:', errorMsg)
+    }
+  }
+
+  // Auto-login effect
   useEffect(() => {
     if (savedCredentials && savedCredentials.rememberMe && !autoLoginAttempted) {
       setAutoLoginAttempted(true)
@@ -29,121 +86,36 @@ export default function ModernLoginPageV2() {
       setUsername(savedCredentials.username)
       setPassword(savedCredentials.password)
       setRememberMe(true)
+      setStep('credentials')
 
-      // Auto-login after a short delay to show the UI
-      setTimeout(() => {
-        setStep('credentials')
-        // Trigger auto-login
-        const host = savedCredentials.serverType === 'stu'
-          ? 'stu.comp.nus.edu.sg'
-          : 'stf.comp.nus.edu.sg'
-        const config = {
-          host,
-          port: 22,
-          username: savedCredentials.username,
-          auth_type: { type: 'Password' as const, password: savedCredentials.password },
-        }
+      const config = buildConfig(
+        savedCredentials.serverType,
+        savedCredentials.username,
+        savedCredentials.password
+      )
 
-        setLoading(true)
-        const isDebugMode = import.meta.env.VITE_DEBUG_OFFLINE === 'true'
+      const isDebugMode = import.meta.env.VITE_DEBUG_OFFLINE === 'true'
+      if (!isDebugMode) {
+        toast.info(`Connecting to ${savedCredentials.serverType.toUpperCase()}...`)
+      }
 
-        if (isDebugMode) {
-          toast.info(`🔧 Debug Mode: Auto-login to ${savedCredentials.serverType.toUpperCase()}`)
-        } else {
-          toast.info(`Auto-login to ${savedCredentials.serverType.toUpperCase()} server...`)
-        }
-
-        testSSHConnection(config).then(result => {
-          if (result.success) {
-            setSshConfig(config)
-            setIsConnected(true)
-            toast.success(`Auto-login successful!`)
-            setTimeout(() => navigate('/home'), 500)
-          } else {
-            toast.error('Auto-login failed. Please login manually.')
-            setLoading(false)
-          }
-        }).catch(error => {
-          toast.error('Auto-login failed: ' + String(error))
-          setLoading(false)
-        })
-      }, 1000)
-    } else if (savedCredentials && !savedCredentials.rememberMe) {
+      performLogin(config, savedCredentials.serverType, savedCredentials.username, savedCredentials.password, true, true)
+    } else if (savedCredentials && !autoLoginAttempted) {
       // Pre-fill credentials but don't auto-login
       setServerType(savedCredentials.serverType)
       setUsername(savedCredentials.username)
       setPassword(savedCredentials.password)
+      setStep('credentials')
     }
-  }, [savedCredentials, autoLoginAttempted, setSshConfig, setIsConnected, navigate])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [savedCredentials, autoLoginAttempted])
 
-  const handleConnect = useCallback(async () => {
+  const handleConnect = async () => {
     if (!username || !password || !serverType) return
 
-    setLoading(true)
-    const isDebugMode = import.meta.env.VITE_DEBUG_OFFLINE === 'true'
-
-    if (isDebugMode) {
-      toast.info(`🔧 Debug Mode: Skipping SSH connection`)
-    } else {
-      toast.info(`Connecting to ${serverType.toUpperCase()} server...`)
-    }
-
-    const host = serverType === 'stu' ? 'stu.comp.nus.edu.sg' : 'stf.comp.nus.edu.sg'
-    const config = {
-      host,
-      port: 22,
-      username,
-      auth_type: { type: 'Password' as const, password },
-    }
-
-    try {
-      let result
-
-      if (isDebugMode) {
-        // 离线调试模式：跳过SSH连接
-        console.log('🔧 Debug mode enabled - Skipping SSH connection to:', host)
-        result = { success: true }
-      } else {
-        // 正常模式：实际连接SSH
-        console.log('Testing SSH connection to:', host)
-        result = await testSSHConnection(config)
-        console.log('SSH connection result:', result)
-      }
-
-      if (result.success) {
-        setSshConfig(config)
-        setIsConnected(true)
-
-        // Save credentials if "Remember me" is checked
-        if (rememberMe) {
-          setSavedCredentials({
-            serverType,
-            username,
-            password,
-            rememberMe: true,
-          })
-        } else {
-          // Clear saved credentials if not remembering
-          setSavedCredentials(null)
-        }
-
-        const successMsg = isDebugMode
-          ? `Debug Mode: Bypassed ${serverType.toUpperCase()} connection`
-          : `Connected to ${serverType.toUpperCase()} successfully!`
-        toast.success(successMsg)
-        setTimeout(() => navigate('/home'), 500)
-      } else {
-        toast.error(result.error || 'Connection failed')
-        console.error('SSH connection error:', result.error)
-      }
-    } catch (error) {
-      const errorMsg = String(error)
-      toast.error('Connection failed: ' + errorMsg)
-      console.error('SSH connection exception:', error)
-    } finally {
-      setLoading(false)
-    }
-  }, [username, password, serverType, rememberMe, setSshConfig, setIsConnected, setSavedCredentials, navigate])
+    const config = buildConfig(serverType, username, password)
+    await performLogin(config, serverType, username, password, rememberMe, false)
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
@@ -335,18 +307,16 @@ export default function ModernLoginPageV2() {
                 <Button
                   type="submit"
                   className="w-full h-12 text-lg rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 fluent-shadow-sm hover:fluent-shadow fluent-transition border-0"
-                  disabled={loading || !username || !password}
-                  aria-label={loading ? 'Connecting to server' : 'Connect to server'}
+                  disabled={isConnecting || !username || !password}
+                  aria-label={isConnecting ? 'Connecting to server' : 'Connect to server'}
                 >
-                  {loading ? (
+                  {isConnecting ? (
                     <>
                       <Loader2 className="w-5 h-5 mr-2 animate-spin" aria-hidden="true" />
                       Connecting...
                     </>
                   ) : (
-                    <>
-                      Connect
-                    </>
+                    'Connect'
                   )}
                 </Button>
 

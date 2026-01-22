@@ -91,7 +91,8 @@ export default function JobsPage() {
     try {
       const info = await getPDFInfo(filePath)
       if (info.success && info.data) {
-        navigate('/preview', { state: { filePath, pdfInfo: info.data } })
+        const sessionId = Math.random().toString(36).substring(2, 10)
+        navigate(`/preview/${sessionId}`, { state: { filePath, pdfInfo: info.data } })
       } else {
         toast.error('Failed to load PDF: ' + (info.error || 'File may have been moved or deleted'))
       }

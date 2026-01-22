@@ -8,7 +8,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb'
-import { ConnectionStatusBadge } from '@/components/ConnectionStatusBadge'
+import { ConnectionStatusBadge } from '@/components/common/ConnectionStatusBadge'
 
 interface RouteConfig {
   name: string
@@ -55,6 +55,18 @@ export function PageBreadcrumb() {
         name: config.name,
         icon: config.icon,
       })
+    } else {
+      // Handle dynamic segments (e.g., /preview/:sessionId)
+      const parentPath = '/' + pathSegments.slice(0, index).join('/')
+      const parentConfig = routeConfig[parentPath]
+      if (parentConfig && index > 0) {
+        // This is a dynamic segment after a known route
+        breadcrumbItems.push({
+          path: currentPath,
+          name: segment, // Show the session ID or dynamic value
+          icon: undefined,
+        })
+      }
     }
   })
 
