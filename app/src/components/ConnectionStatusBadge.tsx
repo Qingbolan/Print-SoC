@@ -32,8 +32,7 @@ export function ConnectionStatusBadge() {
         return (
           <Badge variant="secondary" className="bg-blue-500 text-white">
             <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-            Connecting ({connectionStatus.attempt}/{connectionStatus.maxAttempts})
-            {elapsedTime > 0 && ` • ${elapsedTime}s`}
+            Connecting{elapsedTime > 0 && ` • ${elapsedTime}s`}
           </Badge>
         )
 

@@ -28,6 +28,7 @@ pub fn print_create_job(
         created_at: Utc::now(),
         updated_at: Utc::now(),
         error: None,
+        lpq_job_id: None,
     };
 
     let mut jobs = PRINT_JOBS.lock().unwrap();
@@ -168,8 +169,8 @@ pub fn print_submit_job(job_id: String, ssh_config: SSHConfig) -> ApiResponse<St
         file_path.clone()
     };
 
-    // Generate remote file path and upload
-    let remote_path = format!("/tmp/{}", job_name);
+    // Generate remote file path using job_id (UUID, always safe)
+    let remote_path = format!("/tmp/{}.pdf", job_id);
     let upload_result = crate::ssh_service::ssh_upload_file(
         ssh_config.clone(),
         processed_file_path,
@@ -181,9 +182,10 @@ pub fn print_submit_job(job_id: String, ssh_config: SSHConfig) -> ApiResponse<St
 
     if !upload_result.success {
         job.status = PrintJobStatus::Failed;
-        job.error = upload_result.error;
+        let error_msg = upload_result.error.clone().unwrap_or_else(|| "Unknown error".to_string());
+        job.error = Some(error_msg.clone());
         job.updated_at = Utc::now();
-        return ApiResponse::error("Failed to upload file".to_string());
+        return ApiResponse::error(error_msg);
     }
 
     // Submit print job
@@ -199,6 +201,10 @@ pub fn print_submit_job(job_id: String, ssh_config: SSHConfig) -> ApiResponse<St
             if let Some(job) = jobs.get_mut(&job_id) {
                 job.status = PrintJobStatus::Printing;
                 job.updated_at = Utc::now();
+                // Parse lpq job ID from lpr output (format: "request id is psts-123 (1 file(s))")
+                if let Some(lpq_id) = parse_lpr_job_id(&output) {
+                    job.lpq_job_id = Some(lpq_id);
+                }
             }
             ApiResponse::success(format!("Print job submitted: {}", output))
         }
@@ -212,6 +218,22 @@ pub fn print_submit_job(job_id: String, ssh_config: SSHConfig) -> ApiResponse<St
             ApiResponse::error(format!("Failed to submit print job: {}", e))
         }
     }
+}
+
+/// Parse the lpq job ID from lpr output
+/// Format: "request id is psts-123 (1 file(s))"
+fn parse_lpr_job_id(output: &str) -> Option<String> {
+    // Look for "request id is XXX" pattern
+    if let Some(start) = output.find("request id is ") {
+        let rest = &output[start + 14..]; // Skip "request id is "
+        // Find the end (space or newline)
+        let end = rest.find(|c: char| c == ' ' || c == '\n' || c == '(').unwrap_or(rest.len());
+        let job_id = rest[..end].trim();
+        if !job_id.is_empty() {
+            return Some(job_id.to_string());
+        }
+    }
+    None
 }
 
 /// Get list of available printers (mock data for now)
@@ -278,4 +300,64 @@ pub fn print_check_printer_status(
     printer_queue: String,
 ) -> ApiResponse<Vec<String>> {
     crate::ssh_service::ssh_check_printer_queue(ssh_config, printer_queue)
+}
+
+/// Check and update status of active print jobs
+/// Returns list of jobs that were marked as completed
+#[tauri::command]
+pub fn print_check_active_jobs(ssh_config: SSHConfig) -> ApiResponse<Vec<String>> {
+    let mut completed_jobs = Vec::new();
+
+    // Get all jobs that are currently in Printing or Queued status
+    let active_jobs: Vec<(String, String, Option<String>)> = {
+        let jobs = PRINT_JOBS.lock().unwrap();
+        jobs.values()
+            .filter(|job| matches!(job.status, PrintJobStatus::Printing | PrintJobStatus::Queued))
+            .map(|job| (job.id.clone(), job.printer.clone(), job.lpq_job_id.clone()))
+            .collect()
+    };
+
+    if active_jobs.is_empty() {
+        return ApiResponse::success(completed_jobs);
+    }
+
+    // Group jobs by printer to minimize lpq calls
+    let mut printer_jobs: std::collections::HashMap<String, Vec<(String, Option<String>)>> = std::collections::HashMap::new();
+    for (job_id, printer, lpq_id) in active_jobs {
+        printer_jobs.entry(printer).or_default().push((job_id, lpq_id));
+    }
+
+    // Check each printer's queue
+    for (printer, jobs_to_check) in printer_jobs {
+        let queue_result = crate::ssh_service::ssh_check_printer_queue(ssh_config.clone(), printer.clone());
+
+        if queue_result.success {
+            let queue_output = queue_result.data.unwrap_or_default().join("\n");
+
+            // Check each job
+            for (job_id, lpq_job_id) in jobs_to_check {
+                let job_in_queue = if let Some(ref lpq_id) = lpq_job_id {
+                    // Check if lpq job ID is in the queue output
+                    queue_output.contains(lpq_id)
+                } else {
+                    // If no lpq_job_id, assume job completed after some time
+                    false
+                };
+
+                if !job_in_queue {
+                    // Job not in queue anymore, mark as completed
+                    let mut jobs = PRINT_JOBS.lock().unwrap();
+                    if let Some(job) = jobs.get_mut(&job_id) {
+                        if matches!(job.status, PrintJobStatus::Printing | PrintJobStatus::Queued) {
+                            job.status = PrintJobStatus::Completed;
+                            job.updated_at = Utc::now();
+                            completed_jobs.push(job_id.clone());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    ApiResponse::success(completed_jobs)
 }

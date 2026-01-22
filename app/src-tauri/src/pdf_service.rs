@@ -176,6 +176,7 @@ pub fn create_nup_pdf_internal(
 }
 
 /// Extract page range from PDF
+#[allow(dead_code)]
 pub fn extract_page_range(
     input_path: &str,
     output_path: &str,

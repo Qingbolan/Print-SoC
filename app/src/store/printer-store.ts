@@ -1,11 +1,11 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { SSHConfig, PrintJob, Printer, PrinterGroup } from '@/types/printer'
-import { groupPrinters } from '@/data/printers'
+import { groupPrinters, PRINTERS } from '@/data/printers'
 
 export type ConnectionStatus =
   | { type: 'disconnected' }
-  | { type: 'connecting'; attempt: number; maxAttempts: number; elapsedSeconds: number }
+  | { type: 'connecting'; elapsedSeconds: number }
   | { type: 'connected'; connectedAt: Date }
   | { type: 'error'; message: string; lastAttempt: Date }
 
@@ -120,8 +120,8 @@ export const usePrinterStore = create<PrinterState>()(
         })),
       clearAllJobs: () => set({ printJobs: [] }),
 
-      // Printers
-      printers: [],
+      // Printers - initialized with all printers
+      printers: PRINTERS,
       setPrinters: (printers) => {
         const groups = groupPrinters(printers)
         set({ printers, printerGroups: groups })
@@ -129,8 +129,8 @@ export const usePrinterStore = create<PrinterState>()(
       selectedPrinter: null,
       setSelectedPrinter: (printer) => set({ selectedPrinter: printer }),
 
-      // Printer Groups
-      printerGroups: [],
+      // Printer Groups - initialized with grouped printers
+      printerGroups: groupPrinters(PRINTERS),
       getPrinterGroups: () => {
         const state = usePrinterStore.getState()
         return groupPrinters(state.printers)

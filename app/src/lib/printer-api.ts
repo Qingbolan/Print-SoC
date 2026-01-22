@@ -145,3 +145,13 @@ export async function checkPrinterStatus(
 ): Promise<ApiResponse<string[]>> {
   return await safeInvoke('print_check_printer_status', { sshConfig, printerQueue })
 }
+
+/**
+ * Check active print jobs and update their status if they've completed
+ * Returns list of job IDs that were marked as completed
+ */
+export async function checkActiveJobs(
+  sshConfig: SSHConfig
+): Promise<ApiResponse<string[]>> {
+  return await safeInvoke('print_check_active_jobs', { sshConfig })
+}

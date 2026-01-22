@@ -268,14 +268,21 @@ export default function ModernHomePageV2() {
                 {recentJobs.map((job) => (
                   <Button
                     key={job.id}
-                    onClick={() => navigate(`/jobs`)}
+                    onClick={() => {
+                      // Navigate to preview with the original file
+                      if (job.file_path) {
+                        handleFileSelect(job.file_path)
+                      } else {
+                        navigate('/jobs')
+                      }
+                    }}
                     variant="ghost"
-                    className="w-full h-auto px-6 py-4 justify-start rounded-none hover:bg-accent/80 fluent-transition"
+                    className="w-full h-auto px-6 py-4 justify-start rounded-none hover:bg-accent/80 fluent-transition overflow-hidden"
                   >
-                    <div className="flex items-start gap-3">
+                    <div className="flex items-start gap-3 w-full overflow-hidden">
                       <FileText className="w-4 h-4 text-muted-foreground mt-0.5 flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium text-foreground truncate">
+                      <div className="flex-1 min-w-0 overflow-hidden text-left">
+                        <div className="text-sm font-medium text-foreground truncate max-w-full">
                           {job.name}
                         </div>
                         <div className="text-xs text-muted-foreground mt-1">

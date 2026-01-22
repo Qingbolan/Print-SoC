@@ -64,8 +64,10 @@ pub fn ssh_disconnect() -> ApiResponse<String> {
 /// Get current SSH connection status
 #[tauri::command]
 pub fn ssh_connection_status() -> ApiResponse<bool> {
-    let manager = SSH_MANAGER.lock().unwrap();
-    ApiResponse::success(manager.is_connected())
+    match SSH_MANAGER.lock() {
+        Ok(manager) => ApiResponse::success(manager.is_connected()),
+        Err(_) => ApiResponse::success(false), // If lock fails, assume disconnected
+    }
 }
 
 /// Test SSH connection with given configuration
@@ -77,56 +79,45 @@ pub fn ssh_test_connection(config: SSHConfig) -> ApiResponse<String> {
     }
 }
 
-/// Execute a command via SSH (uses persistent connection if available)
+/// Execute a command via SSH (uses persistent connection)
 #[tauri::command]
-pub fn ssh_execute_command(config: SSHConfig, command: String) -> ApiResponse<String> {
-    // Try to use persistent connection first
+pub fn ssh_execute_command(_config: SSHConfig, command: String) -> ApiResponse<String> {
     match execute_with_persistent_session(&command) {
-        Ok(output) => return ApiResponse::success(output),
-        Err(_) => {
-            // Fall back to creating a new connection if persistent connection is not available
-            match execute_ssh_command_internal(&config, &command) {
-                Ok(output) => ApiResponse::success(output),
-                Err(e) => ApiResponse::error(e.to_string()),
-            }
-        }
+        Ok(output) => ApiResponse::success(output),
+        Err(e) => ApiResponse::error(format!("SSH command failed: {}. Please reconnect.", e)),
     }
 }
 
-/// Upload a file via SSH/SCP (uses persistent connection if available)
+/// Upload a file via SSH/SCP (uses persistent connection)
 #[tauri::command]
 pub fn ssh_upload_file(
-    config: SSHConfig,
+    _config: SSHConfig,
     local_path: String,
     remote_path: String,
 ) -> ApiResponse<String> {
-    // Try to use persistent connection first
     match upload_with_persistent_session(&local_path, &remote_path) {
-        Ok(_) => return ApiResponse::success(format!("File uploaded to {}", remote_path)),
-        Err(_) => {
-            // Fall back to creating a new connection if persistent connection is not available
-            match upload_file_internal(&config, &local_path, &remote_path) {
-                Ok(_) => ApiResponse::success(format!("File uploaded to {}", remote_path)),
-                Err(e) => ApiResponse::error(e.to_string()),
-            }
-        }
+        Ok(_) => ApiResponse::success(format!("File uploaded to {}", remote_path)),
+        Err(e) => ApiResponse::error(format!("File upload failed: {}. Please reconnect.", e)),
     }
 }
 
-/// Check printer queue status via SSH (uses persistent connection if available)
+/// Debug: Run a raw command and return full output (for testing)
 #[tauri::command]
-pub fn ssh_check_printer_queue(config: SSHConfig, printer: String) -> ApiResponse<Vec<String>> {
+pub fn ssh_debug_command(command: String) -> ApiResponse<String> {
+    match execute_with_persistent_session(&command) {
+        Ok(output) => ApiResponse::success(output),
+        Err(e) => ApiResponse::error(e.to_string()),
+    }
+}
+
+/// Check printer queue status via SSH (uses persistent connection)
+#[tauri::command]
+pub fn ssh_check_printer_queue(_config: SSHConfig, printer: String) -> ApiResponse<Vec<String>> {
     let command = format!("lpq -P {}", printer);
 
-    // Try to use persistent connection first, fall back to new connection
     let output = match execute_with_persistent_session(&command) {
         Ok(output) => output,
-        Err(_) => {
-            match execute_ssh_command_internal(&config, &command) {
-                Ok(output) => output,
-                Err(e) => return ApiResponse::error(e.to_string()),
-            }
-        }
+        Err(e) => return ApiResponse::error(format!("Failed to check printer queue: {}. Please reconnect.", e)),
     };
 
     // Parse lpq output to extract actual print jobs
@@ -260,58 +251,9 @@ fn test_ssh_connection_internal(config: &SSHConfig) -> Result<String, Box<dyn st
     Ok(output.trim().to_string())
 }
 
-fn execute_ssh_command_internal(
-    config: &SSHConfig,
-    command: &str,
-) -> Result<String, Box<dyn std::error::Error>> {
-    let sess = create_ssh_session(config)?;
-
-    let mut channel = sess.channel_session()?;
-    channel.exec(command)?;
-
-    let mut output = String::new();
-    channel.read_to_string(&mut output)?;
-
-    // Also read stderr
-    let mut stderr = String::new();
-    channel.stderr().read_to_string(&mut stderr)?;
-
-    channel.wait_close()?;
-    let exit_status = channel.exit_status()?;
-
-    if exit_status != 0 {
-        return Err(format!("Command failed with status {}: {}", exit_status, stderr).into());
-    }
-
-    Ok(output)
-}
-
-fn upload_file_internal(
-    config: &SSHConfig,
-    local_path: &str,
-    remote_path: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let sess = create_ssh_session(config)?;
-
-    let local_file = std::fs::File::open(local_path)?;
-    let metadata = local_file.metadata()?;
-    let file_size = metadata.len();
-
-    let mut remote_file = sess.scp_send(
-        Path::new(remote_path),
-        0o644,
-        file_size,
-        None,
-    )?;
-
-    std::io::copy(&mut std::io::BufReader::new(local_file), &mut remote_file)?;
-
-    Ok(())
-}
-
-/// Submit a print job via SSH lpr command
+/// Submit a print job via SSH lpr command (uses persistent connection)
 pub fn submit_print_job_ssh(
-    config: &SSHConfig,
+    _config: &SSHConfig,
     printer: &str,
     remote_file_path: &str,
     settings: &PrintSettings,
@@ -345,61 +287,23 @@ pub fn submit_print_job_ssh(
     };
 
     // Build lpr command according to NUS SoC documentation
+    // NUS SoC uses basic lpr syntax: lpr -P queue [-# copies] filename
     let mut lpr_command = format!("lpr -P {}", actual_printer);
 
     // Add copies (using -# notation as per SoC docs)
+    // Note: # needs escaping in shell, use single quotes around the whole number
     if settings.copies > 1 {
-        lpr_command.push_str(&format!(" -\\# {}", settings.copies));
+        lpr_command.push_str(&format!(" '-#' {}", settings.copies));
     }
 
-    // Do NOT add -o sides options - NUS SoC controls this via queue selection
+    // NUS SoC lpr may not support CUPS -o options
+    // Duplex is controlled via queue name (-sx suffix)
+    // Paper size and orientation are typically handled by the PDF itself
 
-    // Add orientation
-    match settings.orientation {
-        Orientation::Landscape => lpr_command.push_str(" -o landscape"),
-        Orientation::Portrait => lpr_command.push_str(" -o portrait"),
-    }
+    // Add the file (quoted to handle spaces in filename)
+    lpr_command.push_str(&format!(" \"{}\"", remote_file_path));
 
-    // Add paper size (media)
-    // Common media names are generally accepted by CUPS/LPD. Map directly for A4, A3.
-    let media = match settings.paper_size {
-        PaperSize::A4 => Some("A4"),
-        PaperSize::A3 => Some("A3"),
-    };
-    if let Some(m) = media {
-        lpr_command.push_str(&format!(" -o media={}", m));
-    }
-
-    // Note: pages_per_sheet should be handled via pdfjam BEFORE uploading
-    // We don't use -o number-up in lpr as pdfjam does better job
-
-    // Page ranges (CUPS)
-    match &settings.page_range {
-        PageRange::All => {}
-        PageRange::Range { start, end } => {
-            if *start >= 1 && *end >= *start {
-                lpr_command.push_str(&format!(" -o page-ranges={}-{}", start, end));
-            }
-        }
-        PageRange::Selection { pages } => {
-            if !pages.is_empty() {
-                let list = pages
-                    .iter()
-                    .filter(|p| **p >= 1)
-                    .map(|p| p.to_string())
-                    .collect::<Vec<_>>()
-                    .join(",");
-                if !list.is_empty() {
-                    lpr_command.push_str(&format!(" -o page-ranges={}", list));
-                }
-            }
-        }
-    }
-
-    // Add the file
-    lpr_command.push_str(&format!(" {}", remote_file_path));
-
-    execute_ssh_command_internal(config, &lpr_command)
+    execute_with_persistent_session(&lpr_command)
 }
 
 // ========== Persistent Connection Implementation ==========
@@ -413,7 +317,8 @@ fn connect_persistent(config: &SSHConfig) -> Result<String, Box<dyn std::error::
     // Enable keepalive to prevent connection timeout
     session.set_keepalive(true, KEEPALIVE_INTERVAL_SECS);
 
-    let mut manager = SSH_MANAGER.lock().unwrap();
+    let mut manager = SSH_MANAGER.lock()
+        .map_err(|e| format!("Failed to acquire lock: {}", e))?;
     manager.session = Some(session);
     manager.config = Some(config.clone());
     manager.update_activity();
@@ -423,55 +328,42 @@ fn connect_persistent(config: &SSHConfig) -> Result<String, Box<dyn std::error::
 
 /// Disconnect persistent SSH session
 fn disconnect_persistent() -> Result<String, Box<dyn std::error::Error>> {
-    let mut manager = SSH_MANAGER.lock().unwrap();
+    let mut manager = SSH_MANAGER.lock()
+        .map_err(|e| format!("Failed to acquire lock: {}", e))?;
 
     if manager.session.is_none() {
         return Err("No active SSH connection".into());
     }
 
-    // Drop the session to close the connection
     manager.session = None;
     manager.config = None;
 
     Ok("Disconnected from SSH server".to_string())
 }
 
-/// Get the persistent session, reconnecting if necessary
-fn get_persistent_session() -> Result<(), Box<dyn std::error::Error>> {
-    let mut manager = SSH_MANAGER.lock().unwrap();
+/// Check if session needs reconnection and attempt to reconnect if necessary
+/// Returns the config needed for reconnection, or None if session is healthy
+fn check_session_health() -> Result<Option<SSHConfig>, Box<dyn std::error::Error>> {
+    let mut manager = SSH_MANAGER.lock()
+        .map_err(|e| format!("Failed to acquire lock: {}", e))?;
 
-    // Check if we have a session
     if manager.session.is_none() {
         return Err("No active SSH connection. Please connect first.".into());
     }
 
-    // Check if the session is still alive
     if let Some(ref session) = manager.session {
-        // Try a simple keepalive check
         match session.keepalive_send() {
             Ok(_) => {
                 manager.update_activity();
-                return Ok(());
+                return Ok(None); // Session is healthy
             }
             Err(_) => {
-                // Connection lost, try to reconnect
+                // Session is dead, return config for reconnection
                 if let Some(ref config) = manager.config {
                     let config_clone = config.clone();
-                    drop(manager); // Release lock before reconnecting
-
-                    // Try to reconnect
-                    match create_ssh_session(&config_clone) {
-                        Ok(new_session) => {
-                            new_session.set_keepalive(true, KEEPALIVE_INTERVAL_SECS);
-                            let mut manager = SSH_MANAGER.lock().unwrap();
-                            manager.session = Some(new_session);
-                            manager.update_activity();
-                            return Ok(());
-                        }
-                        Err(e) => {
-                            return Err(format!("Failed to reconnect: {}", e).into());
-                        }
-                    }
+                    // Clear the dead session
+                    manager.session = None;
+                    return Ok(Some(config_clone));
                 } else {
                     return Err("Connection lost and no config available for reconnection".into());
                 }
@@ -479,63 +371,94 @@ fn get_persistent_session() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
+    Ok(None)
+}
+
+/// Ensure we have a valid session, reconnecting if necessary
+fn ensure_session_valid() -> Result<(), Box<dyn std::error::Error>> {
+    // First check health and get config if reconnection needed
+    let reconnect_config = check_session_health()?;
+
+    // If we need to reconnect, do it outside the lock
+    if let Some(config) = reconnect_config {
+        let new_session = create_ssh_session(&config)?;
+        new_session.set_keepalive(true, KEEPALIVE_INTERVAL_SECS);
+
+        // Now acquire lock again and store the new session
+        let mut manager = SSH_MANAGER.lock()
+            .map_err(|e| format!("Failed to acquire lock: {}", e))?;
+        manager.session = Some(new_session);
+        manager.config = Some(config);
+        manager.update_activity();
+    }
+
     Ok(())
 }
 
-/// Execute command using persistent session
-fn execute_with_persistent_session(
-    command: &str,
-) -> Result<String, Box<dyn std::error::Error>> {
-    // Ensure we have a valid session
-    get_persistent_session()?;
+/// Execute a function with a valid session
+/// This is the core abstraction that handles session management
+fn with_session<T, F>(operation: F) -> Result<T, Box<dyn std::error::Error>>
+where
+    F: FnOnce(&Session) -> Result<T, Box<dyn std::error::Error>>,
+{
+    ensure_session_valid()?;
 
-    let manager = SSH_MANAGER.lock().unwrap();
+    let manager = SSH_MANAGER.lock()
+        .map_err(|e| format!("Failed to acquire lock: {}", e))?;
+
     let session = manager.session.as_ref()
         .ok_or("No active SSH session")?;
 
-    let mut channel = session.channel_session()?;
-    channel.exec(command)?;
+    operation(session)
+}
 
-    let mut output = String::new();
-    channel.read_to_string(&mut output)?;
+/// Execute command using persistent session
+fn execute_with_persistent_session(command: &str) -> Result<String, Box<dyn std::error::Error>> {
+    with_session(|session| {
+        let mut channel = session.channel_session()?;
+        channel.exec(command)?;
 
-    let mut stderr = String::new();
-    channel.stderr().read_to_string(&mut stderr)?;
+        let mut output = String::new();
+        channel.read_to_string(&mut output)?;
 
-    channel.wait_close()?;
-    let exit_status = channel.exit_status()?;
+        let mut stderr = String::new();
+        channel.stderr().read_to_string(&mut stderr)?;
 
-    if exit_status != 0 {
-        return Err(format!("Command failed with status {}: {}", exit_status, stderr).into());
-    }
+        channel.wait_close()?;
+        let exit_status = channel.exit_status()?;
 
-    Ok(output)
+        if exit_status != 0 {
+            // Include both stdout and stderr in error for debugging
+            let error_details = if !stderr.trim().is_empty() {
+                stderr.trim().to_string()
+            } else if !output.trim().is_empty() {
+                output.trim().to_string()
+            } else {
+                format!("No error message (command: {})", command)
+            };
+            return Err(format!("Command failed (exit {}): {}", exit_status, error_details).into());
+        }
+
+        Ok(output)
+    })
 }
 
 /// Upload file using persistent session
-fn upload_with_persistent_session(
-    local_path: &str,
-    remote_path: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
-    // Ensure we have a valid session
-    get_persistent_session()?;
-
-    let manager = SSH_MANAGER.lock().unwrap();
-    let session = manager.session.as_ref()
-        .ok_or("No active SSH session")?;
-
+fn upload_with_persistent_session(local_path: &str, remote_path: &str) -> Result<(), Box<dyn std::error::Error>> {
     let local_file = std::fs::File::open(local_path)?;
     let metadata = local_file.metadata()?;
     let file_size = metadata.len();
 
-    let mut remote_file = session.scp_send(
-        Path::new(remote_path),
-        0o644,
-        file_size,
-        None,
-    )?;
+    with_session(|session| {
+        let mut remote_file = session.scp_send(
+            Path::new(remote_path),
+            0o644,
+            file_size,
+            None,
+        )?;
 
-    std::io::copy(&mut std::io::BufReader::new(local_file), &mut remote_file)?;
+        std::io::copy(&mut std::io::BufReader::new(std::fs::File::open(local_path)?), &mut remote_file)?;
 
-    Ok(())
+        Ok(())
+    })
 }

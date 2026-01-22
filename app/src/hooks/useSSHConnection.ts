@@ -3,23 +3,17 @@ import { usePrinterStore } from '@/store/printer-store'
 import { connectSSH, disconnectSSH } from '@/lib/printer-api'
 import type { SSHConfig } from '@/types/printer'
 
-const MAX_RETRIES = 3
-const RETRY_DELAY_MS = 2000  // Increased from 1s to 2s to match backend
-
 export function useSSHConnection() {
   const { setConnectionStatus, setIsConnected } = usePrinterStore()
   const [isConnecting, setIsConnecting] = useState(false)
 
-  const connectWithRetry = useCallback(async (config: SSHConfig) => {
+  const connect = useCallback(async (config: SSHConfig) => {
     setIsConnecting(true)
-    let attempt = 0
     const startTime = Date.now()
 
-    // Set initial connecting status
+    // Set connecting status
     setConnectionStatus({
       type: 'connecting',
-      attempt: 1,
-      maxAttempts: MAX_RETRIES,
       elapsedSeconds: 0,
     })
 
@@ -28,52 +22,27 @@ export function useSSHConnection() {
       const elapsed = Math.floor((Date.now() - startTime) / 1000)
       setConnectionStatus({
         type: 'connecting',
-        attempt: attempt + 1,
-        maxAttempts: MAX_RETRIES,
         elapsedSeconds: elapsed,
       })
     }, 1000)
 
     try {
-      for (attempt = 0; attempt < MAX_RETRIES; attempt++) {
-        try {
-          // Update attempt number
-          setConnectionStatus({
-            type: 'connecting',
-            attempt: attempt + 1,
-            maxAttempts: MAX_RETRIES,
-            elapsedSeconds: Math.floor((Date.now() - startTime) / 1000),
-          })
+      // Backend handles retries internally
+      const result = await connectSSH(config)
+      clearInterval(timerInterval)
 
-          // Try to establish persistent connection
-          const result = await connectSSH(config)
-
-          if (result.success) {
-            clearInterval(timerInterval)
-            setConnectionStatus({
-              type: 'connected',
-              connectedAt: new Date(),
-            })
-            setIsConnected(true)
-            setIsConnecting(false)
-            return { success: true, message: result.data || 'Connected successfully' }
-          }
-
-          // If not success and not the last attempt, wait before retry
-          if (attempt < MAX_RETRIES - 1) {
-            await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS))
-          }
-        } catch (error) {
-          // Continue to next retry
-          if (attempt < MAX_RETRIES - 1) {
-            await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS))
-          }
-        }
+      if (result.success) {
+        setConnectionStatus({
+          type: 'connected',
+          connectedAt: new Date(),
+        })
+        setIsConnected(true)
+        setIsConnecting(false)
+        return { success: true, message: result.data || 'Connected successfully' }
       }
 
-      // All retries failed
-      clearInterval(timerInterval)
-      const errorMessage = 'Connection failed after ' + MAX_RETRIES + ' attempts'
+      // Connection failed
+      const errorMessage = result.error || 'Connection failed'
       setConnectionStatus({
         type: 'error',
         message: errorMessage,
@@ -110,7 +79,7 @@ export function useSSHConnection() {
   }, [setConnectionStatus, setIsConnected])
 
   return {
-    connectWithRetry,
+    connect,
     disconnect,
     isConnecting,
   }

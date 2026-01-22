@@ -21,6 +21,8 @@ export interface PrintJob {
   created_at: string
   updated_at: string
   error?: string
+  /** The job ID assigned by lpq (e.g., "psts-123") */
+  lpq_job_id?: string
 }
 
 export interface PrintSettings {
@@ -58,6 +60,7 @@ export interface Printer {
   name: string
   queue_name: string
   location: PrinterLocation
+  model?: string
   status: PrinterStatus
   paper_level?: number
   supports_duplex: boolean
@@ -66,6 +69,8 @@ export interface Printer {
   group_id?: string
   variant?: PrinterVariant
   queue_count?: number
+  has_banner?: boolean
+  access_level?: 'public' | 'staff' | 'restricted'
 }
 
 export interface PrinterGroup {
@@ -76,7 +81,7 @@ export interface PrinterGroup {
   total_queue_count: number
 }
 
-export type PrinterVariant = 'main' | 'sx' | 'nb'
+export type PrinterVariant = 'main' | 'sx' | 'nb' | 'dx' | 'a3' | 'a3-dx'
 
 export interface PrinterLocation {
   building: string

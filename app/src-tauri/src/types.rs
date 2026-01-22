@@ -29,6 +29,8 @@ pub struct PrintJob {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub error: Option<String>,
+    /// The job ID assigned by lpq (e.g., "psts-123")
+    pub lpq_job_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

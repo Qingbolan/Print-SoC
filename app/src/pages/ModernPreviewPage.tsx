@@ -85,6 +85,8 @@ export default function ModernPreviewPage() {
 
   // Ref for PDF container to calculate optimal size
   const pdfContainerRef = useRef<HTMLDivElement>(null)
+  // Track if initial file was already added (prevent React 18 Strict Mode double-mount)
+  const initialFileAddedRef = useRef(false)
 
   const [errorDialog, setErrorDialog] = useState<{
     open: boolean
@@ -169,7 +171,8 @@ export default function ModernPreviewPage() {
 
   // Initialize with file from location state
   useEffect(() => {
-    if (initialFilePath) {
+    if (initialFilePath && !initialFileAddedRef.current) {
+      initialFileAddedRef.current = true
       addFileToQueue(initialFilePath, initialPdfInfo)
     }
     setPrinters(PRINTERS)
@@ -256,7 +259,20 @@ export default function ModernPreviewPage() {
       error: null,
     }
 
-    setFileQueue(prev => [...prev, newFile])
+    // Use functional update to check for duplicates with current state
+    let isDuplicate = false
+    setFileQueue(prev => {
+      const existing = prev.find(f => f.path === filePath)
+      if (existing) {
+        isDuplicate = true
+        setSelectedFileId(existing.id)
+        return prev // Don't add duplicate
+      }
+      return [...prev, newFile]
+    })
+
+    if (isDuplicate) return
+
     if (!selectedFileId) {
       setSelectedFileId(fileId)
     }
@@ -320,19 +336,25 @@ export default function ModernPreviewPage() {
       return
     }
 
+    // In Tauri, we can get file path from dataTransfer
+    // For web compatibility, use file dialog if path not available
     for (const file of pdfFiles) {
-      // Use Tauri dialog to get file path
-      const { open } = await import('@tauri-apps/plugin-dialog')
-      const filePath = await open({
-        multiple: false,
-        filters: [{
-          name: 'PDF',
-          extensions: ['pdf']
-        }]
-      })
-
+      // Try to get path from file (Tauri provides this)
+      const filePath = (file as File & { path?: string }).path
       if (filePath) {
-        await addFileToQueue(filePath as string)
+        await addFileToQueue(filePath)
+      } else {
+        // Fallback: show file dialog once for all files
+        toast.info('Please select the dropped file(s) in the dialog')
+        const { open } = await import('@tauri-apps/plugin-dialog')
+        const selectedPath = await open({
+          multiple: false,
+          filters: [{ name: 'PDF', extensions: ['pdf'] }]
+        })
+        if (selectedPath) {
+          await addFileToQueue(selectedPath as string)
+        }
+        break // Only show dialog once
       }
     }
   }
@@ -387,10 +409,11 @@ export default function ModernPreviewPage() {
     const containerWidth = pdfContainerRef.current.clientWidth
     const containerHeight = pdfContainerRef.current.clientHeight
 
-    // Calculate scale to fit both width and height
-    const scaleWidth = (containerWidth * 0.95) / viewport.width
-    const scaleHeight = (containerHeight * 0.95) / viewport.height
-    const scale = Math.min(scaleWidth, scaleHeight, 2.0) // Cap at 2x
+    // Calculate scale to fit within container with padding
+    // Use smaller multiplier to ensure PDF doesn't overflow even with zoom
+    const scaleWidth = (containerWidth * 0.85) / viewport.width
+    const scaleHeight = (containerHeight * 0.85) / viewport.height
+    const scale = Math.min(scaleWidth, scaleHeight, 1.5) // Cap at 1.5x to prevent overflow
 
     setPageWidth(viewport.width * scale)
     setPageHeight(viewport.height * scale)
@@ -425,12 +448,28 @@ export default function ModernPreviewPage() {
   }, [selectedFile])
 
   const handlePrintCurrent = useCallback(async () => {
-    if (!selectedFile || !selectedPrinter || !sshConfig) return
+    if (!selectedFile) return
+    if (!selectedPrinter) {
+      toast.error('Please select a printer')
+      return
+    }
+    if (!sshConfig) {
+      toast.error('Not connected to server. Please login first.')
+      return
+    }
     await printFile(selectedFile)
   }, [selectedFile, selectedPrinter, sshConfig, settings])
 
   const handlePrintAll = useCallback(async () => {
-    if (fileQueue.length === 0 || !selectedPrinter || !sshConfig) return
+    if (fileQueue.length === 0) return
+    if (!selectedPrinter) {
+      toast.error('Please select a printer')
+      return
+    }
+    if (!sshConfig) {
+      toast.error('Not connected to server. Please login first.')
+      return
+    }
 
     setSubmitting(true)
     setPrintDialog({
@@ -477,7 +516,14 @@ export default function ModernPreviewPage() {
   }, [fileQueue, selectedPrinter, sshConfig, settings])
 
   const printFile = async (file: QueuedFile, silent = false) => {
-    if (!selectedPrinter || !sshConfig) return
+    if (!selectedPrinter) {
+      toast.error('Please select a printer')
+      return
+    }
+    if (!sshConfig) {
+      toast.error('Not connected to server. Please login first.')
+      return
+    }
 
     if (!silent) {
       setSubmitting(true)
@@ -594,7 +640,7 @@ export default function ModernPreviewPage() {
       {/* Main content - 3 column layout */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left sidebar - Page Thumbnails */}
-        <div className="w-48 border-r border-border/50 flex flex-col bg-muted/20">
+        <div className="w-40 border-r border-border/50 flex flex-col bg-muted/20">
           <div className="p-3 border-b border-border/50">
             <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider">
               Preview
@@ -626,7 +672,7 @@ export default function ModernPreviewPage() {
                         >
                           <Page
                             pageNumber={pageNum}
-                            width={160}
+                            width={130}
                             renderTextLayer={false}
                             renderAnnotationLayer={false}
                           />
@@ -661,9 +707,10 @@ export default function ModernPreviewPage() {
           {selectedFile ? (
             <>
               {/* Page navigation at top */}
-              <div className="px-6 py-3 border-b border-border/50 bg-card/50">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
+              <div className="px-4 py-2 border-b border-border/50 bg-card/50">
+                <div className="flex items-center justify-between gap-4">
+                  {/* Page navigation */}
+                  <div className="flex items-center gap-2">
                     <Button
                       onClick={() => {
                         const pagesArray = Array.from(pagesToPrint).sort((a, b) => a - b)
@@ -674,13 +721,13 @@ export default function ModernPreviewPage() {
                       }}
                       disabled={!pagesToPrint.has(pageNumber) || Array.from(pagesToPrint).sort((a, b) => a - b).indexOf(pageNumber) === 0}
                       variant="outline"
-                      size="sm"
+                      size="icon"
+                      className="h-8 w-8"
                     >
-                      <ChevronLeft className="w-4 h-4 mr-1" />
-                      Previous
+                      <ChevronLeft className="w-4 h-4" />
                     </Button>
-                    <span className="text-sm font-medium">
-                      Page {pageNumber} of {selectedFile.pdfInfo?.num_pages || numPages}
+                    <span className="text-sm font-medium whitespace-nowrap">
+                      {pageNumber} / {selectedFile.pdfInfo?.num_pages || numPages}
                     </span>
                     <Button
                       onClick={() => {
@@ -692,62 +739,55 @@ export default function ModernPreviewPage() {
                       }}
                       disabled={!pagesToPrint.has(pageNumber) || Array.from(pagesToPrint).sort((a, b) => a - b).indexOf(pageNumber) === Array.from(pagesToPrint).length - 1}
                       variant="outline"
-                      size="sm"
+                      size="icon"
+                      className="h-8 w-8"
                     >
-                      Next
-                      <ChevronRight className="w-4 h-4 ml-1" />
+                      <ChevronRight className="w-4 h-4" />
                     </Button>
                   </div>
 
-                  <div className="flex items-center gap-4">
-                    {/* Zoom controls */}
-                    <div className="flex items-center gap-2 border-r border-border pr-4">
-                      <Button
-                        onClick={handleZoomOut}
-                        disabled={zoomLevel <= 0.5}
-                        variant="outline"
-                        size="sm"
-                        title="缩小"
-                      >
-                        <ZoomOut className="w-4 h-4" />
-                      </Button>
-                      <span className="text-xs font-medium w-12 text-center">
-                        {Math.round(zoomLevel * 100)}%
-                      </span>
-                      <Button
-                        onClick={handleZoomIn}
-                        disabled={zoomLevel >= 3.0}
-                        variant="outline"
-                        size="sm"
-                        title="放大"
-                      >
-                        <ZoomIn className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        onClick={handleResetView}
-                        variant="outline"
-                        size="sm"
-                        title="归位"
-                      >
-                        <Maximize2 className="w-4 h-4" />
-                      </Button>
-                      {zoomLevel > 1.0 && (
-                        <span className="text-xs text-muted-foreground flex items-center gap-1">
-                          <Move className="w-3 h-3" />
-                          拖动移动
-                        </span>
-                      )}
-                    </div>
+                  {/* Zoom controls */}
+                  <div className="flex items-center gap-1">
+                    <Button
+                      onClick={handleZoomOut}
+                      disabled={zoomLevel <= 0.5}
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                    >
+                      <ZoomOut className="w-4 h-4" />
+                    </Button>
+                    <span className="text-xs font-medium w-10 text-center">
+                      {Math.round(zoomLevel * 100)}%
+                    </span>
+                    <Button
+                      onClick={handleZoomIn}
+                      disabled={zoomLevel >= 3.0}
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                    >
+                      <ZoomIn className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      onClick={handleResetView}
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      title="Reset view"
+                    >
+                      <Maximize2 className="w-4 h-4" />
+                    </Button>
+                  </div>
 
+                  {/* File name and info */}
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground min-w-0">
                     {(settings.pages_per_sheet > 1 || settings.booklet) && (
-                      <div className="text-xs text-muted-foreground">
-                        {settings.booklet && <span>📖 Booklet mode</span>}
-                        {settings.pages_per_sheet > 1 && <span>📄 {settings.pages_per_sheet}-up → {effectivePageCount} sheets</span>}
-                      </div>
+                      <span className="whitespace-nowrap">
+                        {settings.booklet ? '📖 Booklet' : `📄 ${settings.pages_per_sheet}-up`}
+                      </span>
                     )}
-                    <div className="text-sm text-muted-foreground">
-                      {selectedFile.name}
-                    </div>
+                    <span className="truncate">{selectedFile.name}</span>
                   </div>
                 </div>
               </div>
@@ -756,8 +796,8 @@ export default function ModernPreviewPage() {
               <div
                 ref={pdfContainerRef}
                 className={cn(
-                  "flex-1 overflow-hidden bg-muted/20 flex items-center justify-center py-8 px-4",
-                  zoomLevel > 1.0 && "cursor-move"
+                  "flex-1 bg-muted/20 flex items-center justify-center p-4",
+                  zoomLevel > 1.0 ? "overflow-auto cursor-move" : "overflow-hidden"
                 )}
                 onMouseDown={handleMouseDown}
                 onMouseMove={handleMouseMove}

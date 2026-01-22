@@ -20,7 +20,6 @@ const routeConfig: Record<string, RouteConfig> = {
   '/home': { name: 'Home', icon: <Home className="w-3.5 h-3.5" /> },
   '/login': { name: 'Login' },
   '/printer': { name: 'Printer', icon: <Printer className="w-3.5 h-3.5" /> },
-  '/printers': { name: 'Printers', icon: <Printer className="w-3.5 h-3.5" /> },
   '/queue': { name: 'Print Queue', icon: <ListOrdered className="w-3.5 h-3.5" /> },
   '/jobs': { name: 'Print Jobs', icon: <FileText className="w-3.5 h-3.5" /> },
   '/help': { name: 'Help', icon: <HelpCircle className="w-3.5 h-3.5" /> },

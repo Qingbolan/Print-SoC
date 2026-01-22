@@ -7,13 +7,14 @@ mod print_service;
 // Import commands
 use ssh_service::{
     ssh_connect, ssh_disconnect, ssh_connection_status,
-    ssh_test_connection, ssh_execute_command, ssh_upload_file, ssh_check_printer_queue
+    ssh_test_connection, ssh_execute_command, ssh_upload_file, ssh_check_printer_queue,
+    ssh_debug_command
 };
 use pdf_service::{pdf_get_info, pdf_generate_booklet_layout, pdf_create_booklet, pdf_create_nup};
 use print_service::{
     print_create_job, print_get_all_jobs, print_get_job, print_update_job_status,
     print_cancel_job, print_delete_job, print_submit_job, print_get_printers,
-    print_check_printer_status,
+    print_check_printer_status, print_check_active_jobs,
 };
 
 // Import Manager trait for window methods
@@ -34,6 +35,7 @@ pub fn run() {
             ssh_execute_command,
             ssh_upload_file,
             ssh_check_printer_queue,
+            ssh_debug_command,
             // PDF operations
             pdf_get_info,
             pdf_generate_booklet_layout,
@@ -49,6 +51,7 @@ pub fn run() {
             print_submit_job,
             print_get_printers,
             print_check_printer_status,
+            print_check_active_jobs,
         ])
         .setup(|app| {
             // Get the main window

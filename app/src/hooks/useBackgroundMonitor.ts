@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { usePrinterStore } from '@/store/printer-store'
 import { PRINTERS } from '@/data/printers'
-import { checkPrinterQueue } from '@/lib/printer-api'
+import { checkPrinterQueue, checkActiveJobs, getAllPrintJobs } from '@/lib/printer-api'
 
 // Global refs to manage refresh state across all instances
 const globalIsLoadingRef = { current: false }
@@ -17,6 +17,7 @@ export function useBackgroundMonitor() {
     isConnected,
     printers,
     setPrinters,
+    setPrintJobs,
     updatePrinterStatus,
     setIsRefreshing,
     setLastRefreshTime
@@ -72,6 +73,20 @@ export function useBackgroundMonitor() {
     setIsRefreshing(true)
 
     try {
+      // Check active print jobs first and update their status
+      try {
+        const result = await checkActiveJobs(sshConfig)
+        if (result.success && result.data && result.data.length > 0) {
+          // Refresh job list if any jobs completed
+          const jobsResult = await getAllPrintJobs()
+          if (jobsResult.success && jobsResult.data) {
+            setPrintJobs(jobsResult.data)
+          }
+        }
+      } catch (error) {
+        console.error('Failed to check active jobs:', error)
+      }
+
       // Fetch queue data for all printers sequentially to avoid overwhelming the persistent SSH connection
       // Can be interrupted if component unmounts or connection is lost
       for (const printer of PRINTERS) {
@@ -107,7 +122,7 @@ export function useBackgroundMonitor() {
  */
 export async function refreshPrinters() {
   const store = usePrinterStore.getState()
-  const { sshConfig, updatePrinterStatus, setIsRefreshing, setLastRefreshTime } = store
+  const { sshConfig, updatePrinterStatus, setPrintJobs, setIsRefreshing, setLastRefreshTime } = store
 
   if (!sshConfig || globalIsLoadingRef.current) return
 
@@ -115,6 +130,20 @@ export async function refreshPrinters() {
   setIsRefreshing(true)
 
   try {
+    // Check active print jobs first and update their status
+    try {
+      const result = await checkActiveJobs(sshConfig)
+      if (result.success && result.data && result.data.length > 0) {
+        // Refresh job list if any jobs completed
+        const jobsResult = await getAllPrintJobs()
+        if (jobsResult.success && jobsResult.data) {
+          setPrintJobs(jobsResult.data)
+        }
+      }
+    } catch (error) {
+      console.error('Failed to check active jobs:', error)
+    }
+
     for (const printer of PRINTERS) {
       if (!globalShouldContinueRef.current) {
         break

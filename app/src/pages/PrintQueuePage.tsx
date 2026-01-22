@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { usePrinterStore } from '@/store/printer-store'
 import { refreshPrinters } from '@/hooks/useBackgroundMonitor'
+import { getPrintersForServerType, groupPrinters } from '@/data/printers'
 import type { PrinterStatus } from '@/types/printer'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -43,8 +44,13 @@ const statusConfig: Record<
 }
 
 export default function PrintQueuePage() {
-  const { printers, printerGroups, sshConfig, isConnected, isRefreshing } = usePrinterStore()
+  const { sshConfig, isConnected, isRefreshing, savedCredentials } = usePrinterStore()
   const [selectedGroup, setSelectedGroup] = useState<string | null>('info')
+
+  // Filter printers based on user account type (stu = student, stf = staff)
+  const serverType = savedCredentials?.serverType || (sshConfig?.host?.includes('stf') ? 'stf' : 'stu')
+  const filteredPrinters = useMemo(() => getPrintersForServerType(serverType), [serverType])
+  const printerGroups = useMemo(() => groupPrinters(filteredPrinters), [filteredPrinters])
 
   const handleRefresh = async () => {
     if (!sshConfig) {
@@ -107,21 +113,21 @@ export default function PrintQueuePage() {
         <StatGroup>
           <StatItem
             icon={CheckCircle}
-            value={printers.filter((p) => p.status === 'Online').length}
+            value={filteredPrinters.filter((p) => p.status === 'Online').length}
             label="Online"
           />
           <div className="w-px h-8 bg-border/50" />
           <StatItem
             icon={PrinterIcon}
-            value={printers.length}
+            value={filteredPrinters.length}
             label="Total Printers"
           />
         </StatGroup>
       </div>
 
       {/* Navigation Tabs */}
-      <div className="border-b border-border/50 px-4 py-3">
-        <div className="flex items-center gap-3">
+      <div className="border-b border-border/50 px-4 py-3 overflow-x-auto">
+        <div className="flex items-center gap-3 min-w-max">
           {/* Info Tab */}
           <button
             onClick={() => setSelectedGroup('info')}

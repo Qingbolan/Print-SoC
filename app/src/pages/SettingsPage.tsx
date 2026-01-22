@@ -48,7 +48,7 @@ export default function SettingsPage() {
     logout,
   } = usePrinterStore()
 
-  const { connectWithRetry, disconnect, isConnecting } = useSSHConnection()
+  const { connect, disconnect, isConnecting } = useSSHConnection()
 
   const [formData, setFormData] = useState<SSHConfig>(
     sshConfig || {
@@ -80,7 +80,7 @@ export default function SettingsPage() {
       return
     }
 
-    const result = await connectWithRetry(formData)
+    const result = await connect(formData)
     if (result.success) {
       setSshConfig(formData)
       toast.success('Connection successful!')
@@ -381,8 +381,7 @@ export default function SettingsPage() {
                 </div>
                 {connectionStatus.type === 'connecting' && (
                   <div className="mt-2 text-xs text-muted-foreground">
-                    Retry {connectionStatus.attempt}/{connectionStatus.maxAttempts} •
-                    Elapsed: {connectionStatus.elapsedSeconds}s
+                    Connecting... {connectionStatus.elapsedSeconds}s
                   </div>
                 )}
               </div>

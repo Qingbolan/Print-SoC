@@ -1,7 +1,7 @@
-import { useEffect } from 'react'
+import { useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePrinterStore } from '@/store/printer-store'
-import { getAllPrintJobs, cancelPrintJob, deletePrintJob } from '@/lib/printer-api'
+import { getAllPrintJobs, cancelPrintJob, deletePrintJob, getPDFInfo } from '@/lib/printer-api'
 import { SimpleCard, SimpleCardHeader, SimpleCardTitle, SimpleCardDescription, SimpleCardContent } from '@/components/ui/simple-card'
 import { SectionHeader, Section, PageContainer } from '@/components/ui/section-header'
 import { Badge } from '@/components/ui/badge'
@@ -27,6 +27,7 @@ import {
   Printer as PrinterIcon,
   Trash2,
   Ban,
+  Eye,
 } from 'lucide-react'
 import type { PrintJobStatus } from '@/types/printer'
 
@@ -85,6 +86,19 @@ export default function JobsPage() {
       setPrintJobs(result.data)
     }
   }
+
+  const handlePreviewJob = useCallback(async (filePath: string) => {
+    try {
+      const info = await getPDFInfo(filePath)
+      if (info.success && info.data) {
+        navigate('/preview', { state: { filePath, pdfInfo: info.data } })
+      } else {
+        toast.error('Failed to load PDF: ' + (info.error || 'File may have been moved or deleted'))
+      }
+    } catch (error) {
+      toast.error('Failed to open preview: File may have been moved or deleted')
+    }
+  }, [navigate])
 
   const handleCancelJob = async (jobId: string) => {
     if (!sshConfig) {
@@ -181,6 +195,14 @@ export default function JobsPage() {
                       {statusConfig[job.status].icon}
                       <span className="ml-1">{statusConfig[job.status].label}</span>
                     </Badge>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handlePreviewJob(job.file_path)}
+                      title="Preview file"
+                    >
+                      <Eye className="w-4 h-4" />
+                    </Button>
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
                         <Button variant="outline" size="sm">
@@ -255,6 +277,14 @@ export default function JobsPage() {
                       {statusConfig[job.status].icon}
                       <span className="ml-1">{statusConfig[job.status].label}</span>
                     </Badge>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handlePreviewJob(job.file_path)}
+                      title="Preview file"
+                    >
+                      <Eye className="w-4 h-4" />
+                    </Button>
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
                         <Button variant="outline" size="sm">

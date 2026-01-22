@@ -1,6 +1,6 @@
 import { Link, useLocation } from "react-router-dom"
 import { GlobeIcon } from "@/components/icons"
-import { Home, Printer, MapPin, History, HelpCircle, Settings as SettingsIcon, PanelLeftIcon, Upload } from "lucide-react"
+import { Home, Printer, History, HelpCircle, Settings as SettingsIcon, PanelLeftIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useI18n } from "@/lib/i18n"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -10,7 +10,7 @@ import { usePrinterStore } from "@/store/printer-store"
 export function AppSidebar() {
   const location = useLocation()
   const pathname = location.pathname
-  const { locale, setLocale, t } = useI18n()
+  const { locale, setLocale } = useI18n()
   const { collapsed, toggle } = useRBSidebar()
   const { printJobs, isConnected } = usePrinterStore()
 
@@ -23,12 +23,6 @@ export function AppSidebar() {
       href: "/home",
       icon: Home,
       showAlways: true,
-    },
-    {
-      name: "Printers",
-      href: "/printers",
-      icon: MapPin,
-      showAlways: false,
     },
     {
       name: "Printer",
