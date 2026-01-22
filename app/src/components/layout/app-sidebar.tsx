@@ -1,3 +1,4 @@
+import { useMemo } from "react"
 import { Link, useLocation } from "react-router-dom"
 import { GlobeIcon } from "@/components/common/icons"
 import { Home, Printer, History, HelpCircle, Settings as SettingsIcon, PanelLeftIcon } from "lucide-react"
@@ -5,55 +6,41 @@ import { cn } from "@/lib/utils"
 import { useI18n } from "@/lib/i18n"
 import { ThemeToggle } from "@/components/common/theme-toggle"
 import { useRBSidebar } from "@/components/reactbits/sidebar"
-import { usePrinterStore } from "@/store/printer-store"
 
 export function AppSidebar() {
   const location = useLocation()
   const pathname = location.pathname
   const { locale, setLocale } = useI18n()
   const { collapsed, toggle } = useRBSidebar()
-  const { printJobs, isConnected } = usePrinterStore()
 
-  // Smart navigation - show different items based on usage
-  const hasUsedBefore = printJobs.length > 0
-
-  const allNavigation = [
+  // Static navigation items - always show all items to prevent layout shift
+  const navigation = useMemo(() => [
     {
       name: "Home",
       href: "/home",
       icon: Home,
-      showAlways: true,
     },
     {
       name: "Printer",
       href: "/printer",
       icon: Printer,
-      showAlways: true, // Show in main navigation
-      requiresSSH: true, // Only show when SSH is connected
     },
     {
       name: "Jobs",
       href: "/jobs",
       icon: History,
-      showAlways: true,
     },
     {
       name: "Help",
       href: "/help",
       icon: HelpCircle,
-      showAlways: true,
     },
     {
       name: "Settings",
       href: "/settings",
       icon: SettingsIcon,
-      showAlways: true,
     },
-  ]
-
-  const navigation = hasUsedBefore
-    ? allNavigation.filter((item) => !item.requiresSSH || isConnected)
-    : allNavigation.filter((item) => item.showAlways && (!item.requiresSSH || isConnected))
+  ], [])
 
   const toggleLocale = () => {
     setLocale(locale === "en" ? "zh" : "en")
@@ -117,34 +104,41 @@ export function AppSidebar() {
 
       {/* Navigation with modern styling */}
       <nav className="flex-1 p-3 pt-0 overflow-y-auto overscroll-y-contain">
-        {navigation.map((item) => {
-          const isActive = pathname === item.href ||
+        {(() => {
+          // Check if any navigation item matches the current path
+          const hasActiveItem = navigation.some(item =>
+            pathname === item.href ||
             (item.href === "/home" && pathname.startsWith("/preview"))
-          return (
+          )
+
+          return navigation.map((item) => {
+            // If no item matches, default to Home being active
+            const isActive = pathname === item.href ||
+              (item.href === "/home" && pathname.startsWith("/preview")) ||
+              (item.href === "/home" && !hasActiveItem)
+            return (
             <Link
               key={item.name}
               to={item.href}
               title={collapsed ? item.name : undefined}
               className={cn(
-                "group relative flex items-center rounded-xl py-3 text-sm font-medium fluent-transition overflow-hidden",
-                collapsed ? "justify-center px-3" : "gap-3 px-4",
+                "group relative flex items-center py-3 text-sm font-medium overflow-hidden",
+                collapsed ? "justify-center px-3 rounded-full" : "gap-3 px-4 rounded-xl",
                 isActive
                   ? "bg-gradient-to-r from-[var(--theme-gradient-start)]/15 to-[var(--theme-gradient-end)]/10 text-[var(--theme-gradient-start)] border border-[var(--theme-gradient-start)]/20 fluent-shadow-sm"
                   : "text-sidebar-foreground hover:bg-sidebar-accent/70 border border-transparent hover:border-sidebar-border/30",
               )}
             >
-              <item.icon className={cn(
-                "h-5 w-5 flex-shrink-0 transition-transform duration-167",
-                isActive && "scale-110"
-              )} />
+              <item.icon className="h-5 w-5 flex-shrink-0" />
               {!collapsed && (
                 <span className="font-medium">{item.name}</span>
               )}
               {/* Hover effect */}
               <div className="absolute inset-0 bg-gradient-to-r from-[var(--theme-gradient-start)]/5 to-[var(--theme-gradient-end)]/5 opacity-0 group-hover:opacity-100 transition-opacity duration-167 pointer-events-none" />
             </Link>
-          )
-        })}
+            )
+          })
+        })()}
       </nav>
 
       {/* Bottom section with backdrop */}
