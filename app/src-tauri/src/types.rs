@@ -159,3 +159,13 @@ pub struct BookletLayout {
     pub pages_per_sheet: u32,
     pub page_order: Vec<Vec<Option<u32>>>,
 }
+
+// ========== Storage Info ==========
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StorageInfo {
+    pub data_dir: String,
+    pub history_size: u64,
+    pub backups_size: u64,
+    pub total_size: u64,
+    pub backup_count: usize,
+}

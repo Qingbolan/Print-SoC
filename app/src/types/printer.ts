@@ -128,3 +128,12 @@ export interface BookletLayout {
   pages_per_sheet: number
   page_order: (number | null)[][]
 }
+
+// ========== Storage Info ==========
+export interface StorageInfo {
+  data_dir: string
+  history_size: number
+  backups_size: number
+  total_size: number
+  backup_count: number
+}

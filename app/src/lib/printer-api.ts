@@ -8,6 +8,7 @@ import type {
   BookletLayout,
   ApiResponse,
   PrintJobStatus,
+  StorageInfo,
 } from '@/types/printer'
 
 // ========== SSH Operations ==========
@@ -154,4 +155,36 @@ export async function checkActiveJobs(
   sshConfig: SSHConfig
 ): Promise<ApiResponse<string[]>> {
   return await safeInvoke('print_check_active_jobs', { sshConfig })
+}
+
+// ========== Storage Operations ==========
+
+/**
+ * Force save print history to disk
+ */
+export async function saveHistory(): Promise<ApiResponse<string>> {
+  return await safeInvoke('print_save_history')
+}
+
+/**
+ * Get the backup file path for a print job
+ */
+export async function getBackupPath(jobId: string): Promise<ApiResponse<string>> {
+  return await safeInvoke('print_get_backup_path', { jobId })
+}
+
+/**
+ * Clean up old history entries
+ * @param days Number of days to keep (default: 30)
+ * @returns List of removed job IDs
+ */
+export async function cleanupHistory(days?: number): Promise<ApiResponse<string[]>> {
+  return await safeInvoke('print_cleanup_history', { days })
+}
+
+/**
+ * Get storage information (data directory, sizes, etc.)
+ */
+export async function getStorageInfo(): Promise<ApiResponse<StorageInfo>> {
+  return await safeInvoke('print_get_storage_info')
 }

@@ -1,13 +1,39 @@
 use crate::ssh_service::submit_print_job_ssh;
+use crate::storage_service;
 use crate::types::*;
 use chrono::Utc;
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use uuid::Uuid;
 
-// Global state for print jobs
+// Global state for print jobs - initialized from storage on first access
 lazy_static::lazy_static! {
-    static ref PRINT_JOBS: Mutex<HashMap<String, PrintJob>> = Mutex::new(HashMap::new());
+    static ref PRINT_JOBS: Mutex<HashMap<String, PrintJob>> = {
+        match storage_service::load_print_history() {
+            Ok(jobs) => Mutex::new(jobs),
+            Err(e) => {
+                eprintln!("[Print] Failed to load history: {}, starting with empty state", e);
+                Mutex::new(HashMap::new())
+            }
+        }
+    };
+    static ref HISTORY_DIRTY: AtomicBool = AtomicBool::new(false);
+}
+
+/// Mark history as dirty (needs saving)
+fn mark_dirty() {
+    HISTORY_DIRTY.store(true, Ordering::SeqCst);
+}
+
+/// Save history if dirty
+pub fn save_if_dirty() -> Result<(), String> {
+    if HISTORY_DIRTY.load(Ordering::SeqCst) {
+        let jobs = PRINT_JOBS.lock().unwrap();
+        storage_service::save_print_history(&jobs)?;
+        HISTORY_DIRTY.store(false, Ordering::SeqCst);
+    }
+    Ok(())
 }
 
 /// Create a new print job
@@ -18,8 +44,17 @@ pub fn print_create_job(
     printer: String,
     settings: PrintSettings,
 ) -> ApiResponse<PrintJob> {
+    let job_id = Uuid::new_v4().to_string();
+
+    // Backup the PDF file
+    let backup_result = storage_service::backup_pdf_file(&job_id, &file_path);
+    if let Err(e) = &backup_result {
+        eprintln!("[Print] Warning: Failed to backup PDF: {}", e);
+        // Continue anyway, the original file will be used
+    }
+
     let job = PrintJob {
-        id: Uuid::new_v4().to_string(),
+        id: job_id.clone(),
         name,
         file_path,
         printer,
@@ -32,8 +67,12 @@ pub fn print_create_job(
     };
 
     let mut jobs = PRINT_JOBS.lock().unwrap();
-    let job_id = job.id.clone();
     jobs.insert(job_id.clone(), job.clone());
+    mark_dirty();
+
+    // Try to save immediately (non-blocking)
+    drop(jobs);
+    let _ = save_if_dirty();
 
     ApiResponse::success(job)
 }
@@ -69,7 +108,11 @@ pub fn print_update_job_status(
             job.status = status;
             job.updated_at = Utc::now();
             job.error = error;
-            ApiResponse::success(job.clone())
+            let result = job.clone();
+            mark_dirty();
+            drop(jobs);
+            let _ = save_if_dirty();
+            ApiResponse::success(result)
         }
         None => ApiResponse::error("Job not found".to_string()),
     }
@@ -93,6 +136,9 @@ pub fn print_cancel_job(job_id: String, ssh_config: SSHConfig) -> ApiResponse<St
 
             job.status = PrintJobStatus::Cancelled;
             job.updated_at = Utc::now();
+            mark_dirty();
+            drop(jobs);
+            let _ = save_if_dirty();
             ApiResponse::success("Job cancelled successfully".to_string())
         }
         None => ApiResponse::error("Job not found".to_string()),
@@ -104,7 +150,16 @@ pub fn print_cancel_job(job_id: String, ssh_config: SSHConfig) -> ApiResponse<St
 pub fn print_delete_job(job_id: String) -> ApiResponse<String> {
     let mut jobs = PRINT_JOBS.lock().unwrap();
     match jobs.remove(&job_id) {
-        Some(_) => ApiResponse::success("Job deleted successfully".to_string()),
+        Some(_) => {
+            mark_dirty();
+            // Clean up backup
+            if let Err(e) = storage_service::delete_pdf_backup(&job_id) {
+                eprintln!("[Print] Warning: Failed to delete backup: {}", e);
+            }
+            drop(jobs);
+            let _ = save_if_dirty();
+            ApiResponse::success("Job deleted successfully".to_string())
+        }
         None => ApiResponse::error("Job not found".to_string()),
     }
 }
@@ -387,4 +442,51 @@ pub fn print_check_active_jobs(ssh_config: SSHConfig) -> ApiResponse<Vec<String>
     }
 
     ApiResponse::success(completed_jobs)
+}
+
+/// Force save print history to disk
+#[tauri::command]
+pub fn print_save_history() -> ApiResponse<String> {
+    let jobs = PRINT_JOBS.lock().unwrap();
+    match storage_service::save_print_history(&jobs) {
+        Ok(_) => {
+            HISTORY_DIRTY.store(false, Ordering::SeqCst);
+            ApiResponse::success("History saved successfully".to_string())
+        }
+        Err(e) => ApiResponse::error(format!("Failed to save history: {}", e)),
+    }
+}
+
+/// Get the backup file path for a job
+#[tauri::command]
+pub fn print_get_backup_path(job_id: String) -> ApiResponse<String> {
+    match storage_service::get_backup_file_path(&job_id) {
+        Some(path) => ApiResponse::success(path.to_string_lossy().to_string()),
+        None => ApiResponse::error("Backup not found".to_string()),
+    }
+}
+
+/// Clean up old history entries (default: 30 days)
+#[tauri::command]
+pub fn print_cleanup_history(days: Option<i64>) -> ApiResponse<Vec<String>> {
+    let days = days.unwrap_or(30);
+    let mut jobs = PRINT_JOBS.lock().unwrap();
+    let removed = storage_service::cleanup_old_history(&mut jobs, days);
+
+    if !removed.is_empty() {
+        mark_dirty();
+        drop(jobs);
+        let _ = save_if_dirty();
+    }
+
+    ApiResponse::success(removed)
+}
+
+/// Get storage information
+#[tauri::command]
+pub fn print_get_storage_info() -> ApiResponse<StorageInfo> {
+    match storage_service::get_storage_info() {
+        Ok(info) => ApiResponse::success(info),
+        Err(e) => ApiResponse::error(format!("Failed to get storage info: {}", e)),
+    }
 }

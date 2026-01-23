@@ -3,6 +3,7 @@ mod types;
 mod ssh_service;
 mod pdf_service;
 mod print_service;
+mod storage_service;
 
 // Import commands
 use ssh_service::{
@@ -15,6 +16,7 @@ use print_service::{
     print_create_job, print_get_all_jobs, print_get_job, print_update_job_status,
     print_cancel_job, print_delete_job, print_submit_job, print_get_printers,
     print_check_printer_status, print_check_active_jobs,
+    print_save_history, print_get_backup_path, print_cleanup_history, print_get_storage_info,
 };
 
 // Import Manager trait for window methods
@@ -56,8 +58,18 @@ pub fn run() {
             print_get_printers,
             print_check_printer_status,
             print_check_active_jobs,
+            // Storage operations
+            print_save_history,
+            print_get_backup_path,
+            print_cleanup_history,
+            print_get_storage_info,
         ])
         .setup(|app| {
+            // Initialize storage directories
+            if let Err(e) = storage_service::ensure_directories() {
+                eprintln!("[App] Warning: Failed to initialize storage directories: {}", e);
+            }
+
             // Get the main window
             let _window = app.get_webview_window("main").unwrap();
 
@@ -67,6 +79,17 @@ pub fn run() {
 
             // Note: In production builds, users can press F12 or use the menu to open DevTools
             // The window.open_devtools() method is available in both dev and production
+
+            // Save history on window close
+            let window = app.get_webview_window("main").unwrap();
+            window.on_window_event(|event| {
+                if let tauri::WindowEvent::CloseRequested { .. } = event {
+                    eprintln!("[App] Window closing, saving print history...");
+                    if let Err(e) = print_service::save_if_dirty() {
+                        eprintln!("[App] Failed to save history on close: {}", e);
+                    }
+                }
+            });
 
             Ok(())
         })
