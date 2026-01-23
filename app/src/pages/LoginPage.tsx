@@ -8,6 +8,12 @@ import { toast } from 'sonner'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Loader2, ChevronRight, GraduationCap, Briefcase } from 'lucide-react'
 
+// Helper to hide splash screen
+const hideSplash = () => {
+  const win = window as unknown as { hideSplash?: () => void }
+  win.hideSplash?.()
+}
+
 export default function LoginPage() {
   const navigate = useNavigate()
   const { setSshConfig, savedCredentials, setSavedCredentials } = usePrinterStore()
@@ -47,6 +53,7 @@ export default function LoginPage() {
       if (remember) {
         setSavedCredentials({ serverType: server, username: user, password: pass, rememberMe: true })
       }
+      hideSplash()
       navigate('/home')
       return
     }
@@ -66,9 +73,11 @@ export default function LoginPage() {
         setSavedCredentials(null)
       }
       toast.success(`Connected to ${server.toUpperCase()}!`)
+      hideSplash() // Hide splash before navigating
       navigate('/home')
     } else {
       const errorMsg = result.error || 'Connection failed'
+      hideSplash() // Hide splash to show login form
       if (isAutoLogin) {
         toast.error('Auto-login failed. Please login manually.')
       } else {
@@ -81,6 +90,7 @@ export default function LoginPage() {
   // Auto-login effect
   useEffect(() => {
     if (savedCredentials && savedCredentials.rememberMe && !autoLoginAttempted) {
+      // Auto-login - splash stays until login completes
       setAutoLoginAttempted(true)
       setServerType(savedCredentials.serverType)
       setUsername(savedCredentials.username)
@@ -101,11 +111,16 @@ export default function LoginPage() {
 
       performLogin(config, savedCredentials.serverType, savedCredentials.username, savedCredentials.password, true, true)
     } else if (savedCredentials && !autoLoginAttempted) {
-      // Pre-fill credentials but don't auto-login
+      // Pre-fill credentials but don't auto-login - show login form
       setServerType(savedCredentials.serverType)
       setUsername(savedCredentials.username)
       setPassword(savedCredentials.password)
       setStep('credentials')
+      hideSplash() // Show login form
+    } else if (!savedCredentials && !autoLoginAttempted) {
+      // No saved credentials - show welcome screen
+      setAutoLoginAttempted(true)
+      hideSplash() // Show welcome screen
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [savedCredentials, autoLoginAttempted])
@@ -331,6 +346,26 @@ export default function LoginPage() {
                 </Button>
               </form>
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Full-screen loading overlay when connecting */}
+      <AnimatePresence>
+        {isConnecting && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background/95 backdrop-blur-sm"
+          >
+            <motion.img
+              src="/logo.png"
+              alt="Print@SoC"
+              className="w-24 h-24 mb-6"
+              animate={{ scale: [1, 1.05, 1] }}
+              transition={{ duration: 2, repeat: Infinity }}
+            />
           </motion.div>
         )}
       </AnimatePresence>

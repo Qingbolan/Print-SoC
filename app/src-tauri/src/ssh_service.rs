@@ -7,6 +7,51 @@ use std::time::{Duration, Instant};
 use std::sync::{Arc, Mutex};
 use lazy_static::lazy_static;
 
+// ========== App Exit ==========
+
+/// Exit the application
+#[tauri::command]
+pub fn exit_app() {
+    std::process::exit(0);
+}
+
+// ========== Network Connectivity Check ==========
+
+/// Check if the app can reach NUS SoC network by attempting TCP connection
+/// Parallel check: both servers checked simultaneously, 3 second timeout
+#[tauri::command]
+pub fn check_network_connectivity() -> ApiResponse<bool> {
+    use std::net::ToSocketAddrs;
+    use std::sync::mpsc;
+    use std::thread;
+
+    let hosts = ["stu.comp.nus.edu.sg:22", "stf.comp.nus.edu.sg:22"];
+    let timeout = Duration::from_secs(3);
+    let (tx, rx) = mpsc::channel();
+
+    // Spawn threads to check both servers in parallel
+    for host in hosts {
+        let tx = tx.clone();
+        let host = host.to_string();
+        thread::spawn(move || {
+            if let Ok(mut addrs) = host.to_socket_addrs() {
+                if let Some(addr) = addrs.next() {
+                    if TcpStream::connect_timeout(&addr, Duration::from_secs(3)).is_ok() {
+                        let _ = tx.send(true);
+                    }
+                }
+            }
+        });
+    }
+    drop(tx); // Close sender so rx.recv_timeout works correctly
+
+    // Wait for first success or timeout
+    match rx.recv_timeout(timeout) {
+        Ok(true) => ApiResponse::success(true),
+        _ => ApiResponse::error("Cannot connect to NUS SoC network. Please connect to NUS WiFi or VPN.".to_string()),
+    }
+}
+
 // ========== Persistent SSH Connection Manager ==========
 
 /// Manages a persistent SSH connection throughout the application lifecycle
@@ -43,12 +88,18 @@ lazy_static! {
     static ref SSH_MANAGER: Arc<Mutex<SSHConnectionManager>> = Arc::new(Mutex::new(SSHConnectionManager::new()));
 }
 
-/// Connect to SSH server and establish persistent connection
+/// Connect to SSH server and establish persistent connection (async, non-blocking)
 #[tauri::command]
-pub fn ssh_connect(config: SSHConfig) -> ApiResponse<String> {
-    match connect_persistent(&config) {
-        Ok(message) => ApiResponse::success(message),
-        Err(e) => ApiResponse::error(e.to_string()),
+pub async fn ssh_connect(config: SSHConfig) -> ApiResponse<String> {
+    // Run blocking SSH connection in a separate thread
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        connect_persistent(&config).map_err(|e| e.to_string())
+    }).await;
+
+    match result {
+        Ok(Ok(message)) => ApiResponse::success(message),
+        Ok(Err(e)) => ApiResponse::error(e),
+        Err(e) => ApiResponse::error(format!("Task failed: {}", e)),
     }
 }
 
@@ -160,7 +211,7 @@ pub fn ssh_check_printer_queue(_config: SSHConfig, printer: String) -> ApiRespon
 
 // ========== Internal Implementation ==========
 
-const CONNECTION_TIMEOUT_SECS: u64 = 5;  // 5 seconds per IP attempt
+const CONNECTION_TIMEOUT_SECS: u64 = 3;  // 3 seconds max per attempt
 
 fn create_ssh_session(config: &SSHConfig) -> Result<Session, Box<dyn std::error::Error>> {
     // Single attempt, no retries - fail fast with 3s timeout
@@ -172,10 +223,9 @@ fn try_create_ssh_session(config: &SSHConfig) -> Result<Session, Box<dyn std::er
     use std::sync::mpsc;
     use std::thread;
 
-    // Debug: log connection attempt (without password)
     println!("[SSH] Connecting to {}@{}:{}", config.username, config.host, config.port);
 
-    // Resolve hostname to socket address
+    // Resolve hostname
     let addr_string = format!("{}:{}", config.host, config.port);
     let addrs: Vec<_> = addr_string.to_socket_addrs()
         .map_err(|e| format!("Failed to resolve hostname {}: {}", config.host, e))?
@@ -187,43 +237,24 @@ fn try_create_ssh_session(config: &SSHConfig) -> Result<Session, Box<dyn std::er
 
     println!("[SSH] Resolved to {} IP(s): {:?}", addrs.len(), addrs);
 
-    // Try all addresses in parallel, use first successful connection
+    // Try all addresses in parallel, first success wins
     let (tx, rx) = mpsc::channel();
-    let addr_count = addrs.len();
 
     for addr in addrs {
         let tx = tx.clone();
         thread::spawn(move || {
             println!("[SSH] Trying IP: {}", addr);
-            match TcpStream::connect_timeout(&addr, Duration::from_secs(CONNECTION_TIMEOUT_SECS)) {
-                Ok(stream) => {
-                    println!("[SSH] TCP connection established to {}", addr);
-                    let _ = tx.send(Ok(stream));
-                }
-                Err(e) => {
-                    println!("[SSH] Failed to connect to {}: {}", addr, e);
-                    let _ = tx.send(Err(e.to_string()));
-                }
+            if let Ok(stream) = TcpStream::connect_timeout(&addr, Duration::from_secs(CONNECTION_TIMEOUT_SECS)) {
+                println!("[SSH] TCP connection established to {}", addr);
+                let _ = tx.send(stream);
             }
         });
     }
+    drop(tx); // Close sender
 
-    // Wait for first successful connection or all failures
-    let mut errors = Vec::new();
-    let mut tcp: Option<TcpStream> = None;
-
-    for _ in 0..addr_count {
-        match rx.recv_timeout(Duration::from_secs(CONNECTION_TIMEOUT_SECS + 1)) {
-            Ok(Ok(stream)) => {
-                tcp = Some(stream);
-                break;
-            }
-            Ok(Err(e)) => errors.push(e),
-            Err(_) => errors.push("timeout".to_string()),
-        }
-    }
-
-    let tcp = tcp.ok_or_else(|| format!("Failed to connect: {}", errors.join(", ")))?;
+    // Wait max 3 seconds for first successful connection
+    let tcp = rx.recv_timeout(Duration::from_secs(CONNECTION_TIMEOUT_SECS))
+        .map_err(|_| "Connection timeout - no server reachable")?;
 
     // Set read/write timeouts
     tcp.set_read_timeout(Some(Duration::from_secs(CONNECTION_TIMEOUT_SECS)))?;

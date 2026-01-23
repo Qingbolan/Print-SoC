@@ -230,22 +230,3 @@ pub fn extract_page_range(
         .map_err(|e| format!("Failed to copy PDF: {}", e))?;
     Ok(())
 }
-
-/// Copy PDF file for processing
-/// PDF scaling is handled server-side to avoid external dependencies
-pub fn prepare_pdf_for_print(
-    input_path: &str,
-    output_path: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
-    // Verify input file exists
-    if !Path::new(input_path).exists() {
-        return Err(format!("Input PDF not found: {}", input_path).into());
-    }
-
-    // Just copy the file - scaling will be done server-side
-    std::fs::copy(input_path, output_path)
-        .map_err(|e| format!("Failed to copy PDF: {}", e))?;
-
-    eprintln!("[PDF] Prepared {} -> {}", input_path, output_path);
-    Ok(())
-}

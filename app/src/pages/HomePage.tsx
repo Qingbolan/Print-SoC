@@ -8,7 +8,6 @@ import { FileText, AlertCircle, Clock, Printer, Edit3, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { AnimatedCard } from '@/components/magic/animated-card'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { SimpleCard, SimpleCardContent } from '@/components/ui/simple-card'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,7 +17,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import type { PrintJobStatus } from '@/types/printer'
+import type { PrintJobStatus, PrintJob, DraftPrintJob } from '@/types/printer'
 
 const statusColors: Record<PrintJobStatus, string> = {
   Pending: 'text-muted-foreground',
@@ -250,7 +249,7 @@ export default function ModernHomePageV2() {
                 </h3>
               </div>
               <div className="divide-y divide-border/50 border-b border-border/50">
-                {draftJobs.slice(0, 3).map((draft) => (
+                {draftJobs.slice(0, 3).map((draft: DraftPrintJob) => (
                   <Button
                     key={draft.id}
                     onClick={() => handleContinueDraft(draft)}
@@ -301,7 +300,7 @@ export default function ModernHomePageV2() {
               </div>
             ) : (
               <div className="divide-y divide-border/50">
-                {recentJobs.map((job) => (
+                {recentJobs.map((job: PrintJob) => (
                   <Button
                     key={job.id}
                     onClick={() => {

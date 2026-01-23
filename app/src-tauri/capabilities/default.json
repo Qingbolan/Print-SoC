@@ -17,6 +17,7 @@
       ]
     },
     "dialog:allow-save",
-    "fs:allow-write-file"
+    "fs:allow-write-file",
+    "process:allow-exit"
   ]
 }

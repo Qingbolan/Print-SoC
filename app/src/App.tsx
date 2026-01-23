@@ -7,6 +7,7 @@ import { AccentColorProvider } from '@/lib/accent-color'
 import { ThemeProvider } from '@/lib/theme-context'
 import { FluentProviderWrapper } from '@/components/providers/fluent-provider'
 import { AntdProvider } from '@/components/providers/antd-provider'
+import { NetworkCheckProvider } from '@/components/providers/NetworkCheckProvider'
 import { PageBreadcrumb } from '@/components/layout/PageBreadcrumb'
 import { safeOpenDevTools } from '@/lib/tauri-utils'
 
@@ -134,21 +135,23 @@ function AppLayout({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <AppLayout>
-        <Routes>
-          <Route path="/" element={<Navigate to="/login" replace />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/home" element={<HomePage />} />
-          <Route path="/preview/:sessionId?" element={<PreviewPage />} />
-          <Route path="/printer" element={<PrintersPage />} />
-          <Route path="/jobs" element={<JobsPage />} />
-          <Route path="/help" element={<HelpPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route path="/debug" element={<DebugPage />} />
-          <Route path="*" element={<Navigate to="/home" replace />} />
-        </Routes>
-      </AppLayout>
-    </BrowserRouter>
+    <NetworkCheckProvider>
+      <BrowserRouter>
+        <AppLayout>
+          <Routes>
+            <Route path="/" element={<Navigate to="/login" replace />} />
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/home" element={<HomePage />} />
+            <Route path="/preview/:sessionId?" element={<PreviewPage />} />
+            <Route path="/printer" element={<PrintersPage />} />
+            <Route path="/jobs" element={<JobsPage />} />
+            <Route path="/help" element={<HelpPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/debug" element={<DebugPage />} />
+            <Route path="*" element={<Navigate to="/home" replace />} />
+          </Routes>
+        </AppLayout>
+      </BrowserRouter>
+    </NetworkCheckProvider>
   )
 }

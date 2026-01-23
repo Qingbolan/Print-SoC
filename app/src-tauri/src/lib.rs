@@ -8,7 +8,7 @@ mod print_service;
 use ssh_service::{
     ssh_connect, ssh_disconnect, ssh_connection_status,
     ssh_test_connection, ssh_execute_command, ssh_upload_file, ssh_check_printer_queue,
-    ssh_debug_command
+    ssh_debug_command, check_network_connectivity, exit_app
 };
 use pdf_service::{pdf_get_info, pdf_generate_booklet_layout, pdf_create_booklet, pdf_create_nup};
 use print_service::{
@@ -26,7 +26,11 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_process::init())
         .invoke_handler(tauri::generate_handler![
+            // App control
+            exit_app,
+            check_network_connectivity,
             // SSH operations
             ssh_connect,
             ssh_disconnect,
@@ -55,11 +59,11 @@ pub fn run() {
         ])
         .setup(|app| {
             // Get the main window
-            let window = app.get_webview_window("main").unwrap();
+            let _window = app.get_webview_window("main").unwrap();
 
             // Open DevTools on startup (you can remove this line if you only want keyboard shortcut)
             #[cfg(debug_assertions)]
-            window.open_devtools();
+            _window.open_devtools();
 
             // Note: In production builds, users can press F12 or use the menu to open DevTools
             // The window.open_devtools() method is available in both dev and production
