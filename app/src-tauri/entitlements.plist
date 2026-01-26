@@ -23,5 +23,9 @@
   <!-- Disable App Sandbox (common for desktop apps) -->
   <key>com.apple.security.app-sandbox</key>
   <false/>
+
+  <!-- Location access for printer navigation -->
+  <key>com.apple.security.personal-information.location</key>
+  <true/>
 </dict>
 </plist>

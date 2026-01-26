@@ -1,5 +1,52 @@
 import type { Printer, PrinterGroup } from '@/types/printer'
 
+// Building coordinates for distance calculation (relative positions in meters)
+// Based on NUS SoC campus layout
+export const BUILDING_COORDINATES: Record<string, { x: number; y: number }> = {
+  'COM1': { x: 0, y: 0 },
+  'COM2': { x: 80, y: 0 },
+  'COM3': { x: 80, y: 80 },
+  'COM4': { x: 0, y: 80 },
+  'AS6': { x: -60, y: 40 },
+}
+
+// Real GPS coordinates for NUS SoC buildings (latitude, longitude)
+// Verified from Google Maps - NUS Computing Complex
+export const BUILDING_GPS_COORDINATES: Record<string, { lat: number; lng: number; name: string }> = {
+  'COM1': { lat: 1.2950, lng: 103.7736, name: 'Computing 1' },   // Main COM1 building
+  'COM2': { lat: 1.2943, lng: 103.7745, name: 'Computing 2' },   // COM2 (south of COM1)
+  'COM3': { lat: 1.2949, lng: 103.7755, name: 'Computing 3' },   // COM3 (east side)
+  'COM4': { lat: 1.2954, lng: 103.7755, name: 'Computing 4' },   // COM4 (north of COM3)
+  'AS6': { lat: 1.2955, lng: 103.7725, name: 'Arts & Social Sciences 6' }, // AS6 (west of COM1)
+}
+
+// NUS SoC campus center for initial map view
+export const NUS_SOC_CENTER = { lat: 1.2950, lng: 103.7745 }
+
+// All buildings available for filtering
+export const BUILDINGS = ['COM1', 'COM2', 'COM3', 'COM4', 'AS6'] as const
+
+// Floors by building (for dynamic floor selection)
+export const FLOORS_BY_BUILDING: Record<string, string[]> = {
+  'COM1': ['B1', '1', '2', '3'],
+  'COM2': ['B1', '1', '2', '3', '4'],
+  'COM3': ['B1', '1', '2'],
+  'COM4': ['2', '5'],
+  'AS6': ['4', '5'],
+}
+
+// Get all unique floors from printers
+export function getAllFloors(): string[] {
+  const floors = new Set<string>()
+  Object.values(FLOORS_BY_BUILDING).flat().forEach(f => floors.add(f))
+  return Array.from(floors).sort((a, b) => {
+    // Sort B1 first, then numerically
+    if (a === 'B1') return -1
+    if (b === 'B1') return 1
+    return parseInt(a) - parseInt(b)
+  })
+}
+
 // Helper to create printer variants (main, sx, nb)
 function createPrinterGroup(
   baseId: string,

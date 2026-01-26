@@ -76,7 +76,12 @@
                 { "path": "$HOME/**" }
               ]
             },
-            "fs:default"
+            "fs:default",
+            "geolocation:allow-get-current-position",
+            "geolocation:allow-watch-position",
+            "geolocation:allow-clear-watch",
+            "geolocation:allow-check-permissions",
+            "geolocation:allow-request-permissions"
           ]
         }
       ]
@@ -128,7 +133,10 @@
       "entitlements": "entitlements.plist",
       "minimumSystemVersion": "11.0",
       "frameworks": [],
-      "signingIdentity": null
+      "signingIdentity": null,
+      "files": {
+        "Info.plist": "Info.plist"
+      }
     },
     "windows": {
       "certificateThumbprint": null,

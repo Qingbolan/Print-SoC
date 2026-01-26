@@ -62,7 +62,7 @@ export default function ModernPreviewPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const { sessionId } = useParams<{ sessionId?: string }>()
-  const { sshConfig, printerGroups, setPrinters, addPrintJob, addDraftJob, removeDraftJob } = usePrinterStore()
+  const { sshConfig, printerGroups, setPrinters, addPrintJob, addDraftJob, removeDraftJob, quickPrintPrinter, setQuickPrintPrinter } = usePrinterStore()
 
   // Get all printers from groups
   const printers = printerGroups.flatMap((g: PrinterGroup) => g.printers)
@@ -474,9 +474,18 @@ export default function ModernPreviewPage() {
     }
   }
 
+  // Handle quick print printer (from printers page detail sheet)
+  useEffect(() => {
+    if (quickPrintPrinter) {
+      setSelectedPrinter(quickPrintPrinter)
+      // Clear the quick print printer after using it
+      setQuickPrintPrinter(null)
+    }
+  }, [quickPrintPrinter, setQuickPrintPrinter])
+
   // Set recommended printer
   useEffect(() => {
-    if (printers.length > 0 && !selectedPrinter) {
+    if (printers.length > 0 && !selectedPrinter && !quickPrintPrinter) {
       const online = printers.filter((p: PrinterType) => p.status === 'Online')
       if (online.length > 0) {
         const recommended = online.sort((a: PrinterType, b: PrinterType) => (b.paper_level || 0) - (a.paper_level || 0))[0]
@@ -486,7 +495,7 @@ export default function ModernPreviewPage() {
         setSelectedPrinter(printers[0]?.queue_name || '')
       }
     }
-  }, [printers, selectedPrinter])
+  }, [printers, selectedPrinter, quickPrintPrinter])
 
   const handlePrintCurrent = useCallback(async () => {
     if (!selectedFile) return

@@ -250,11 +250,10 @@ export default function ModernHomePageV2() {
               </div>
               <div className="divide-y divide-border/50 border-b border-border/50">
                 {draftJobs.slice(0, 3).map((draft: DraftPrintJob) => (
-                  <Button
+                  <div
                     key={draft.id}
                     onClick={() => handleContinueDraft(draft)}
-                    variant="ghost"
-                    className="w-full h-auto px-4 py-3 justify-start rounded-none hover:bg-warning/10 fluent-transition overflow-hidden group"
+                    className="w-full px-4 py-3 hover:bg-warning/10 fluent-transition overflow-hidden group cursor-pointer"
                   >
                     <div className="flex items-center gap-3 w-full overflow-hidden">
                       <FileText className="w-4 h-4 text-warning flex-shrink-0" />
@@ -275,7 +274,7 @@ export default function ModernHomePageV2() {
                         <X className="w-3 h-3 text-muted-foreground hover:text-destructive" />
                       </Button>
                     </div>
-                  </Button>
+                  </div>
                 ))}
               </div>
             </>

@@ -1,6 +1,6 @@
-import { create } from 'zustand'
+import { create, type StoreApi, type UseBoundStore } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { SSHConfig, PrintJob, Printer, PrinterGroup, DraftPrintJob } from '@/types/printer'
+import type { SSHConfig, PrintJob, Printer, PrinterGroup, DraftPrintJob, PrinterFilter, UserLocation } from '@/types/printer'
 import { groupPrinters, PRINTERS } from '@/data/printers'
 
 export type ConnectionStatus =
@@ -74,6 +74,19 @@ interface PrinterState {
   currentFilePath: string | null
   setCurrentFile: (file: File | null, path: string | null) => void
 
+  // Printer Filter State
+  printerFilter: PrinterFilter
+  setPrinterFilter: (filter: Partial<PrinterFilter>) => void
+  clearPrinterFilter: () => void
+
+  // User Location (for distance-based sorting)
+  userLocation: UserLocation | null
+  setUserLocation: (location: UserLocation | null) => void
+
+  // Quick print - pre-selected printer for navigation
+  quickPrintPrinter: string | null
+  setQuickPrintPrinter: (printerId: string | null) => void
+
   // Connection State
   connectionStatus: ConnectionStatus
   setConnectionStatus: (status: ConnectionStatus) => void
@@ -86,16 +99,16 @@ interface PrinterState {
   logout: () => void
 }
 
-export const usePrinterStore = create<PrinterState>()(
+export const usePrinterStore: UseBoundStore<StoreApi<PrinterState>> = create<PrinterState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       // SSH Configuration
       sshConfig: null,
-      setSshConfig: (config) => set({ sshConfig: config }),
+      setSshConfig: (config: SSHConfig | null) => set({ sshConfig: config }),
 
       // Saved Credentials
       savedCredentials: null,
-      setSavedCredentials: (credentials) => set({ savedCredentials: credentials }),
+      setSavedCredentials: (credentials: SavedCredentials | null) => set({ savedCredentials: credentials }),
       clearSavedCredentials: () => set({ savedCredentials: null }),
 
       // App Settings
@@ -105,23 +118,23 @@ export const usePrinterStore = create<PrinterState>()(
         autoClearCache: false,
         maxCacheSize: 100, // 100MB default
       },
-      setSettings: (newSettings) =>
+      setSettings: (newSettings: Partial<AppSettings>) =>
         set((state) => ({
           settings: { ...state.settings, ...newSettings },
         })),
 
       // Print Jobs
       printJobs: [],
-      setPrintJobs: (jobs) => set({ printJobs: jobs }),
-      addPrintJob: (job) =>
+      setPrintJobs: (jobs: PrintJob[]) => set({ printJobs: jobs }),
+      addPrintJob: (job: PrintJob) =>
         set((state) => ({ printJobs: [job, ...state.printJobs] })),
-      updatePrintJob: (jobId, updates) =>
+      updatePrintJob: (jobId: string, updates: Partial<PrintJob>) =>
         set((state) => ({
           printJobs: state.printJobs.map((job) =>
             job.id === jobId ? { ...job, ...updates } : job
           ),
         })),
-      removePrintJob: (jobId) =>
+      removePrintJob: (jobId: string) =>
         set((state) => ({
           printJobs: state.printJobs.filter((job) => job.id !== jobId),
         })),
@@ -129,7 +142,7 @@ export const usePrinterStore = create<PrinterState>()(
 
       // Draft Jobs
       draftJobs: [],
-      addDraftJob: (draft) =>
+      addDraftJob: (draft: DraftPrintJob) =>
         set((state) => {
           // Replace existing draft with same file path, or add new one
           const existingIndex = state.draftJobs.findIndex(d => d.file_path === draft.file_path)
@@ -140,13 +153,13 @@ export const usePrinterStore = create<PrinterState>()(
           }
           return { draftJobs: [draft, ...state.draftJobs] }
         }),
-      updateDraftJob: (draftId, updates) =>
+      updateDraftJob: (draftId: string, updates: Partial<DraftPrintJob>) =>
         set((state) => ({
           draftJobs: state.draftJobs.map((draft) =>
             draft.id === draftId ? { ...draft, ...updates, updated_at: new Date().toISOString() } : draft
           ),
         })),
-      removeDraftJob: (draftId) =>
+      removeDraftJob: (draftId: string) =>
         set((state) => ({
           draftJobs: state.draftJobs.filter((draft) => draft.id !== draftId),
         })),
@@ -154,20 +167,20 @@ export const usePrinterStore = create<PrinterState>()(
 
       // Printers - initialized with all printers
       printers: PRINTERS,
-      setPrinters: (printers) => {
+      setPrinters: (printers: Printer[]) => {
         const groups = groupPrinters(printers)
         set({ printers, printerGroups: groups })
       },
       selectedPrinter: null,
-      setSelectedPrinter: (printer) => set({ selectedPrinter: printer }),
+      setSelectedPrinter: (printer: Printer | null) => set({ selectedPrinter: printer }),
 
       // Printer Groups - initialized with grouped printers
       printerGroups: groupPrinters(PRINTERS),
-      getPrinterGroups: () => {
-        const state = usePrinterStore.getState()
+      getPrinterGroups: (): PrinterGroup[] => {
+        const state = get()
         return groupPrinters(state.printers)
       },
-      updatePrinterStatus: (printerId, status, queueCount) =>
+      updatePrinterStatus: (printerId: string, status: Printer['status'], queueCount?: number) =>
         set((state) => {
           const updatedPrinters = state.printers.map((printer) =>
             printer.id === printerId
@@ -180,23 +193,50 @@ export const usePrinterStore = create<PrinterState>()(
 
       // Printer refresh state
       isRefreshing: false,
-      setIsRefreshing: (refreshing) => set({ isRefreshing: refreshing }),
+      setIsRefreshing: (refreshing: boolean) => set({ isRefreshing: refreshing }),
       lastRefreshTime: null,
-      setLastRefreshTime: (time) => set({ lastRefreshTime: time }),
+      setLastRefreshTime: (time: Date | null) => set({ lastRefreshTime: time }),
 
       // Current upload/print state
       currentFile: null,
       currentFilePath: null,
-      setCurrentFile: (file, path) =>
+      setCurrentFile: (file: File | null, path: string | null) =>
         set({ currentFile: file, currentFilePath: path }),
+
+      // Printer Filter State
+      printerFilter: {
+        building: null,
+        floor: null,
+        sortBy: 'default',
+      },
+      setPrinterFilter: (filter: Partial<PrinterFilter>) =>
+        set((state) => ({
+          printerFilter: { ...state.printerFilter, ...filter },
+        })),
+      clearPrinterFilter: () =>
+        set({
+          printerFilter: {
+            building: null,
+            floor: null,
+            sortBy: 'default',
+          },
+        }),
+
+      // User Location
+      userLocation: null,
+      setUserLocation: (location: UserLocation | null) => set({ userLocation: location }),
+
+      // Quick print
+      quickPrintPrinter: null,
+      setQuickPrintPrinter: (printerId: string | null) => set({ quickPrintPrinter: printerId }),
 
       // Connection State
       connectionStatus: { type: 'disconnected' },
-      setConnectionStatus: (status) => set({ connectionStatus: status }),
+      setConnectionStatus: (status: ConnectionStatus) => set({ connectionStatus: status }),
 
       // UI State
       isConnected: false,
-      setIsConnected: (connected) => set({ isConnected: connected }),
+      setIsConnected: (connected: boolean) => set({ isConnected: connected }),
 
       // Logout
       logout: () =>
@@ -218,6 +258,8 @@ export const usePrinterStore = create<PrinterState>()(
         savedCredentials: state.savedCredentials,
         settings: state.settings,
         draftJobs: state.draftJobs,
+        userLocation: state.userLocation,
+        printerFilter: state.printerFilter,
       }),
     }
   )

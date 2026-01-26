@@ -1,5 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "leaflet/dist/leaflet.css";
+@import "leaflet-routing-machine/dist/leaflet-routing-machine.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -633,4 +635,65 @@
       box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
     }
   }
+}
+
+/* Leaflet Map Styles */
+.leaflet-container {
+  font-family: inherit;
+  background: #f8f8f8;
+}
+
+.dark .leaflet-container {
+  background: #1a1a2e;
+}
+
+/* Ensure tiles are visible */
+.leaflet-tile-pane {
+  z-index: 200;
+}
+
+.leaflet-tile {
+  visibility: visible !important;
+}
+
+/* Custom marker styles */
+.custom-printer-marker,
+.user-location-marker {
+  background: transparent !important;
+  border: none !important;
+}
+
+/* Hide routing instructions panel */
+.leaflet-routing-container {
+  display: none !important;
+}
+
+/* Fix leaflet popup styling in dark mode */
+.dark .leaflet-popup-content-wrapper {
+  background: #1f2937;
+  color: #f3f4f6;
+}
+
+.dark .leaflet-popup-tip {
+  background: #1f2937;
+}
+
+/* Leaflet controls dark mode */
+.dark .leaflet-control-zoom a {
+  background: #374151;
+  color: #f3f4f6;
+  border-color: #4b5563;
+}
+
+.dark .leaflet-control-zoom a:hover {
+  background: #4b5563;
+}
+
+.dark .leaflet-control-attribution {
+  background: rgba(31, 41, 55, 0.8);
+  color: #9ca3af;
+}
+
+.dark .leaflet-control-attribution a {
+  color: #60a5fa;
 }

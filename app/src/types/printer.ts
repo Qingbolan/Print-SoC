@@ -137,3 +137,15 @@ export interface StorageInfo {
   total_size: number
   backup_count: number
 }
+
+// ========== Printer Filter ==========
+export interface PrinterFilter {
+  building: string | null
+  floor: string | null
+  sortBy: 'default' | 'distance' | 'queue'
+}
+
+export interface UserLocation {
+  building: string
+  floor: string
+}

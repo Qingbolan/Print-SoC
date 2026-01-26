@@ -12,6 +12,7 @@ interface SimpleCardProps {
   variant?: 'default' | 'ghost' | 'bordered';
   padding?: 'sm' | 'md' | 'lg';
   hoverable?: boolean;
+  onClick?: () => void;
 }
 
 export function SimpleCard({
@@ -20,9 +21,11 @@ export function SimpleCard({
   variant = 'default',
   padding = 'md',
   hoverable = false,
+  onClick,
 }: SimpleCardProps) {
   return (
     <div
+      onClick={onClick}
       className={cn(
         "rounded-lg transition-colors",
         {

@@ -274,7 +274,7 @@ export default function LoginPage() {
                   <Input
                     id="username"
                     type="text"
-                    placeholder="e0123456"
+                    placeholder="Your (SOC)ID [e.g. silan-hu]"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     className="h-12 text-lg bg-input border-border text-foreground placeholder:text-muted-foreground focus:border-cyan-500 focus:ring-cyan-500"
