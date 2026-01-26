@@ -1,0 +1,428 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g., v0.1.0)'
+        required: true
+
+env:
+  CARGO_TERM_COLOR: always
+  APP_NAME: Print_at_SoC
+
+jobs:
+  build:
+    name: Build ${{ matrix.platform }} (${{ matrix.arch }})
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      packages: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # macOS builds
+          - platform: macos
+            arch: aarch64
+            os: macos-latest
+            target: aarch64-apple-darwin
+            asset_name: Print_at_SoC_macos_aarch64.app.tar.gz
+
+          - platform: macos
+            arch: x86_64
+            os: macos-13
+            target: x86_64-apple-darwin
+            asset_name: Print_at_SoC_macos_x86_64.app.tar.gz
+
+          # Windows build
+          - platform: windows
+            arch: x86_64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            asset_name: Print_at_SoC_windows_x86_64.msi
+
+          # Linux build (Ubuntu 22.04, broader GLIBC compatibility)
+          - platform: linux
+            arch: x86_64
+            os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            asset_name: Print_at_SoC_linux_x86_64.AppImage
+
+          # Linux build (Ubuntu 24.04, latest WebKitGTK 4.1)
+          - platform: linux
+            arch: x86_64
+            os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+            asset_name: Print_at_SoC_linux_x86_64_ubuntu24.04.AppImage
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Get version (for build)
+        id: get_version_build
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Sync Tauri app version from tag
+        shell: bash
+        env:
+          VERSION_TAG: ${{ steps.get_version_build.outputs.VERSION }}
+        run: |
+          cat > sync-version.js <<'JS'
+          const fs = require('fs');
+          const path = require('path');
+          const versionTag = process.env.VERSION_TAG || '';
+          const version = versionTag.startsWith('v') ? versionTag.slice(1) : versionTag;
+          if (!version) { console.error('Empty version'); process.exit(1); }
+          // Update app/package.json
+          const pkgPath = path.join('app', 'package.json');
+          const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+          pkg.version = version;
+          fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
+          // Update app/src-tauri/tauri.conf.json
+          const tauriPath = path.join('app', 'src-tauri', 'tauri.conf.json');
+          const tauri = JSON.parse(fs.readFileSync(tauriPath, 'utf8'));
+          tauri.version = version;
+          fs.writeFileSync(tauriPath, JSON.stringify(tauri, null, 2) + '\n');
+          // Update app/src-tauri/Cargo.toml
+          const cargoPath = path.join('app', 'src-tauri', 'Cargo.toml');
+          let cargo = fs.readFileSync(cargoPath, 'utf8');
+          cargo = cargo.replace(/^version\s*=\s*\"[^\"]+\"/m, `version = \"${version}\"`);
+          fs.writeFileSync(cargoPath, cargo);
+          console.log('Synced app versions to', version);
+          JS
+          node sync-version.js
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      # Linux dependencies
+      - name: Install Linux dependencies
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgtk-3-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
+          # WebKitGTK dev package varies with Ubuntu version
+          sudo apt-get install -y libwebkit2gtk-4.1-dev || sudo apt-get install -y libwebkit2gtk-4.0-dev || true
+
+      # Install npm dependencies
+      - name: Install frontend dependencies
+        working-directory: ./app
+        run: npm install
+
+      # Build Tauri app
+      - name: Build Tauri app (macOS/Windows)
+        if: matrix.platform != 'linux'
+        working-directory: ./app
+        run: npm run tauri:build -- --target ${{ matrix.target }}
+
+      # Authenticate to GHCR
+      - name: Login to GitHub Container Registry
+        if: matrix.platform == 'linux'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Tauri app (Linux)
+        if: matrix.platform == 'linux'
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: ./app
+          args: --target ${{ matrix.target }}
+
+      # Package macOS builds
+      - name: Package macOS build
+        if: matrix.platform == 'macos'
+        run: |
+          BUNDLE_DIR="app/src-tauri/target/${{ matrix.target }}/release/bundle/macos"
+
+          if [ ! -d "$BUNDLE_DIR" ]; then
+            echo "Error: Bundle directory not found: $BUNDLE_DIR"
+            find app/src-tauri/target/${{ matrix.target }}/release -type d | head -20
+            exit 1
+          fi
+
+          cd "$BUNDLE_DIR"
+          echo "Contents of macOS bundle directory:"
+          ls -la
+
+          APP_BUNDLE=$(find . -maxdepth 1 -name "*.app" -print -quit)
+
+          if [ -z "$APP_BUNDLE" ]; then
+            echo "Error: No .app bundle found"
+            exit 1
+          fi
+
+          echo "Found app bundle: $APP_BUNDLE"
+          tar -czf "${{ matrix.asset_name }}" "$APP_BUNDLE"
+          mv "${{ matrix.asset_name }}" "${{ github.workspace }}/"
+          echo "Packaged: ${{ matrix.asset_name }}"
+
+      # Package Windows builds
+      - name: Package Windows build
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "${{ github.workspace }}/windows-packages"
+
+          $bundleBase = "app/src-tauri/target/${{ matrix.target }}/release/bundle"
+
+          Write-Host "Checking bundle directory: $bundleBase"
+          if (Test-Path $bundleBase) {
+            Write-Host "Bundle directory contents:"
+            Get-ChildItem $bundleBase | Format-Table Name
+          } else {
+            Write-Error "Bundle directory not found"
+            exit 1
+          }
+
+          $packagesFound = 0
+
+          # Copy MSI if exists
+          Write-Host "Looking for MSI installer..."
+          if (Test-Path "$bundleBase/msi") {
+            $msiPath = Get-ChildItem -Path "$bundleBase/msi" -Filter "*.msi" -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($msiPath) {
+              Copy-Item $msiPath.FullName -Destination "${{ github.workspace }}/windows-packages/Print_at_SoC_windows_x86_64.msi"
+              Write-Host "MSI copied: $($msiPath.Name)" -ForegroundColor Green
+              $packagesFound++
+            }
+          }
+
+          # Copy NSIS installer if exists
+          Write-Host "Looking for NSIS installer..."
+          if (Test-Path "$bundleBase/nsis") {
+            $nsisPath = Get-ChildItem -Path "$bundleBase/nsis" -Filter "*.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($nsisPath) {
+              Copy-Item $nsisPath.FullName -Destination "${{ github.workspace }}/windows-packages/Print_at_SoC_windows_x86_64_setup.exe"
+              Write-Host "NSIS installer copied: $($nsisPath.Name)" -ForegroundColor Green
+              $packagesFound++
+            }
+          }
+
+          Write-Host "Generated packages:"
+          Get-ChildItem "${{ github.workspace }}/windows-packages" | Format-Table Name, Length
+
+          if ($packagesFound -eq 0) {
+            Write-Error "No packages were generated"
+            exit 1
+          }
+
+      # Package Linux build
+      - name: Package Linux build
+        if: matrix.platform == 'linux'
+        run: |
+          find app/src-tauri/target/${{ matrix.target }}/release/bundle/appimage -name "*.AppImage" -exec cp {} ${{ github.workspace }}/${{ matrix.asset_name }} \;
+
+      # Upload artifacts
+      - name: Upload build artifact (macOS)
+        if: matrix.platform == 'macos'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset_name }}
+          path: ${{ matrix.asset_name }}
+          if-no-files-found: error
+
+      - name: Upload Windows artifacts
+        if: matrix.platform == 'windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-packages
+          path: ${{ github.workspace }}/windows-packages/*
+          if-no-files-found: error
+
+      - name: Upload build artifact (Linux)
+        if: matrix.platform == 'linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset_name }}
+          path: ${{ matrix.asset_name }}
+          if-no-files-found: error
+
+  create-release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
+
+      - name: Display structure of downloaded files
+        run: ls -R ./artifacts
+
+      - name: Get version
+        id: get_version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.get_version.outputs.VERSION }}
+          name: Print@SoC ${{ steps.get_version.outputs.VERSION }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          body: |
+            ## Print@SoC - Smart Printing for NUS SoC
+
+            ### Downloads
+            | Platform | Architecture | File |
+            |----------|--------------|------|
+            | macOS | Apple Silicon (M1/M2/M3) | `Print_at_SoC_macos_aarch64.app.tar.gz` |
+            | macOS | Intel | `Print_at_SoC_macos_x86_64.app.tar.gz` |
+            | Windows | x64 | `Print_at_SoC_windows_x86_64.msi` or `Print_at_SoC_windows_x86_64_setup.exe` |
+            | Linux | x64 (Ubuntu 22.04+) | `Print_at_SoC_linux_x86_64.AppImage` |
+            | Linux | x64 (Ubuntu 24.04+) | `Print_at_SoC_linux_x86_64_ubuntu24.04.AppImage` |
+
+            ### Installation
+            - **macOS**: Extract the `.tar.gz` and drag `Print_at_SoC.app` to Applications
+            - **Windows**: Run the `.msi` or `.exe` installer
+            - **Linux**: Make the AppImage executable (`chmod +x`) and run it
+
+          files: |
+            ./artifacts/*/*.tar.gz
+            ./artifacts/*/*.msi
+            ./artifacts/*/*.exe
+            ./artifacts/*/*.AppImage
+
+  publish-pypi:
+    name: Publish to PyPI
+    needs: create-release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get version
+        id: get_version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Sync package version from tag
+        run: |
+          VERSION="${{ steps.get_version.outputs.VERSION }}"
+          VERSION_NO_V="${VERSION#v}"
+          echo "Using version: ${VERSION_NO_V}"
+          sed -i.bak -E "s/^version = \"[0-9]+\.[0-9]+\.[0-9]+\"/version = \"${VERSION_NO_V}\"/" release/python-pip/pyproject.toml
+          sed -i.bak -E "s/^__version__ = \"[0-9]+\.[0-9]+\.[0-9]+\"/__version__ = \"${VERSION_NO_V}\"/" release/python-pip/vldb_toolkits/__init__.py
+          sed -i.bak -E "s/^VERSION = \"[0-9]+\.[0-9]+\.[0-9]+\"/VERSION = \"${VERSION_NO_V}\"/" release/python-pip/vldb_toolkits/config.py
+          rm -f release/python-pip/*.bak release/python-pip/vldb_toolkits/*.bak
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install build tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install build twine
+
+      - name: Build Python package
+        working-directory: ./release/python-pip
+        run: python -m build
+
+      - name: Publish to PyPI
+        working-directory: ./release/python-pip
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        run: twine upload dist/*
+
+  publish-npm:
+    name: Publish to npm
+    needs: create-release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Get version
+        id: get_version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Sync package version from tag
+        working-directory: ./release/node.js-npm
+        run: |
+          VERSION="${{ steps.get_version.outputs.VERSION }}"
+          VERSION_NO_V="${VERSION#v}"
+          echo "Using version: ${VERSION_NO_V}"
+          npm version --no-git-tag-version "${VERSION_NO_V}"
+
+      - name: Install dependencies
+        working-directory: ./release/node.js-npm
+        run: npm install
+
+      - name: Run tests
+        working-directory: ./release/node.js-npm
+        run: npm test
+
+      - name: Publish to npm
+        working-directory: ./release/node.js-npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish

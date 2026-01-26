@@ -1,0 +1,254 @@
+name: Test Build (No Publish)
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  APP_NAME: Print_at_SoC
+
+jobs:
+  build:
+    name: Build ${{ matrix.platform }} (${{ matrix.arch }})
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      packages: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # macOS builds
+          - platform: macos
+            arch: aarch64
+            os: macos-latest
+            target: aarch64-apple-darwin
+            asset_name: Print_at_SoC_macos_aarch64.app.tar.gz
+
+          - platform: macos
+            arch: x86_64
+            os: macos-13
+            target: x86_64-apple-darwin
+            asset_name: Print_at_SoC_macos_x86_64.app.tar.gz
+
+          # Windows build
+          - platform: windows
+            arch: x86_64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            asset_name: Print_at_SoC_windows_x86_64.msi
+
+          # Linux build (Ubuntu 22.04)
+          - platform: linux
+            arch: x86_64
+            os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            asset_name: Print_at_SoC_linux_x86_64.AppImage
+
+          # Linux build (Ubuntu 24.04)
+          - platform: linux
+            arch: x86_64
+            os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+            asset_name: Print_at_SoC_linux_x86_64_ubuntu24.04.AppImage
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Get version (for build)
+        id: get_version_build
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          else
+            VERSION_PKG=$(node -p "require('./app/package.json').version")
+            echo "VERSION=v${VERSION_PKG}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Sync Tauri app version from tag
+        shell: bash
+        env:
+          VERSION_TAG: ${{ steps.get_version_build.outputs.VERSION }}
+        run: |
+          cat > sync-version.js <<'JS'
+          const fs = require('fs');
+          const path = require('path');
+          const versionTag = process.env.VERSION_TAG || '';
+          const version = versionTag.startsWith('v') ? versionTag.slice(1) : versionTag;
+          if (!version) { console.error('Empty version'); process.exit(1); }
+          // Update app/package.json
+          const pkgPath = path.join('app', 'package.json');
+          const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+          pkg.version = version;
+          fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
+          // Update app/src-tauri/tauri.conf.json
+          const tauriPath = path.join('app', 'src-tauri', 'tauri.conf.json');
+          const tauri = JSON.parse(fs.readFileSync(tauriPath, 'utf8'));
+          tauri.version = version;
+          fs.writeFileSync(tauriPath, JSON.stringify(tauri, null, 2) + '\n');
+          // Update app/src-tauri/Cargo.toml
+          const cargoPath = path.join('app', 'src-tauri', 'Cargo.toml');
+          let cargo = fs.readFileSync(cargoPath, 'utf8');
+          cargo = cargo.replace(/^version\s*=\s*\"[^\"]+\"/m, `version = \"${version}\"`);
+          fs.writeFileSync(cargoPath, cargo);
+          console.log('Synced app versions to', version);
+          JS
+          node sync-version.js
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      # Linux dependencies
+      - name: Install Linux dependencies
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgtk-3-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
+          sudo apt-get install -y libwebkit2gtk-4.1-dev || sudo apt-get install -y libwebkit2gtk-4.0-dev || true
+
+      # Install npm dependencies
+      - name: Install frontend dependencies
+        working-directory: ./app
+        run: npm install
+
+      # Build Tauri app
+      - name: Build Tauri app (macOS/Windows)
+        if: matrix.platform != 'linux'
+        working-directory: ./app
+        run: npm run tauri:build -- --target ${{ matrix.target }}
+
+      # Authenticate to GHCR
+      - name: Login to GitHub Container Registry
+        if: matrix.platform == 'linux'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Tauri app (Linux)
+        if: matrix.platform == 'linux'
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: ./app
+          args: --target ${{ matrix.target }}
+
+      # Package macOS builds
+      - name: Package macOS build
+        if: matrix.platform == 'macos'
+        run: |
+          set -e
+          BUNDLE_DIR="app/src-tauri/target/${{ matrix.target }}/release/bundle/macos"
+          if [ ! -d "$BUNDLE_DIR" ]; then
+            echo "Error: Bundle directory not found: $BUNDLE_DIR"
+            find app/src-tauri/target/${{ matrix.target }}/release -maxdepth 3 -type d | sed -n '1,200p'
+            exit 1
+          fi
+          cd "$BUNDLE_DIR"
+          echo "Contents of macOS bundle directory:"
+          ls -la
+          APP_BUNDLE=$(find . -maxdepth 1 -name "*.app" -print -quit)
+          if [ -z "$APP_BUNDLE" ]; then
+            echo "Error: No .app bundle found"
+            exit 1
+          fi
+          echo "Packaging $APP_BUNDLE -> ${{ matrix.asset_name }}"
+          tar -czf "${{ matrix.asset_name }}" "$APP_BUNDLE"
+          mv "${{ matrix.asset_name }}" "${{ github.workspace }}/"
+
+      # Package Windows build
+      - name: Package Windows build
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          $msiPath = Get-ChildItem -Path "app/src-tauri/target/${{ matrix.target }}/release/bundle/msi" -Filter "*.msi" | Select-Object -First 1
+          Copy-Item $msiPath.FullName -Destination "${{ github.workspace }}/${{ matrix.asset_name }}"
+
+      # Package Linux build
+      - name: Package Linux build
+        if: matrix.platform == 'linux'
+        run: |
+          find app/src-tauri/target/${{ matrix.target }}/release/bundle/appimage -name "*.AppImage" -exec cp {} ${{ github.workspace }}/${{ matrix.asset_name }} \;
+
+      # Upload artifacts
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset_name }}
+          path: ${{ matrix.asset_name }}
+          if-no-files-found: error
+
+  test-python:
+    name: Test Python Package
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install build tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install build twine
+
+      - name: Build Python package
+        working-directory: ./release/python-pip
+        run: python -m build
+
+      - name: Check package
+        working-directory: ./release/python-pip
+        run: twine check dist/*
+
+  test-npm:
+    name: Test npm Package
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        working-directory: ./release/node.js-npm
+        run: npm install
+
+      - name: Run tests
+        working-directory: ./release/node.js-npm
+        run: npm test
+
+      - name: Test package
+        working-directory: ./release/node.js-npm
+        run: npm pack --dry-run
