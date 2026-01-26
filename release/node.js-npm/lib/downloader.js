@@ -1,5 +1,5 @@
 /**
- * Binary downloader for EasyPaper
+ * Binary downloader for Print@SoC
  */
 
 const fs = require('fs');
@@ -57,7 +57,7 @@ function getPlatformKey() {
 /**
  * Try to discover installed Windows executable location.
  */
-function findWindowsInstalledExe(productName = 'EasyPaper', exeName = 'EasyPaper.exe') {
+function findWindowsInstalledExe(productName = 'Print_at_SoC', exeName = 'Print_at_SoC.exe') {
   if (process.platform !== 'win32') return null;
 
   const candidates = [];
@@ -90,7 +90,7 @@ function findWindowsInstalledExe(productName = 'EasyPaper', exeName = 'EasyPaper
             // process previous block
             if (block.length) {
               const blk = block.join('\n');
-              if (/DisplayName\s+REG_\w+\s+.*EasyPaper/i.test(blk)) {
+              if (/DisplayName\s+REG_\w+\s+.*Print_at_SoC/i.test(blk)) {
                 const mIcon = blk.match(/DisplayIcon\s+REG_\w+\s+([^\r\n]+)/i);
                 if (mIcon && mIcon[1]) {
                   const p = mIcon[1].split(',')[0].trim();
@@ -111,7 +111,7 @@ function findWindowsInstalledExe(productName = 'EasyPaper', exeName = 'EasyPaper
         // final block
         if (block.length) {
           const blk = block.join('\n');
-          if (/DisplayName\s+REG_\w+\s+.*EasyPaper/i.test(blk)) {
+          if (/DisplayName\s+REG_\w+\s+.*Print_at_SoC/i.test(blk)) {
             const mIcon = blk.match(/DisplayIcon\s+REG_\w+\s+([^\r\n]+)/i);
             if (mIcon && mIcon[1]) {
               const p = mIcon[1].split(',')[0].trim();
@@ -294,7 +294,7 @@ async function downloadFile(url, destPath) {
 
     https.get(url, {
       headers: {
-        'User-Agent': 'EasyPaper-installer'
+        'User-Agent': 'Print-at-SoC-installer'
       }
     }, (response) => {
       // Handle redirects
@@ -346,7 +346,7 @@ function runNsisInstaller(installerPath) {
   console.log('Running Windows installer...');
   console.log('='.repeat(60));
   console.log('\nNOTE: The installer will:');
-  console.log('  1. Check if EasyPaper is already installed');
+  console.log('  1. Check if Print@SoC is already installed');
   console.log('  2. If installed, offer to launch it or reinstall');
   console.log('  3. If not installed, proceed with installation');
   console.log('\nPlease follow the installer prompts.');
@@ -427,7 +427,7 @@ async function getDownloadUrl() {
 
     https.get(GITHUB_API_URL, {
       headers: {
-        'User-Agent': 'EasyPaper-installer',
+        'User-Agent': 'Print-at-SoC-installer',
         'Accept': 'application/vnd.github.v3+json'
       }
     }, (response) => {
@@ -495,7 +495,7 @@ async function downloadAndInstall(force = false) {
   // Check if already installed
   if (isInstalled() && !force) {
     const installedVersion = getInstalledVersion();
-    console.log(`EasyPaper is already installed (version: ${installedVersion})`);
+    console.log(`Print@SoC is already installed (version: ${installedVersion})`);
     return;
   }
 
@@ -555,7 +555,7 @@ async function downloadAndInstall(force = false) {
   // Save version
   fs.writeFileSync(VERSION_FILE, version);
 
-  console.log(`\nEasyPaper ${version} installed successfully!`);
+  console.log(`\nPrint@SoC ${version} installed successfully!`);
   console.log(`Installation directory: ${BINARY_DIR}`);
 }
 
@@ -564,7 +564,7 @@ async function downloadAndInstall(force = false) {
  */
 async function checkAndInstall() {
   if (!isInstalled()) {
-    console.log('EasyPaper is not installed yet.');
+    console.log('Print@SoC is not installed yet.');
     console.log('This will download the application (~50-150 MB depending on platform)');
     console.log();
     await downloadAndInstall();

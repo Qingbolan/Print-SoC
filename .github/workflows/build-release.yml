@@ -332,38 +332,88 @@ jobs:
             ./artifacts/*/*.exe
             ./artifacts/*/*.AppImage
 
-  publish-pypi:
-    name: Publish to PyPI
-    needs: create-release
+  test-python:
+    name: Test Python Package
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Get version
-        id: get_version
-        run: |
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
-          else
-            echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-          fi
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
 
-      - name: Sync package version from tag
+      - name: Install build tools
         run: |
-          VERSION="${{ steps.get_version.outputs.VERSION }}"
-          VERSION_NO_V="${VERSION#v}"
-          echo "Using version: ${VERSION_NO_V}"
-          sed -i.bak -E "s/^version = \"[0-9]+\.[0-9]+\.[0-9]+\"/version = \"${VERSION_NO_V}\"/" release/python-pip/pyproject.toml
-          sed -i.bak -E "s/^__version__ = \"[0-9]+\.[0-9]+\.[0-9]+\"/__version__ = \"${VERSION_NO_V}\"/" release/python-pip/vldb_toolkits/__init__.py
-          sed -i.bak -E "s/^VERSION = \"[0-9]+\.[0-9]+\.[0-9]+\"/VERSION = \"${VERSION_NO_V}\"/" release/python-pip/vldb_toolkits/config.py
-          rm -f release/python-pip/*.bak release/python-pip/vldb_toolkits/*.bak
+          python -m pip install --upgrade pip
+          pip install build twine
+
+      - name: Build Python package
+        working-directory: ./release/python-pip
+        run: python -m build
+
+      - name: Check package
+        working-directory: ./release/python-pip
+        run: twine check dist/*
+
+  test-npm:
+    name: Test npm Package
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        working-directory: ./release/node.js-npm
+        run: npm install
+
+      - name: Run tests
+        working-directory: ./release/node.js-npm
+        run: npm test
+
+      - name: Test package
+        working-directory: ./release/node.js-npm
+        run: npm pack --dry-run
+
+  publish-pypi:
+    name: Publish to PyPI
+    needs: [create-release, test-python]
+    runs-on: ubuntu-latest
+    environment: pypi
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+
+      - name: Get version
+        id: get_version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/}"
+          fi
+          VERSION="${VERSION#v}"
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Update package version
+        working-directory: ./release/python-pip
+        run: |
+          sed -i "s/^version = .*/version = \"${{ steps.get_version.outputs.VERSION }}\"/" pyproject.toml
+          cat pyproject.toml | grep version
 
       - name: Install build tools
         run: |
@@ -383,8 +433,9 @@ jobs:
 
   publish-npm:
     name: Publish to npm
-    needs: create-release
+    needs: [create-release, test-npm]
     runs-on: ubuntu-latest
+    environment: npm
 
     steps:
       - name: Checkout repository
@@ -400,29 +451,24 @@ jobs:
         id: get_version
         run: |
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+            VERSION="${{ github.event.inputs.version }}"
           else
-            echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+            VERSION="${GITHUB_REF#refs/tags/}"
           fi
+          VERSION="${VERSION#v}"
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Sync package version from tag
+      - name: Update package version
         working-directory: ./release/node.js-npm
         run: |
-          VERSION="${{ steps.get_version.outputs.VERSION }}"
-          VERSION_NO_V="${VERSION#v}"
-          echo "Using version: ${VERSION_NO_V}"
-          npm version --no-git-tag-version "${VERSION_NO_V}"
+          npm version ${{ steps.get_version.outputs.VERSION }} --no-git-tag-version
 
       - name: Install dependencies
         working-directory: ./release/node.js-npm
         run: npm install
 
-      - name: Run tests
-        working-directory: ./release/node.js-npm
-        run: npm test
-
       - name: Publish to npm
         working-directory: ./release/node.js-npm
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish
+        run: npm publish --access public

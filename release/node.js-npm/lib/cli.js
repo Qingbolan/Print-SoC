@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Command-line interface for EasyPaper
+ * Command-line interface for Print@SoC
  */
 
 const { spawn } = require('child_process');
@@ -21,20 +21,20 @@ const { VERSION } = require('./config');
  */
 function printUsage() {
   console.log(`
-EasyPaper v${VERSION}
-Paper Management Platform for VLDB
+Print@SoC v${VERSION}
+Smart Printing for NUS SoC
 
 Usage:
-  EasyPaper           Launch the application
-  EasyPaper --help    Show this help message
-  EasyPaper --version Show version information
-  EasyPaper --install Force reinstall the binary
-  EasyPaper --path    Show binary installation path
-  EasyPaper --doctor  Linux: check runtime deps and exit
-  EasyPaper --no-check  Linux: skip runtime checks (warn-only)
+  print-at-soc           Launch the application
+  print-at-soc --help    Show this help message
+  print-at-soc --version Show version information
+  print-at-soc --install Force reinstall the binary
+  print-at-soc --path    Show binary installation path
+  print-at-soc --doctor  Linux: check runtime deps and exit
+  print-at-soc --no-check  Linux: skip runtime checks (warn-only)
 
 Examples:
-  EasyPaper          # Start the application
+  print-at-soc          # Start the application
   `);
 }
 
@@ -98,14 +98,13 @@ function linuxRuntimeCheck() {
 async function main() {
   const args = process.argv.slice(2);
 
-  // Handle special commands
   if (args.includes('--help') || args.includes('-h')) {
     printUsage();
     return 0;
   }
 
   if (args.includes('--version') || args.includes('-v')) {
-    console.log(`EasyPaper v${VERSION}`);
+    console.log(`Print@SoC v${VERSION}`);
     return 0;
   }
 
@@ -124,12 +123,11 @@ async function main() {
       console.log(`Binary path: ${getBinaryPath()}`);
       console.log('Installed: Yes');
     } else {
-      console.log('Binary not installed yet. Run "EasyPaper" to install.');
+      console.log('Binary not installed yet. Run "print-at-soc" to install.');
     }
     return 0;
   }
 
-  // Check and install if needed
   try {
     await checkAndInstall();
   } catch (error) {
@@ -137,20 +135,18 @@ async function main() {
     return 1;
   }
 
-  // Get binary path
   const binaryPath = getBinaryPath();
 
   if (!isInstalled()) {
     console.error(`Error: Binary not found at ${binaryPath}`);
-    console.error('Try running "EasyPaper --install" to reinstall');
+    console.error('Try running "print-at-soc --install" to reinstall');
     return 1;
   }
 
-  // Linux runtime checks
   let extraEnv = {};
   if (os.platform() === 'linux') {
-    const skipChecks = args.includes('--no-check') || !!process.env.easy_paper_NO_CHECKS;
-    const strict = !!process.env.easy_paper_STRICT_CHECKS;
+    const skipChecks = args.includes('--no-check') || !!process.env.PRINT_AT_SOC_NO_CHECKS;
+    const strict = !!process.env.PRINT_AT_SOC_STRICT_CHECKS;
     if (args.includes('--doctor')) {
       linuxRuntimeCheck();
       return 0;
@@ -165,32 +161,26 @@ async function main() {
     }
   }
 
-  // Launch the application
-  console.log('Launching EasyPaper...');
+  console.log('Launching Print@SoC...');
 
   return new Promise((resolve) => {
     let command = binaryPath;
     let commandArgs = args;
 
-    // On macOS with .app bundle, use 'open' command
     if (os.platform() === 'darwin' && binaryPath.includes('.app/')) {
       const appBundle = binaryPath.split('.app/')[0] + '.app';
 
-      // Remove macOS quarantine attribute to prevent "damaged" error
       try {
         const { execSync } = require('child_process');
         execSync(`xattr -dr com.apple.quarantine "${appBundle}"`, {
           stdio: 'ignore'
         });
-      } catch (error) {
-        // Silently ignore if xattr command fails
-      }
+      } catch (error) {}
 
       command = 'open';
       commandArgs = [appBundle, ...args];
     }
 
-    // Filter wrapper-only args
     const wrapperFlags = new Set(['--no-check', '--doctor', '--install', '--path', '--help', '-h', '--version', '-v']);
     const filteredArgs = commandArgs.filter(a => !wrapperFlags.has(a));
 
@@ -209,7 +199,6 @@ async function main() {
       resolve(code || 0);
     });
 
-    // Handle Ctrl+C
     process.on('SIGINT', () => {
       child.kill('SIGINT');
       console.log('\nApplication closed by user');
@@ -218,7 +207,6 @@ async function main() {
   });
 }
 
-// Run CLI
 main()
   .then((exitCode) => {
     process.exit(exitCode);

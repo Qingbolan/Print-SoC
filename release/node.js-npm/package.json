@@ -1,21 +1,22 @@
 {
-  "name": "EasyPaper",
-  "version": "0.1.1",
-  "description": "Paper Management Platform for VLDB - Node.js CLI wrapper for desktop application",
+  "name": "print-at-soc",
+  "version": "0.1.0",
+  "description": "Print@SoC - Smart Printing for NUS SoC - Node.js CLI wrapper for desktop application",
   "main": "lib/cli.js",
   "bin": {
-    "EasyPaper": "lib/cli.js",
-    "easy_paper": "lib/cli.js"
+    "print-at-soc": "lib/cli.js",
+    "print_at_soc": "lib/cli.js"
   },
   "scripts": {
     "test": "node test/test.js",
     "prepublishOnly": "node lib/cli.js --version"
   },
   "keywords": [
-    "vldb",
-    "paper-management",
-    "academic",
-    "research",
+    "nus",
+    "soc",
+    "printing",
+    "ssh",
+    "pdf",
     "desktop-application",
     "tauri"
   ],
@@ -26,12 +27,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Qingbolan/EasyPaper.git"
+    "url": "https://github.com/Qingbolan/Print-SoC.git"
   },
   "bugs": {
-    "url": "https://github.com/Qingbolan/EasyPaper/issues"
+    "url": "https://github.com/Qingbolan/Print-SoC/issues"
   },
-  "homepage": "https://github.com/Qingbolan/EasyPaper#readme",
+  "homepage": "https://github.com/Qingbolan/Print-SoC#readme",
   "engines": {
     "node": ">=14.0.0"
   },

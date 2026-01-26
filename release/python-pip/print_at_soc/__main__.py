@@ -1,7 +1,6 @@
-"""Python -m easy_paper entry point."""
+"""Python -m print_at_soc entry point."""
 
 from .cli import main
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
