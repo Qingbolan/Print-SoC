@@ -461,7 +461,7 @@ jobs:
       - name: Update package version
         working-directory: ./release/node.js-npm
         run: |
-          npm version ${{ steps.get_version.outputs.VERSION }} --no-git-tag-version
+          npm version ${{ steps.get_version.outputs.VERSION }} --no-git-tag-version --allow-same-version
 
       - name: Install dependencies
         working-directory: ./release/node.js-npm
