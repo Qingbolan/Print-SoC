@@ -1,7 +1,9 @@
 import { useEffect, useCallback, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePrinterStore } from '@/store/printer-store'
-import { getAllPrintJobs, cancelPrintJob, deletePrintJob, getPDFInfo } from '@/lib/printer-api'
+import { getAllPrintJobs, cancelPrintJob, deletePrintJob } from '@/lib/printer-api'
+import { JobDetailDialog } from '@/components/jobs/JobDetailDialog'
+import type { PrintJob } from '@/types/printer'
 import { SimpleCard, SimpleCardHeader, SimpleCardTitle, SimpleCardDescription, SimpleCardContent } from '@/components/ui/simple-card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -81,6 +83,8 @@ export default function JobsPage() {
   const { printJobs, setPrintJobs, removePrintJob, sshConfig } = usePrinterStore()
   const [selectedTab, setSelectedTab] = useState<'active' | 'history'>('active')
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [selectedJob, setSelectedJob] = useState<PrintJob | null>(null)
+  const [detailDialogOpen, setDetailDialogOpen] = useState(false)
 
   useEffect(() => {
     loadJobs()
@@ -95,19 +99,10 @@ export default function JobsPage() {
     setIsRefreshing(false)
   }
 
-  const handlePreviewJob = useCallback(async (filePath: string) => {
-    try {
-      const info = await getPDFInfo(filePath)
-      if (info.success && info.data) {
-        const sessionId = Math.random().toString(36).substring(2, 10)
-        navigate(`/preview/${sessionId}`, { state: { filePath, pdfInfo: info.data } })
-      } else {
-        toast.error('Failed to load PDF: ' + (info.error || 'File may have been moved or deleted'))
-      }
-    } catch (error) {
-      toast.error('Failed to open preview: File may have been moved or deleted')
-    }
-  }, [navigate])
+  const handleViewJob = useCallback((job: PrintJob) => {
+    setSelectedJob(job)
+    setDetailDialogOpen(true)
+  }, [])
 
   const handleCancelJob = async (jobId: string) => {
     if (!sshConfig) {
@@ -311,11 +306,11 @@ export default function JobsPage() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => handlePreviewJob(job.file_path)}
+                      onClick={() => handleViewJob(job)}
                       className="flex-1"
                     >
                       <Eye className="w-4 h-4 mr-2" />
-                      Preview
+                      View
                     </Button>
 
                     {selectedTab === 'active' ? (
@@ -370,6 +365,13 @@ export default function JobsPage() {
           </div>
         )}
       </div>
+
+      {/* Job Detail Dialog */}
+      <JobDetailDialog
+        job={selectedJob}
+        open={detailDialogOpen}
+        onOpenChange={setDetailDialogOpen}
+      />
     </div>
   )
 }
