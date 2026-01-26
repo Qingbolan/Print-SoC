@@ -337,7 +337,15 @@ def main():
         if platform.system() == "Darwin" and binary_path.suffix == "":
             app_bundle = binary_path.parent.parent.parent
 
+            # Remove quarantine attribute to allow unsigned app to run
             try:
+                # Remove quarantine from entire app bundle
+                subprocess.run(
+                    ["xattr", "-cr", str(app_bundle)],
+                    capture_output=True,
+                    check=False
+                )
+                # Also try the specific quarantine attribute
                 subprocess.run(
                     ["xattr", "-dr", "com.apple.quarantine", str(app_bundle)],
                     capture_output=True,
@@ -347,7 +355,18 @@ def main():
                 pass
 
             app_args = [a for a in args if a not in {"--no-check", "--doctor", "--fix-path", "--register-app", "--unregister", "--install", "--path", "--help", "-h", "--version", "-v"}]
-            subprocess.run(["open", str(app_bundle)] + app_args, check=True)
+
+            # Try to launch, with helpful error message on failure
+            result = subprocess.run(["open", str(app_bundle)] + app_args, capture_output=True, text=True)
+            if result.returncode != 0:
+                print(f"\nFailed to launch application.", file=sys.stderr)
+                print(f"\nIf macOS blocks the app, try one of these solutions:", file=sys.stderr)
+                print(f"  1. Open System Preferences > Security & Privacy > General", file=sys.stderr)
+                print(f"     Click 'Open Anyway' for Print_at_SoC", file=sys.stderr)
+                print(f"  2. Or run in terminal:", file=sys.stderr)
+                print(f"     xattr -cr '{app_bundle}'", file=sys.stderr)
+                print(f"     open '{app_bundle}'", file=sys.stderr)
+                return 1
         else:
             env = os.environ.copy()
             if platform.system() == "Linux":

@@ -552,6 +552,27 @@ async function downloadAndInstall(force = false) {
     }
   }
 
+  // macOS: Remove quarantine attribute to allow unsigned app to run
+  if (process.platform === 'darwin') {
+    const { spawnSync } = require('child_process');
+    try {
+      // Find .app bundles in BINARY_DIR
+      const entries = fs.readdirSync(BINARY_DIR, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.isDirectory() && entry.name.endsWith('.app')) {
+          const appPath = path.join(BINARY_DIR, entry.name);
+          console.log(`Removing quarantine attribute from ${entry.name}...`);
+          spawnSync('xattr', ['-cr', appPath], { stdio: 'ignore' });
+          spawnSync('xattr', ['-dr', 'com.apple.quarantine', appPath], { stdio: 'ignore' });
+          break;
+        }
+      }
+    } catch (e) {
+      console.log('Note: Could not remove quarantine attribute.');
+      console.log('You may need to allow the app in System Preferences > Security & Privacy');
+    }
+  }
+
   // Save version
   fs.writeFileSync(VERSION_FILE, version);
 

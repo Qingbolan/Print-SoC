@@ -402,6 +402,20 @@ def download_and_install():
         if binary_path.exists():
             os.chmod(binary_path, 0o755)
 
+    # macOS: Remove quarantine attribute to allow unsigned app to run
+    if platform.system() == "Darwin":
+        import subprocess
+        try:
+            # Find the .app bundle
+            for app_dir in BINARY_DIR.rglob("*.app"):
+                print(f"Removing quarantine attribute from {app_dir.name}...")
+                subprocess.run(["xattr", "-cr", str(app_dir)], capture_output=True, check=False)
+                subprocess.run(["xattr", "-dr", "com.apple.quarantine", str(app_dir)], capture_output=True, check=False)
+                break
+        except Exception as e:
+            print(f"Note: Could not remove quarantine attribute: {e}")
+            print("You may need to allow the app in System Preferences > Security & Privacy")
+
     VERSION_FILE.write_text(version)
 
     print(f"\nPrint@SoC {version} installed successfully!")

@@ -97,9 +97,9 @@ export function JobDetailDialog({ job, open, onOpenChange }: JobDetailDialogProp
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] p-0 overflow-hidden">
-        <DialogHeader className="px-6 pt-6 pb-4 border-b border-border/50">
-          <div className="flex items-start justify-between gap-4">
+      <DialogContent className="!max-w-5xl w-[900px] max-h-[85vh] p-0 overflow-hidden flex flex-col">
+        <DialogHeader className="px-6 pt-6 pb-4 border-b border-border/50 flex-shrink-0">
+          <div className="flex items-start justify-between gap-4 pr-8">
             <div className="flex-1 min-w-0">
               <DialogTitle className="flex items-center gap-2 text-lg">
                 <FileText className="w-5 h-5 flex-shrink-0" />
@@ -125,9 +125,9 @@ export function JobDetailDialog({ job, open, onOpenChange }: JobDetailDialogProp
           </div>
         </DialogHeader>
 
-        <div className="flex flex-1 overflow-hidden" style={{ height: '60vh' }}>
+        <div className="flex flex-1 overflow-hidden min-h-0">
           {/* PDF Preview */}
-          <div className="flex-1 flex flex-col bg-muted/30 overflow-hidden">
+          <div className="flex-1 flex flex-col bg-muted/30 overflow-hidden min-w-0">
             {loading ? (
               <div className="flex-1 flex items-center justify-center">
                 <div className="text-center">
@@ -196,7 +196,7 @@ export function JobDetailDialog({ job, open, onOpenChange }: JobDetailDialogProp
           </div>
 
           {/* Settings panel */}
-          <div className="w-64 border-l border-border/50 bg-background overflow-y-auto">
+          <div className="w-72 flex-shrink-0 border-l border-border/50 bg-background overflow-y-auto">
             <div className="p-4 space-y-4">
               <h3 className="text-sm font-semibold text-foreground">Print Settings</h3>
 
@@ -280,13 +280,13 @@ function SettingItem({
   highlight?: boolean
 }) {
   return (
-    <div className="flex items-center justify-between py-2 px-3 rounded-lg bg-muted/50">
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        {icon}
-        <span>{label}</span>
+    <div className="flex items-center justify-between py-2.5 px-3 rounded-lg bg-muted/50">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground min-w-0">
+        <span className="flex-shrink-0">{icon}</span>
+        <span className="truncate">{label}</span>
       </div>
       <span className={cn(
-        "text-sm font-medium",
+        "text-sm font-medium flex-shrink-0 ml-2",
         highlight ? "text-primary" : "text-foreground"
       )}>
         {value}

@@ -170,11 +170,11 @@ async function main() {
     if (os.platform() === 'darwin' && binaryPath.includes('.app/')) {
       const appBundle = binaryPath.split('.app/')[0] + '.app';
 
+      // Remove quarantine attribute to allow unsigned app to run
       try {
         const { execSync } = require('child_process');
-        execSync(`xattr -dr com.apple.quarantine "${appBundle}"`, {
-          stdio: 'ignore'
-        });
+        execSync(`xattr -cr "${appBundle}"`, { stdio: 'ignore' });
+        execSync(`xattr -dr com.apple.quarantine "${appBundle}"`, { stdio: 'ignore' });
       } catch (error) {}
 
       command = 'open';
@@ -192,10 +192,28 @@ async function main() {
 
     child.on('error', (error) => {
       console.error(`Failed to launch application: ${error.message}`);
+      if (os.platform() === 'darwin') {
+        console.error('\nIf macOS blocks the app, try one of these solutions:');
+        console.error('  1. Open System Preferences > Security & Privacy > General');
+        console.error('     Click "Open Anyway" for Print_at_SoC');
+        console.error('  2. Or run in terminal:');
+        const appBundle = binaryPath.includes('.app/') ? binaryPath.split('.app/')[0] + '.app' : binaryPath;
+        console.error(`     xattr -cr "${appBundle}"`);
+        console.error(`     open "${appBundle}"`);
+      }
       resolve(1);
     });
 
     child.on('exit', (code) => {
+      if (code !== 0 && os.platform() === 'darwin') {
+        console.error('\nIf macOS blocks the app, try one of these solutions:');
+        console.error('  1. Open System Preferences > Security & Privacy > General');
+        console.error('     Click "Open Anyway" for Print_at_SoC');
+        console.error('  2. Or run in terminal:');
+        const appBundle = binaryPath.includes('.app/') ? binaryPath.split('.app/')[0] + '.app' : binaryPath;
+        console.error(`     xattr -cr "${appBundle}"`);
+        console.error(`     open "${appBundle}"`);
+      }
       resolve(code || 0);
     });
 
