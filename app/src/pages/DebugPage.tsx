@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Terminal } from 'lucide-react'
+import type { PrintQuota } from '@/types/printer'
 
 interface ApiResponse<T> {
   success: boolean
@@ -26,17 +27,18 @@ export default function DebugPage() {
     setOutput(prev => prev + '\n' + msg)
   }
 
+  const getConfig = () => ({
+    host,
+    port: 22,
+    username,
+    auth_type: { type: 'Password', password }
+  })
+
   const handleConnect = async () => {
     setIsLoading(true)
     setOutput('Connecting...')
     try {
-      const config = {
-        host,
-        port: 22,
-        username,
-        auth_type: { type: 'Password', password }
-      }
-      const result = await invoke<ApiResponse<string>>('ssh_connect', { config })
+      const result = await invoke<ApiResponse<string>>('ssh_connect', { config: getConfig() })
       if (result.success) {
         log(`SUCCESS: ${result.data}`)
         setIsConnected(true)
@@ -77,7 +79,7 @@ export default function DebugPage() {
   }
 
   const handleTestPrint = async () => {
-    const printer = prompt('Enter printer queue (e.g., psts, pstsb):')
+    const printer = prompt('Enter printer queue (e.g., psts-dx, psts-sx):')
     if (!printer) return
 
     setIsLoading(true)
@@ -132,11 +134,24 @@ export default function DebugPage() {
     setIsLoading(true)
     log('\n=== Available Print Queues ===')
     try {
-      // Try to list available printers
-      const result = await invoke<ApiResponse<string>>('ssh_debug_command', {
-        command: 'lpstat -a 2>/dev/null | head -20 || echo "lpstat not available"'
-      })
-      log(result.success ? result.data || '(no output)' : `ERROR: ${result.error}`)
+      const result = await invoke<ApiResponse<string[]>>('print_list_queues', { sshConfig: getConfig() })
+      log(result.success ? (result.data || []).join('\n') || '(no queues)' : `ERROR: ${result.error}`)
+    } catch (e) {
+      log(`EXCEPTION: ${e}`)
+    }
+    setIsLoading(false)
+  }
+
+  const handleCheckQuota = async () => {
+    setIsLoading(true)
+    log('\n=== Print Quota ===')
+    try {
+      const result = await invoke<ApiResponse<PrintQuota>>('print_get_quota', { sshConfig: getConfig() })
+      if (result.success && result.data) {
+        log(result.data.raw_output || JSON.stringify(result.data, null, 2))
+      } else {
+        log(`ERROR: ${result.error}`)
+      }
     } catch (e) {
       log(`EXCEPTION: ${e}`)
     }
@@ -202,6 +217,7 @@ export default function DebugPage() {
             <Button size="sm" variant="outline" onClick={() => setCommand('pwd')}>pwd</Button>
             <Button size="sm" variant="outline" onClick={() => setCommand('ls -la /tmp/')}>ls /tmp</Button>
             <Button size="sm" variant="outline" onClick={handleCheckQueues} disabled={!isConnected}>List Queues</Button>
+            <Button size="sm" variant="outline" onClick={handleCheckQuota} disabled={!isConnected}>Check Quota</Button>
             <Button size="sm" variant="outline" onClick={handleTestPrint} disabled={!isConnected}>Test Print</Button>
           </div>
         </div>

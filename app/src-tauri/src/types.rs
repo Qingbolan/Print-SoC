@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 
 // ========== SSH Authentication ==========
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -13,8 +13,13 @@ pub struct SSHConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum SSHAuthType {
-    Password { password: String },
-    PrivateKey { key_path: String, passphrase: Option<String> },
+    Password {
+        password: String,
+    },
+    PrivateKey {
+        key_path: String,
+        passphrase: Option<String>,
+    },
 }
 
 // ========== Print Job ==========
@@ -71,7 +76,7 @@ pub enum PaperSize {
     A3,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum PrintJobStatus {
     Pending,
     Uploading,
@@ -82,41 +87,23 @@ pub enum PrintJobStatus {
     Cancelled,
 }
 
-// ========== Printer Info ==========
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Printer {
-    pub id: String,
-    pub name: String,
-    pub queue_name: String,
-    pub location: PrinterLocation,
-    pub status: PrinterStatus,
-    pub paper_level: Option<u32>,
-    pub supports_duplex: bool,
-    pub supports_color: bool,
-    pub supported_paper_sizes: Vec<PaperSize>,
+pub struct PrintQueueJob {
+    pub rank: String,
+    pub owner: String,
+    pub job_id: String,
+    pub file: String,
+    pub total_size: Option<String>,
+    pub raw_line: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PrinterLocation {
-    pub building: String,
-    pub room: String,
-    pub floor: String,
-    pub coordinates: Option<Coordinates>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Coordinates {
-    pub x: f64,
-    pub y: f64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum PrinterStatus {
-    Online,
-    Offline,
-    Busy,
-    OutOfPaper,
-    Error,
+pub struct PrintQuota {
+    pub raw_output: String,
+    pub summary: Option<String>,
+    pub balance: Option<String>,
+    pub used: Option<String>,
+    pub limit: Option<String>,
 }
 
 // ========== API Responses ==========

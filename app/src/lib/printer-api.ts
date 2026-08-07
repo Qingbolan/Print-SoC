@@ -3,12 +3,13 @@ import type {
   SSHConfig,
   PrintJob,
   PrintSettings,
-  Printer,
   PDFInfo,
   BookletLayout,
   ApiResponse,
   PrintJobStatus,
   StorageInfo,
+  PrintQueueJob,
+  PrintQuota,
 } from '@/types/printer'
 
 // ========== SSH Operations ==========
@@ -53,8 +54,23 @@ export async function uploadFile(
 export async function checkPrinterQueue(
   config: SSHConfig,
   printer: string
+): Promise<ApiResponse<PrintQueueJob[]>> {
+  return await safeInvoke('print_check_printer_status', {
+    sshConfig: config,
+    printerQueue: printer,
+  })
+}
+
+export async function listPrintQueues(
+  sshConfig: SSHConfig
 ): Promise<ApiResponse<string[]>> {
-  return await safeInvoke('ssh_check_printer_queue', { config, printer })
+  return await safeInvoke('print_list_queues', { sshConfig })
+}
+
+export async function getPrintQuota(
+  sshConfig: SSHConfig
+): Promise<ApiResponse<PrintQuota>> {
+  return await safeInvoke('print_get_quota', { sshConfig })
 }
 
 // ========== PDF Operations ==========
@@ -136,14 +152,10 @@ export async function submitPrintJob(
   return await safeInvoke('print_submit_job', { jobId, sshConfig })
 }
 
-export async function getPrinters(): Promise<ApiResponse<Printer[]>> {
-  return await safeInvoke('print_get_printers')
-}
-
 export async function checkPrinterStatus(
   sshConfig: SSHConfig,
   printerQueue: string
-): Promise<ApiResponse<string[]>> {
+): Promise<ApiResponse<PrintQueueJob[]>> {
   return await safeInvoke('print_check_printer_status', { sshConfig, printerQueue })
 }
 

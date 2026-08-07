@@ -1,11 +1,11 @@
 use crate::types::*;
+use lazy_static::lazy_static;
 use ssh2::Session;
 use std::io::Read;
 use std::net::TcpStream;
 use std::path::Path;
-use std::time::{Duration, Instant};
 use std::sync::{Arc, Mutex};
-use lazy_static::lazy_static;
+use std::time::{Duration, Instant};
 
 // ========== App Exit ==========
 
@@ -48,7 +48,9 @@ pub fn check_network_connectivity() -> ApiResponse<bool> {
     // Wait for first success or timeout
     match rx.recv_timeout(timeout) {
         Ok(true) => ApiResponse::success(true),
-        _ => ApiResponse::error("Cannot connect to NUS SoC network. Please connect to NUS WiFi or VPN.".to_string()),
+        _ => ApiResponse::error(
+            "Cannot connect to NUS SoC network. Please connect to NUS WiFi or VPN.".to_string(),
+        ),
     }
 }
 
@@ -85,7 +87,8 @@ impl SSHConnectionManager {
 }
 
 lazy_static! {
-    static ref SSH_MANAGER: Arc<Mutex<SSHConnectionManager>> = Arc::new(Mutex::new(SSHConnectionManager::new()));
+    static ref SSH_MANAGER: Arc<Mutex<SSHConnectionManager>> =
+        Arc::new(Mutex::new(SSHConnectionManager::new()));
 }
 
 /// Connect to SSH server and establish persistent connection (async, non-blocking)
@@ -94,13 +97,30 @@ pub async fn ssh_connect(config: SSHConfig) -> ApiResponse<String> {
     // Run blocking SSH connection in a separate thread
     let result = tauri::async_runtime::spawn_blocking(move || {
         connect_persistent(&config).map_err(|e| e.to_string())
-    }).await;
+    })
+    .await;
 
     match result {
         Ok(Ok(message)) => ApiResponse::success(message),
         Ok(Err(e)) => ApiResponse::error(e),
         Err(e) => ApiResponse::error(format!("Task failed: {}", e)),
     }
+}
+
+/// Connect to SSH from non-Tauri entrypoints such as the MCP stdio server.
+pub fn ssh_connect_blocking(config: SSHConfig) -> ApiResponse<String> {
+    match connect_persistent(&config) {
+        Ok(message) => ApiResponse::success(message),
+        Err(e) => ApiResponse::error(e.to_string()),
+    }
+}
+
+/// Return the current persistent SSH configuration, if connected.
+pub fn ssh_current_config() -> Option<SSHConfig> {
+    SSH_MANAGER
+        .lock()
+        .ok()
+        .and_then(|manager| manager.get_config())
 }
 
 /// Disconnect from SSH server
@@ -152,6 +172,45 @@ pub fn ssh_upload_file(
     }
 }
 
+/// List print queues from /etc/printcap via SSH (uses persistent connection).
+pub(crate) fn ssh_list_print_queues(_config: SSHConfig) -> ApiResponse<Vec<String>> {
+    // Mirrors SOCprint's /etc/printcap discovery while stripping optional aliases.
+    let command = "awk -F'[:|]' '/^p/ { print $1 }' /etc/printcap | sort -u";
+
+    let output = match execute_with_persistent_session(command) {
+        Ok(output) => output,
+        Err(e) => {
+            return ApiResponse::error(format!(
+                "Failed to list print queues: {}. Please reconnect.",
+                e
+            ))
+        }
+    };
+
+    let queues = output
+        .lines()
+        .map(str::trim)
+        .filter(|queue| is_safe_print_queue_name(queue))
+        .map(ToString::to_string)
+        .collect();
+
+    ApiResponse::success(queues)
+}
+
+/// Check print quota via pusage. pusage requires a PTY on SoC Unix servers.
+pub(crate) fn ssh_get_print_quota(_config: SSHConfig) -> ApiResponse<PrintQuota> {
+    let command =
+        "if command -v pusage >/dev/null 2>&1; then pusage; else /usr/local/bin/pusage; fi";
+
+    match execute_with_persistent_session_pty(command) {
+        Ok(output) => ApiResponse::success(parse_print_quota_output(&output)),
+        Err(e) => ApiResponse::error(format!(
+            "Failed to check print quota: {}. Please reconnect.",
+            e
+        )),
+    }
+}
+
 /// Debug: Run a raw command and return full output (for testing)
 #[tauri::command]
 pub fn ssh_debug_command(command: String) -> ApiResponse<String> {
@@ -161,57 +220,33 @@ pub fn ssh_debug_command(command: String) -> ApiResponse<String> {
     }
 }
 
-/// Check printer queue status via SSH (uses persistent connection)
-#[tauri::command]
-pub fn ssh_check_printer_queue(_config: SSHConfig, printer: String) -> ApiResponse<Vec<String>> {
+/// Check printer queue status via SSH (uses persistent connection).
+pub(crate) fn ssh_check_printer_queue(
+    _config: SSHConfig,
+    printer: String,
+) -> ApiResponse<Vec<PrintQueueJob>> {
+    if let Err(e) = validate_print_queue_name(&printer) {
+        return ApiResponse::error(e);
+    }
+
     let command = format!("lpq -P {}", printer);
 
     let output = match execute_with_persistent_session(&command) {
         Ok(output) => output,
-        Err(e) => return ApiResponse::error(format!("Failed to check printer queue: {}. Please reconnect.", e)),
+        Err(e) => {
+            return ApiResponse::error(format!(
+                "Failed to check printer queue: {}. Please reconnect.",
+                e
+            ))
+        }
     };
 
-    // Parse lpq output to extract actual print jobs
-    // lpq output format:
-    // Printer: printer@host
-    // Queue: X printable jobs (or "no printable jobs in queue")
-    // Rank    Owner   Job     File(s)                         Total Size
-    // 1st     user1   123     document.pdf                    1024 bytes
-    // 2nd     user2   124     file.pdf                        2048 bytes
-
-    let jobs: Vec<String> = output
-        .lines()
-        .filter(|line| {
-            let trimmed = line.trim();
-            // Skip empty lines
-            if trimmed.is_empty() {
-                return false;
-            }
-            // Skip header lines
-            if trimmed.starts_with("Printer:") ||
-               trimmed.starts_with("Queue:") ||
-               trimmed.starts_with("Rank") {
-                return false;
-            }
-            // Check if line starts with a rank indicator
-            // Valid ranks: 1st, 2nd, 3rd, 4th, 5th, ..., 21st, 22nd, etc.
-            if let Some(first_word) = trimmed.split_whitespace().next() {
-                return first_word.ends_with("st") ||
-                       first_word.ends_with("nd") ||
-                       first_word.ends_with("rd") ||
-                       first_word.ends_with("th");
-            }
-            false
-        })
-        .map(|s| s.to_string())
-        .collect();
-
-    ApiResponse::success(jobs)
+    ApiResponse::success(parse_lpq_jobs(&output))
 }
 
 // ========== Internal Implementation ==========
 
-const CONNECTION_TIMEOUT_SECS: u64 = 3;  // 3 seconds max per attempt
+const CONNECTION_TIMEOUT_SECS: u64 = 3; // 3 seconds max per attempt
 
 fn create_ssh_session(config: &SSHConfig) -> Result<Session, Box<dyn std::error::Error>> {
     // Single attempt, no retries - fail fast with 3s timeout
@@ -223,11 +258,15 @@ fn try_create_ssh_session(config: &SSHConfig) -> Result<Session, Box<dyn std::er
     use std::sync::mpsc;
     use std::thread;
 
-    println!("[SSH] Connecting to {}@{}:{}", config.username, config.host, config.port);
+    eprintln!(
+        "[SSH] Connecting to {}@{}:{}",
+        config.username, config.host, config.port
+    );
 
     // Resolve hostname
     let addr_string = format!("{}:{}", config.host, config.port);
-    let addrs: Vec<_> = addr_string.to_socket_addrs()
+    let addrs: Vec<_> = addr_string
+        .to_socket_addrs()
         .map_err(|e| format!("Failed to resolve hostname {}: {}", config.host, e))?
         .collect();
 
@@ -235,7 +274,7 @@ fn try_create_ssh_session(config: &SSHConfig) -> Result<Session, Box<dyn std::er
         return Err(format!("No IP address found for hostname: {}", config.host).into());
     }
 
-    println!("[SSH] Resolved to {} IP(s): {:?}", addrs.len(), addrs);
+    eprintln!("[SSH] Resolved to {} IP(s): {:?}", addrs.len(), addrs);
 
     // Try all addresses in parallel, first success wins
     let (tx, rx) = mpsc::channel();
@@ -243,9 +282,11 @@ fn try_create_ssh_session(config: &SSHConfig) -> Result<Session, Box<dyn std::er
     for addr in addrs {
         let tx = tx.clone();
         thread::spawn(move || {
-            println!("[SSH] Trying IP: {}", addr);
-            if let Ok(stream) = TcpStream::connect_timeout(&addr, Duration::from_secs(CONNECTION_TIMEOUT_SECS)) {
-                println!("[SSH] TCP connection established to {}", addr);
+            eprintln!("[SSH] Trying IP: {}", addr);
+            if let Ok(stream) =
+                TcpStream::connect_timeout(&addr, Duration::from_secs(CONNECTION_TIMEOUT_SECS))
+            {
+                eprintln!("[SSH] TCP connection established to {}", addr);
                 let _ = tx.send(stream);
             }
         });
@@ -253,7 +294,8 @@ fn try_create_ssh_session(config: &SSHConfig) -> Result<Session, Box<dyn std::er
     drop(tx); // Close sender
 
     // Wait max 3 seconds for first successful connection
-    let tcp = rx.recv_timeout(Duration::from_secs(CONNECTION_TIMEOUT_SECS))
+    let tcp = rx
+        .recv_timeout(Duration::from_secs(CONNECTION_TIMEOUT_SECS))
         .map_err(|_| "Connection timeout - no server reachable")?;
 
     // Set read/write timeouts
@@ -264,14 +306,20 @@ fn try_create_ssh_session(config: &SSHConfig) -> Result<Session, Box<dyn std::er
     sess.set_tcp_stream(tcp);
     sess.set_timeout(CONNECTION_TIMEOUT_SECS as u32 * 1000); // milliseconds
     sess.handshake()?;
-    println!("[SSH] Handshake completed");
+    eprintln!("[SSH] Handshake completed");
 
     match &config.auth_type {
         SSHAuthType::Password { password } => {
-            println!("[SSH] Authenticating with password (length: {})", password.len());
+            eprintln!(
+                "[SSH] Authenticating with password (length: {})",
+                password.len()
+            );
             sess.userauth_password(&config.username, password)?;
         }
-        SSHAuthType::PrivateKey { key_path, passphrase } => {
+        SSHAuthType::PrivateKey {
+            key_path,
+            passphrase,
+        } => {
             sess.userauth_pubkey_file(
                 &config.username,
                 None,
@@ -309,33 +357,21 @@ pub fn submit_print_job_ssh(
     remote_file_path: &str,
     settings: &PrintSettings,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    // NUS SoC Rule: Duplex is controlled by queue name, not lpr options
-    // - Duplex (double-sided): use queues without -sx suffix (e.g., psts, pstsb)
-    // - Simplex (single-sided): use queues with -sx suffix (e.g., psts-sx, pstsb-sx)
-
+    // NUS SoC public queues use explicit suffixes documented by SOCprint:
+    // - -dx: double-sided
+    // - -sx: single-sided
+    // - -nb: no banner
+    // Older app versions used base queues like psts/pstsb/pstsc, so keep those
+    // as aliases while preferring explicit public queue names.
     let actual_printer = match settings.duplex {
-        DuplexMode::Simplex => {
-            // Single-sided: ensure queue has -sx suffix
-            if printer.ends_with("-sx") {
-                printer.to_string()
-            } else if printer.ends_with("-nb") {
-                // Keep -nb suffix, don't change
-                printer.to_string()
-            } else {
-                // Add -sx suffix for single-sided
-                format!("{}-sx", printer)
-            }
-        }
+        DuplexMode::Simplex => queue_for_duplex_mode(printer, true),
         DuplexMode::DuplexLongEdge | DuplexMode::DuplexShortEdge => {
-            // Double-sided: ensure queue does NOT have -sx suffix
-            if printer.ends_with("-sx") {
-                // Remove -sx suffix for double-sided
-                printer.trim_end_matches("-sx").to_string()
-            } else {
-                printer.to_string()
-            }
+            queue_for_duplex_mode(printer, false)
         }
     };
+
+    validate_print_queue_name(&actual_printer)
+        .map_err(|e| -> Box<dyn std::error::Error> { e.into() })?;
 
     // Paper size dimensions in points
     let (width_pts, height_pts) = match settings.paper_size {
@@ -345,6 +381,8 @@ pub fn submit_print_job_ssh(
 
     // Create scaled PDF path
     let scaled_path = remote_file_path.replace(".pdf", "_scaled.pdf");
+    let scaled_path_arg = shell_quote(&scaled_path);
+    let remote_file_arg = shell_quote(remote_file_path);
 
     // Step 1: Scale PDF on server using ghostscript (available on NUS servers)
     // -dPDFFitPage: scale content to fit page
@@ -353,11 +391,14 @@ pub fn submit_print_job_ssh(
         "gs -sDEVICE=pdfwrite -dPDFFitPage -dFIXEDMEDIA \
          -dDEVICEWIDTHPOINTS={} -dDEVICEHEIGHTPOINTS={} \
          -dCompatibilityLevel=1.4 -dNOPAUSE -dBATCH -dQUIET \
-         -sOutputFile=\"{}\" \"{}\" 2>/dev/null || cp \"{}\" \"{}\"",
-        width_pts, height_pts, scaled_path, remote_file_path, remote_file_path, scaled_path
+         -sOutputFile={} {} 2>/dev/null || cp {} {}",
+        width_pts, height_pts, scaled_path_arg, remote_file_arg, remote_file_arg, scaled_path_arg
     );
 
-    eprintln!("[SSH] Scaling PDF on server: {} -> {}", remote_file_path, scaled_path);
+    eprintln!(
+        "[SSH] Scaling PDF on server: {} -> {}",
+        remote_file_path, scaled_path
+    );
     let scale_result = execute_with_persistent_session(&scale_command);
     if let Err(e) = &scale_result {
         eprintln!("[SSH] PDF scaling warning: {}", e);
@@ -374,13 +415,13 @@ pub fn submit_print_job_ssh(
     }
 
     // Add the file
-    lpr_command.push_str(&format!(" \"{}\"", print_file));
+    lpr_command.push_str(&format!(" {}", shell_quote(print_file)));
 
     eprintln!("[SSH] Submitting print job: {}", lpr_command);
     let result = execute_with_persistent_session(&lpr_command);
 
     // Step 3: Cleanup scaled file
-    let _ = execute_with_persistent_session(&format!("rm -f \"{}\"", scaled_path));
+    let _ = execute_with_persistent_session(&format!("rm -f {}", shell_quote(&scaled_path)));
 
     result
 }
@@ -396,18 +437,23 @@ fn connect_persistent(config: &SSHConfig) -> Result<String, Box<dyn std::error::
     // Enable keepalive to prevent connection timeout
     session.set_keepalive(true, KEEPALIVE_INTERVAL_SECS);
 
-    let mut manager = SSH_MANAGER.lock()
+    let mut manager = SSH_MANAGER
+        .lock()
         .map_err(|e| format!("Failed to acquire lock: {}", e))?;
     manager.session = Some(session);
     manager.config = Some(config.clone());
     manager.update_activity();
 
-    Ok(format!("Connected to {}@{}:{}", config.username, config.host, config.port))
+    Ok(format!(
+        "Connected to {}@{}:{}",
+        config.username, config.host, config.port
+    ))
 }
 
 /// Disconnect persistent SSH session
 fn disconnect_persistent() -> Result<String, Box<dyn std::error::Error>> {
-    let mut manager = SSH_MANAGER.lock()
+    let mut manager = SSH_MANAGER
+        .lock()
         .map_err(|e| format!("Failed to acquire lock: {}", e))?;
 
     if manager.session.is_none() {
@@ -423,7 +469,8 @@ fn disconnect_persistent() -> Result<String, Box<dyn std::error::Error>> {
 /// Check if session needs reconnection and attempt to reconnect if necessary
 /// Returns the config needed for reconnection, or None if session is healthy
 fn check_session_health() -> Result<Option<SSHConfig>, Box<dyn std::error::Error>> {
-    let mut manager = SSH_MANAGER.lock()
+    let mut manager = SSH_MANAGER
+        .lock()
         .map_err(|e| format!("Failed to acquire lock: {}", e))?;
 
     if manager.session.is_none() {
@@ -464,7 +511,8 @@ fn ensure_session_valid() -> Result<(), Box<dyn std::error::Error>> {
         new_session.set_keepalive(true, KEEPALIVE_INTERVAL_SECS);
 
         // Now acquire lock again and store the new session
-        let mut manager = SSH_MANAGER.lock()
+        let mut manager = SSH_MANAGER
+            .lock()
             .map_err(|e| format!("Failed to acquire lock: {}", e))?;
         manager.session = Some(new_session);
         manager.config = Some(config);
@@ -482,11 +530,11 @@ where
 {
     ensure_session_valid()?;
 
-    let manager = SSH_MANAGER.lock()
+    let manager = SSH_MANAGER
+        .lock()
         .map_err(|e| format!("Failed to acquire lock: {}", e))?;
 
-    let session = manager.session.as_ref()
-        .ok_or("No active SSH session")?;
+    let session = manager.session.as_ref().ok_or("No active SSH session")?;
 
     operation(session)
 }
@@ -522,22 +570,337 @@ fn execute_with_persistent_session(command: &str) -> Result<String, Box<dyn std:
     })
 }
 
+/// Execute a command using a PTY. Required by tools such as /usr/local/bin/pusage.
+fn execute_with_persistent_session_pty(
+    command: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    with_session(|session| {
+        let mut channel = session.channel_session()?;
+        channel.request_pty("xterm", None, Some((80, 24, 0, 0)))?;
+        channel.exec(command)?;
+
+        let mut output = String::new();
+        channel.read_to_string(&mut output)?;
+
+        let mut stderr = String::new();
+        channel.stderr().read_to_string(&mut stderr)?;
+
+        channel.wait_close()?;
+        let exit_status = channel.exit_status()?;
+
+        if exit_status != 0 {
+            let error_details = if !stderr.trim().is_empty() {
+                stderr.trim().to_string()
+            } else if !output.trim().is_empty() {
+                output.trim().to_string()
+            } else {
+                format!("No error message (command: {})", command)
+            };
+            return Err(format!("Command failed (exit {}): {}", exit_status, error_details).into());
+        }
+
+        if stderr.trim().is_empty() {
+            Ok(output)
+        } else if output.trim().is_empty() {
+            Ok(stderr)
+        } else {
+            Ok(format!("{}\n{}", output.trim_end(), stderr.trim_end()))
+        }
+    })
+}
+
 /// Upload file using persistent session
-fn upload_with_persistent_session(local_path: &str, remote_path: &str) -> Result<(), Box<dyn std::error::Error>> {
+fn upload_with_persistent_session(
+    local_path: &str,
+    remote_path: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
     let local_file = std::fs::File::open(local_path)?;
     let metadata = local_file.metadata()?;
     let file_size = metadata.len();
 
     with_session(|session| {
-        let mut remote_file = session.scp_send(
-            Path::new(remote_path),
-            0o644,
-            file_size,
-            None,
-        )?;
+        let mut remote_file = session.scp_send(Path::new(remote_path), 0o644, file_size, None)?;
 
-        std::io::copy(&mut std::io::BufReader::new(std::fs::File::open(local_path)?), &mut remote_file)?;
+        std::io::copy(
+            &mut std::io::BufReader::new(std::fs::File::open(local_path)?),
+            &mut remote_file,
+        )?;
 
         Ok(())
     })
+}
+
+fn normalize_legacy_public_queue(queue: &str) -> String {
+    match queue {
+        "pstsb" => "pstb".to_string(),
+        "pstsb-dx" => "pstb-dx".to_string(),
+        "pstsb-sx" => "pstb-sx".to_string(),
+        "pstsc" => "pstc".to_string(),
+        "pstsc-dx" => "pstc-dx".to_string(),
+        "pstsc-sx" => "pstc-sx".to_string(),
+        _ => queue.to_string(),
+    }
+}
+
+fn is_socprint_public_base_queue(queue: &str) -> bool {
+    matches!(queue, "psc008" | "psc011" | "psts" | "pstb" | "pstc")
+}
+
+fn replace_queue_suffix(queue: &str, suffix: &str) -> String {
+    if let Some(base) = queue.strip_suffix("-sx") {
+        format!("{}-{}", base, suffix)
+    } else if let Some(base) = queue.strip_suffix("-dx") {
+        format!("{}-{}", base, suffix)
+    } else {
+        format!("{}-{}", queue, suffix)
+    }
+}
+
+fn queue_for_duplex_mode(queue: &str, simplex: bool) -> String {
+    let normalized = normalize_legacy_public_queue(queue);
+
+    if normalized.ends_with("-nb") {
+        return normalized;
+    }
+
+    if simplex {
+        return replace_queue_suffix(&normalized, "sx");
+    }
+
+    if normalized.ends_with("-sx") || normalized.ends_with("-dx") {
+        return replace_queue_suffix(&normalized, "dx");
+    }
+
+    if is_socprint_public_base_queue(&normalized) {
+        return format!("{}-dx", normalized);
+    }
+
+    normalized
+}
+
+pub(crate) fn validate_print_queue_name(queue: &str) -> Result<(), String> {
+    if is_safe_print_queue_name(queue) {
+        Ok(())
+    } else {
+        Err(format!("Invalid print queue name: {}", queue))
+    }
+}
+
+pub(crate) fn shell_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "'\"'\"'"))
+}
+
+fn is_safe_print_queue_name(queue: &str) -> bool {
+    !queue.is_empty()
+        && queue.len() <= 128
+        && queue
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+}
+
+fn parse_lpq_jobs(output: &str) -> Vec<PrintQueueJob> {
+    output.lines().filter_map(parse_lpq_job_line).collect()
+}
+
+fn parse_lpq_job_line(line: &str) -> Option<PrintQueueJob> {
+    let trimmed = line.trim();
+    if trimmed.is_empty() || should_skip_lpq_line(trimmed) {
+        return None;
+    }
+
+    let parts: Vec<&str> = trimmed.split_whitespace().collect();
+    if parts.len() < 4 || !is_lpq_rank_token(parts[0]) {
+        return None;
+    }
+
+    let file_parts = &parts[3..];
+    let (file, total_size) = split_lpq_file_and_size(file_parts);
+
+    Some(PrintQueueJob {
+        rank: parts[0].to_string(),
+        owner: parts[1].to_string(),
+        job_id: parts[2].to_string(),
+        file,
+        total_size,
+        raw_line: trimmed.to_string(),
+    })
+}
+
+fn should_skip_lpq_line(line: &str) -> bool {
+    let lower = line.to_ascii_lowercase();
+    lower.starts_with("printer:")
+        || lower.starts_with("queue:")
+        || lower.starts_with("rank")
+        || lower.contains("no entries")
+        || lower.contains("no printable jobs")
+        || lower.contains("is ready")
+}
+
+fn is_lpq_rank_token(token: &str) -> bool {
+    let lower = token.to_ascii_lowercase();
+    if matches!(lower.as_str(), "active" | "stalled") {
+        return true;
+    }
+
+    for suffix in ["st", "nd", "rd", "th"] {
+        if let Some(number) = lower.strip_suffix(suffix) {
+            return !number.is_empty() && number.chars().all(|c| c.is_ascii_digit());
+        }
+    }
+
+    false
+}
+
+fn split_lpq_file_and_size(parts: &[&str]) -> (String, Option<String>) {
+    if parts.len() >= 3 {
+        let unit = parts[parts.len() - 1].to_ascii_lowercase();
+        let amount = parts[parts.len() - 2];
+        let looks_like_size = matches!(
+            unit.as_str(),
+            "byte" | "bytes" | "kb" | "kbytes" | "mb" | "mbytes" | "gb" | "gbytes"
+        ) && amount.chars().any(|c| c.is_ascii_digit());
+
+        if looks_like_size {
+            let file = parts[..parts.len() - 2].join(" ");
+            let total_size = Some(parts[parts.len() - 2..].join(" "));
+            return (file, total_size);
+        }
+    }
+
+    (parts.join(" "), None)
+}
+
+pub(crate) fn normalize_lpq_job_id(job_id: &str) -> String {
+    let trimmed = job_id.trim();
+    if let Some((_, suffix)) = trimmed.rsplit_once('-') {
+        if !suffix.is_empty() && suffix.chars().all(|c| c.is_ascii_digit()) {
+            return suffix.to_string();
+        }
+    }
+
+    trimmed.to_string()
+}
+
+fn parse_print_quota_output(output: &str) -> PrintQuota {
+    let raw_output = strip_ansi_sequences(output).trim().to_string();
+    let lines: Vec<String> = raw_output
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(ToString::to_string)
+        .collect();
+
+    PrintQuota {
+        raw_output,
+        summary: lines.first().cloned(),
+        balance: find_quota_line_value(&lines, &["balance", "remaining", "left"]),
+        used: find_quota_line_value(&lines, &["used", "usage", "printed"]),
+        limit: find_quota_line_value(&lines, &["quota", "limit", "allocated"]),
+    }
+}
+
+fn find_quota_line_value(lines: &[String], keys: &[&str]) -> Option<String> {
+    for line in lines {
+        let lower = line.to_ascii_lowercase();
+        if keys.iter().any(|key| lower.contains(key)) {
+            if let Some((_, value)) = line.split_once(':') {
+                let value = value.trim();
+                if !value.is_empty() {
+                    return Some(value.to_string());
+                }
+            }
+            return Some(line.clone());
+        }
+    }
+
+    None
+}
+
+fn strip_ansi_sequences(input: &str) -> String {
+    let mut output = String::with_capacity(input.len());
+    let mut chars = input.chars().peekable();
+
+    while let Some(ch) = chars.next() {
+        if ch == '\u{1b}' && chars.peek() == Some(&'[') {
+            chars.next();
+            for next in chars.by_ref() {
+                if ('@'..='~').contains(&next) {
+                    break;
+                }
+            }
+        } else {
+            output.push(ch);
+        }
+    }
+
+    output
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_lpq_jobs_with_total_size() {
+        let output = "\
+Printer: psts@print
+Queue: 2 printable jobs
+Rank    Owner   Job     File(s)                         Total Size
+active  alice   123     lecture notes.pdf                1024 bytes
+1st     bob     124     assignment.pdf                   2048 bytes
+";
+
+        let jobs = parse_lpq_jobs(output);
+
+        assert_eq!(jobs.len(), 2);
+        assert_eq!(jobs[0].rank, "active");
+        assert_eq!(jobs[0].owner, "alice");
+        assert_eq!(jobs[0].job_id, "123");
+        assert_eq!(jobs[0].file, "lecture notes.pdf");
+        assert_eq!(jobs[0].total_size.as_deref(), Some("1024 bytes"));
+        assert_eq!(jobs[1].rank, "1st");
+    }
+
+    #[test]
+    fn ignores_empty_lpq_output() {
+        let output = "\
+Printer: psts@print
+Queue: no printable jobs in queue
+";
+
+        assert!(parse_lpq_jobs(output).is_empty());
+    }
+
+    #[test]
+    fn parses_quota_output_with_ansi_removed() {
+        let output = "\u{1b}[32mPrint quota: 10.00 remaining\u{1b}[0m\nUsed: 2.50\n";
+
+        let quota = parse_print_quota_output(output);
+
+        assert_eq!(
+            quota.summary.as_deref(),
+            Some("Print quota: 10.00 remaining")
+        );
+        assert_eq!(quota.limit.as_deref(), Some("10.00 remaining"));
+        assert_eq!(quota.used.as_deref(), Some("2.50"));
+        assert!(!quota.raw_output.contains('\u{1b}'));
+    }
+
+    #[test]
+    fn normalizes_socprint_public_queue_suffixes() {
+        assert_eq!(queue_for_duplex_mode("psts", false), "psts-dx");
+        assert_eq!(queue_for_duplex_mode("psts-sx", false), "psts-dx");
+        assert_eq!(queue_for_duplex_mode("psts-dx", true), "psts-sx");
+        assert_eq!(queue_for_duplex_mode("psc008", true), "psc008-sx");
+        assert_eq!(queue_for_duplex_mode("pstsb", false), "pstb-dx");
+        assert_eq!(queue_for_duplex_mode("pstsc-sx", false), "pstc-dx");
+    }
+
+    #[test]
+    fn shell_quotes_single_quotes() {
+        assert_eq!(
+            shell_quote("/tmp/alice's file.pdf"),
+            "'/tmp/alice'\"'\"'s file.pdf'"
+        );
+    }
 }

@@ -1,7 +1,7 @@
 use crate::types::*;
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
-use std::collections::HashMap;
 
 const APP_NAME: &str = "tech.silan.PrintAtSoC";
 const HISTORY_FILE: &str = "print_jobs.json";
@@ -31,10 +31,10 @@ pub fn get_history_file_path() -> Option<PathBuf> {
 
 /// Ensure all required directories exist
 pub fn ensure_directories() -> Result<(), String> {
-    let history_dir = get_history_dir()
-        .ok_or_else(|| "Failed to get history directory path".to_string())?;
-    let backups_dir = get_backups_dir()
-        .ok_or_else(|| "Failed to get backups directory path".to_string())?;
+    let history_dir =
+        get_history_dir().ok_or_else(|| "Failed to get history directory path".to_string())?;
+    let backups_dir =
+        get_backups_dir().ok_or_else(|| "Failed to get backups directory path".to_string())?;
 
     fs::create_dir_all(&history_dir)
         .map_err(|e| format!("Failed to create history directory: {}", e))?;
@@ -46,8 +46,8 @@ pub fn ensure_directories() -> Result<(), String> {
 
 /// Load print history from JSON file
 pub fn load_print_history() -> Result<HashMap<String, PrintJob>, String> {
-    let history_path = get_history_file_path()
-        .ok_or_else(|| "Failed to get history file path".to_string())?;
+    let history_path =
+        get_history_file_path().ok_or_else(|| "Failed to get history file path".to_string())?;
 
     if !history_path.exists() {
         eprintln!("[Storage] History file does not exist, returning empty history");
@@ -77,8 +77,8 @@ pub fn load_print_history() -> Result<HashMap<String, PrintJob>, String> {
 pub fn save_print_history(jobs: &HashMap<String, PrintJob>) -> Result<(), String> {
     ensure_directories()?;
 
-    let history_path = get_history_file_path()
-        .ok_or_else(|| "Failed to get history file path".to_string())?;
+    let history_path =
+        get_history_file_path().ok_or_else(|| "Failed to get history file path".to_string())?;
 
     // Convert HashMap to Vec for serialization
     let jobs_vec: Vec<&PrintJob> = jobs.values().collect();
@@ -103,8 +103,8 @@ pub fn save_print_history(jobs: &HashMap<String, PrintJob>) -> Result<(), String
 pub fn backup_pdf_file(job_id: &str, source_path: &str) -> Result<PathBuf, String> {
     ensure_directories()?;
 
-    let backups_dir = get_backups_dir()
-        .ok_or_else(|| "Failed to get backups directory path".to_string())?;
+    let backups_dir =
+        get_backups_dir().ok_or_else(|| "Failed to get backups directory path".to_string())?;
 
     let job_backup_dir = backups_dir.join(job_id);
     fs::create_dir_all(&job_backup_dir)
@@ -112,17 +112,19 @@ pub fn backup_pdf_file(job_id: &str, source_path: &str) -> Result<PathBuf, Strin
 
     let backup_path = job_backup_dir.join("original.pdf");
 
-    fs::copy(source_path, &backup_path)
-        .map_err(|e| format!("Failed to copy PDF file: {}", e))?;
+    fs::copy(source_path, &backup_path).map_err(|e| format!("Failed to copy PDF file: {}", e))?;
 
-    eprintln!("[Storage] Backed up PDF for job {} to {:?}", job_id, backup_path);
+    eprintln!(
+        "[Storage] Backed up PDF for job {} to {:?}",
+        job_id, backup_path
+    );
     Ok(backup_path)
 }
 
 /// Delete PDF backup for a job
 pub fn delete_pdf_backup(job_id: &str) -> Result<(), String> {
-    let backups_dir = get_backups_dir()
-        .ok_or_else(|| "Failed to get backups directory path".to_string())?;
+    let backups_dir =
+        get_backups_dir().ok_or_else(|| "Failed to get backups directory path".to_string())?;
 
     let job_backup_dir = backups_dir.join(job_id);
 
@@ -164,12 +166,12 @@ fn get_dir_size(path: &PathBuf) -> u64 {
 
 /// Get storage information
 pub fn get_storage_info() -> Result<StorageInfo, String> {
-    let data_dir = get_app_data_dir()
-        .ok_or_else(|| "Failed to get app data directory".to_string())?;
-    let history_dir = get_history_dir()
-        .ok_or_else(|| "Failed to get history directory".to_string())?;
-    let backups_dir = get_backups_dir()
-        .ok_or_else(|| "Failed to get backups directory".to_string())?;
+    let data_dir =
+        get_app_data_dir().ok_or_else(|| "Failed to get app data directory".to_string())?;
+    let history_dir =
+        get_history_dir().ok_or_else(|| "Failed to get history directory".to_string())?;
+    let backups_dir =
+        get_backups_dir().ok_or_else(|| "Failed to get backups directory".to_string())?;
 
     let history_size = get_dir_size(&history_dir);
     let backups_size = get_dir_size(&backups_dir);
@@ -202,7 +204,10 @@ pub fn cleanup_old_history(jobs: &mut HashMap<String, PrintJob>, days: i64) -> V
         // Keep jobs that are still in progress
         let keep = matches!(
             job.status,
-            PrintJobStatus::Pending | PrintJobStatus::Uploading | PrintJobStatus::Queued | PrintJobStatus::Printing
+            PrintJobStatus::Pending
+                | PrintJobStatus::Uploading
+                | PrintJobStatus::Queued
+                | PrintJobStatus::Printing
         ) || job.created_at > cutoff;
 
         if !keep {

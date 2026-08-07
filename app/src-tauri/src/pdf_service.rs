@@ -59,8 +59,12 @@ fn get_pdf_info_internal(file_path: &str) -> Result<PDFInfo, Box<dyn std::error:
     }
 
     // Try to load with lopdf
-    let doc = Document::load(path)
-        .map_err(|e| format!("Failed to parse PDF {}: {}. The file may be corrupted or use unsupported features.", file_path, e))?;
+    let doc = Document::load(path).map_err(|e| {
+        format!(
+            "Failed to parse PDF {}: {}. The file may be corrupted or use unsupported features.",
+            file_path, e
+        )
+    })?;
 
     let num_pages = doc.get_pages().len() as u32;
     if num_pages == 0 {
@@ -171,7 +175,10 @@ pub fn create_nup_pdf_internal(
         9 => (3, 3),
         _ => {
             // Fallback: just copy the document
-            eprintln!("[PDF] Unsupported pages_per_sheet {}, copying original", pages_per_sheet);
+            eprintln!(
+                "[PDF] Unsupported pages_per_sheet {}, copying original",
+                pages_per_sheet
+            );
             std::fs::copy(input_path, output_path)
                 .map_err(|e| format!("Failed to copy PDF: {}", e))?;
             return Ok(());
@@ -226,7 +233,6 @@ pub fn extract_page_range(
 
     // For now, just copy the entire document
     // Full implementation would filter pages
-    std::fs::copy(input_path, output_path)
-        .map_err(|e| format!("Failed to copy PDF: {}", e))?;
+    std::fs::copy(input_path, output_path).map_err(|e| format!("Failed to copy PDF: {}", e))?;
     Ok(())
 }

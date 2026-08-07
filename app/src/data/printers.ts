@@ -1,5 +1,17 @@
 import type { Printer, PrinterGroup } from '@/types/printer'
 
+export const DEFAULT_PRINTER_QUEUE = 'psts-dx'
+
+// Public queues copied from socprint-web/SOCprint's documented common queues:
+// COM1 basement: psc008, psc011; COM1 L1 tech services: psts, pstb, pstc.
+// Queue suffixes are explicit: -dx = double-sided, -sx = single-sided.
+export const SOCPRINT_PUBLIC_BASE_QUEUES = ['psc008', 'psc011', 'psts', 'pstb', 'pstc'] as const
+export const SOCPRINT_PUBLIC_QUEUE_NAMES = SOCPRINT_PUBLIC_BASE_QUEUES.flatMap((queue) => [
+  `${queue}-dx`,
+  `${queue}-sx`,
+])
+const SOCPRINT_PUBLIC_QUEUE_SET = new Set<string>(SOCPRINT_PUBLIC_QUEUE_NAMES)
+
 // Building coordinates for distance calculation (relative positions in meters)
 // Based on NUS SoC campus layout
 export const BUILDING_COORDINATES: Record<string, { x: number; y: number }> = {
@@ -84,27 +96,27 @@ const PUBLIC_PRINTERS: Printer[] = [
   // psc008 - COM1 Basement
   ...createPrinterGroup('psc008',
     { building: 'COM1', room: 'Basement (outside Programming Lab 3)', floor: 'B1' },
-    'LEXMARK MS821DN', false, ['A4'], true, 'public'),
+    'LEXMARK MS821DN', false, ['A4'], true, 'public', ['dx', 'sx']),
 
   // psc011 - COM1 Basement
   ...createPrinterGroup('psc011',
     { building: 'COM1', room: 'Basement', floor: 'B1' },
-    'LEXMARK MS821DN', false, ['A4'], true, 'public'),
+    'LEXMARK MS821DN', false, ['A4'], true, 'public', ['dx', 'sx']),
 
-  // psts - COM1 Level 1 Printer Area
+  // psts - COM1 Level 1, in front of tech services
   ...createPrinterGroup('psts',
-    { building: 'COM1', room: 'Printer Area', floor: '1' },
-    'LEXMARK MS821DN', false, ['A4'], true, 'public'),
+    { building: 'COM1', room: 'Level 1, in front of Tech Services', floor: '1' },
+    'LEXMARK MS821DN', false, ['A4'], true, 'public', ['dx', 'sx']),
 
-  // pstsb - COM1 Level 1 Printer Area
-  ...createPrinterGroup('pstsb',
-    { building: 'COM1', room: 'Printer Area', floor: '1' },
-    'LEXMARK MS821DN', false, ['A4'], true, 'public'),
+  // pstb - COM1 Level 1, in front of tech services
+  ...createPrinterGroup('pstb',
+    { building: 'COM1', room: 'Level 1, in front of Tech Services', floor: '1' },
+    'LEXMARK MS821DN', false, ['A4'], true, 'public', ['dx', 'sx']),
 
-  // pstsc - COM1 Level 1 Printer Area
-  ...createPrinterGroup('pstsc',
-    { building: 'COM1', room: 'Printer Area', floor: '1' },
-    'LEXMARK MS821DN', false, ['A4'], true, 'public'),
+  // pstc - COM1 Level 1, in front of tech services
+  ...createPrinterGroup('pstc',
+    { building: 'COM1', room: 'Level 1, in front of Tech Services', floor: '1' },
+    'LEXMARK MS821DN', false, ['A4'], true, 'public', ['dx', 'sx']),
 
   // cptsc - COM1-01-06 Technical Services (Color, No Banner)
   ...createPrinterGroup('cptsc',
@@ -124,6 +136,10 @@ const PUBLIC_PRINTERS: Printer[] = [
     { building: 'COM4', room: 'Printer Area (corridor)', floor: '2' },
     'LEXMARK MS810', false, ['A4'], true, 'public', ['main', 'sx']),
 ]
+
+const COMMON_PUBLIC_PRINTERS = PUBLIC_PRINTERS.filter((printer) =>
+  SOCPRINT_PUBLIC_QUEUE_SET.has(printer.queue_name)
+)
 
 // ============ Print Queues Restricted to Staff Only ============
 const STAFF_PRINTERS: Printer[] = [
@@ -328,9 +344,109 @@ export const PRINTERS: Printer[] = [
 ]
 
 // Export by access level for filtering
-export const PUBLIC_PRINTER_IDS = PUBLIC_PRINTERS.map(p => p.queue_name)
+export const PUBLIC_PRINTER_IDS = COMMON_PUBLIC_PRINTERS.map(p => p.queue_name)
 export const STAFF_PRINTER_IDS = STAFF_PRINTERS.map(p => p.queue_name)
 export const RESTRICTED_PRINTER_IDS = RESTRICTED_PRINTERS.map(p => p.queue_name)
+
+export function normalizePrintQueueName(queueName: string | null | undefined): string | null {
+  if (!queueName) return null
+
+  const normalized = queueName.trim()
+  if (!normalized) return null
+
+  const legacyAliases: Record<string, string> = {
+    pstsb: 'pstb-dx',
+    'pstsb-dx': 'pstb-dx',
+    'pstsb-sx': 'pstb-sx',
+    pstsc: 'pstc-dx',
+    'pstsc-dx': 'pstc-dx',
+    'pstsc-sx': 'pstc-sx',
+  }
+
+  if (legacyAliases[normalized]) {
+    return legacyAliases[normalized]
+  }
+
+  if ((SOCPRINT_PUBLIC_BASE_QUEUES as readonly string[]).includes(normalized)) {
+    return `${normalized}-dx`
+  }
+
+  return normalized
+}
+
+export function getDefaultPrinterQueue(): string {
+  return DEFAULT_PRINTER_QUEUE
+}
+
+function createDiscoveredPrinter(queueName: string): Printer {
+  const normalized = normalizePrintQueueName(queueName) || queueName
+  const baseId = normalized.replace(/-(dx|sx|nb)$/i, '')
+  const variant = normalized.endsWith('-sx')
+    ? 'sx'
+    : normalized.endsWith('-dx')
+      ? 'dx'
+      : normalized.endsWith('-nb')
+        ? 'nb'
+        : 'main'
+
+  return {
+    id: normalized,
+    name: normalized,
+    queue_name: normalized,
+    location: {
+      building: 'SoC',
+      room: 'Discovered from /etc/printcap',
+      floor: '-',
+    },
+    model: 'Unknown',
+    status: 'Online',
+    supports_duplex: variant !== 'sx',
+    supports_color: normalized.startsWith('c'),
+    supported_paper_sizes: ['A4'],
+    group_id: baseId,
+    variant,
+    queue_count: 0,
+    access_level: 'restricted',
+  }
+}
+
+function getPrinterMetadataMap(): Map<string, Printer> {
+  return new Map(PRINTERS.map((printer) => [printer.queue_name, printer]))
+}
+
+export function getAvailablePrintersFromQueues(
+  queueNames: string[],
+  serverType: 'stu' | 'stf' | null
+): Printer[] {
+  const normalizedQueues = Array.from(
+    new Set(
+      queueNames
+        .map(normalizePrintQueueName)
+        .filter((queue): queue is string => Boolean(queue))
+        .filter((queue) => /^[A-Za-z0-9_-]+$/.test(queue))
+    )
+  )
+
+  if (normalizedQueues.length === 0) {
+    return getPrintersForServerType(serverType)
+  }
+
+  const availableQueueSet = new Set(normalizedQueues)
+  const metadataByQueue = getPrinterMetadataMap()
+  const candidates = getPrintersForServerType(serverType)
+  const knownAvailablePrinters = candidates.filter((printer) => availableQueueSet.has(printer.queue_name))
+
+  if (serverType !== 'stf') {
+    return knownAvailablePrinters.length > 0 ? knownAvailablePrinters : getPublicPrinters()
+  }
+
+  const knownQueueSet = new Set(knownAvailablePrinters.map((printer) => printer.queue_name))
+  const discoveredPrinters = normalizedQueues
+    .filter((queue) => !knownQueueSet.has(queue))
+    .map((queue) => metadataByQueue.get(queue) || createDiscoveredPrinter(queue))
+
+  return [...knownAvailablePrinters, ...discoveredPrinters]
+}
 
 // Group printers by their group_id
 export function groupPrinters(printers: Printer[]): PrinterGroup[] {
@@ -368,17 +484,17 @@ export function getPrinterGroupsWithStatus(): PrinterGroup[] {
 
 // Get only public printers (for students)
 export function getPublicPrinters(): Printer[] {
-  return PUBLIC_PRINTERS
+  return COMMON_PUBLIC_PRINTERS
 }
 
 // Get printers based on server type (stu = student, stf = staff)
 export function getPrintersForServerType(serverType: 'stu' | 'stf' | null): Printer[] {
   if (serverType === 'stf') {
     // Staff can use public + staff printers
-    return [...PUBLIC_PRINTERS, ...STAFF_PRINTERS]
+    return [...COMMON_PUBLIC_PRINTERS, ...STAFF_PRINTERS]
   }
   // Students (stu) can only use public printers
-  return PUBLIC_PRINTERS
+  return COMMON_PUBLIC_PRINTERS
 }
 
 // Get printers by building

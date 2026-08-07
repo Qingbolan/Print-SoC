@@ -97,6 +97,23 @@ export interface Coordinates {
 
 export type PrinterStatus = 'Online' | 'Offline' | 'Busy' | 'OutOfPaper' | 'Error'
 
+export interface PrintQueueJob {
+  rank: string
+  owner: string
+  job_id: string
+  file: string
+  total_size?: string
+  raw_line: string
+}
+
+export interface PrintQuota {
+  raw_output: string
+  summary?: string
+  balance?: string
+  used?: string
+  limit?: string
+}
+
 // ========== API Responses ==========
 export interface ApiResponse<T> {
   success: boolean
