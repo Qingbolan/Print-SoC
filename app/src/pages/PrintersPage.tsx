@@ -21,38 +21,39 @@ const statusConfig: Record<
   { color: string; label: string; icon: React.ReactNode }
 > = {
   Online: {
-    color: 'bg-success',
+    color: 'bg-success/10 text-success border-success/20',
     label: 'Online',
     icon: <CheckCircle className="w-4 h-4" />,
   },
   Offline: {
-    color: 'bg-muted-foreground',
+    color: 'bg-muted text-muted-foreground border-border/70',
     label: 'Offline',
     icon: <AlertCircle className="w-4 h-4" />,
   },
   Busy: {
-    color: 'bg-warning text-warning-foreground',
+    color: 'bg-warning/10 text-warning-foreground border-warning/25',
     label: 'Busy',
     icon: <AlertCircle className="w-4 h-4" />,
   },
   OutOfPaper: {
-    color: 'bg-destructive',
+    color: 'bg-destructive/10 text-destructive border-destructive/20',
     label: 'Out of Paper',
     icon: <AlertCircle className="w-4 h-4" />,
   },
   Error: {
-    color: 'bg-destructive',
+    color: 'bg-destructive/10 text-destructive border-destructive/20',
     label: 'Error',
     icon: <AlertCircle className="w-4 h-4" />,
   },
 }
 
 export default function PrintQueuePage() {
-  const { sshConfig, isConnected, isRefreshing, savedCredentials, printerFilter, userLocation } = usePrinterStore()
+  const { sshConfig, connectionStatus, isRefreshing, savedCredentials, printerFilter, userLocation } = usePrinterStore()
   const [selectedGroup, setSelectedGroup] = useState<string | null>('info')
   const [selectedPrinter, setSelectedPrinter] = useState<Printer | null>(null)
   const [sheetOpen, setSheetOpen] = useState(false)
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list')
+  const isConnected = connectionStatus.type === 'connected'
 
   // Filter printers based on user account type (stu = student, stf = staff)
   const serverType = savedCredentials?.serverType || (sshConfig?.host?.includes('stf') ? 'stf' : 'stu')
@@ -79,7 +80,7 @@ export default function PrintQueuePage() {
   const printerGroups = useMemo(() => groupPrinters(filteredPrinters), [filteredPrinters])
 
   const handleRefresh = async () => {
-    if (!sshConfig) {
+    if (!isConnected || !sshConfig) {
       toast.error('Not connected to SSH')
       return
     }
@@ -252,59 +253,56 @@ export default function PrintQueuePage() {
 
           {/* Printer Cards Grid */}
           <div className="flex-1 overflow-y-auto p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-7xl">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-7xl">
               {displayPrinters.map((printer) => {
                 const queueCount = printer.queue_count || 0
                 const distance = calculateDistance(userLocation, printer)
+                const queueTone =
+                  printer.status === 'Online' && queueCount === 0
+                    ? 'border-success/20 bg-success/10 text-success'
+                    : printer.status !== 'Online'
+                    ? 'border-destructive/20 bg-destructive/10 text-destructive'
+                    : 'border-warning/25 bg-warning/10 text-warning-foreground'
 
                 return (
                   <SimpleCard
                     key={printer.id}
                     variant="default"
                     hoverable
-                    className="cursor-pointer"
+                    className="h-full cursor-pointer"
                     onClick={() => handlePrinterClick(printer)}
                   >
-                    <SimpleCardHeader>
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
+                    <SimpleCardHeader className="mb-5">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0 space-y-2">
                           <SimpleCardTitle className="flex items-center gap-2">
-                            <PrinterIcon className="w-5 h-5" />
-                            {printer.name}
+                            <PrinterIcon className="w-4 h-4 shrink-0 text-muted-foreground" />
+                            <span className="truncate">{printer.name}</span>
                           </SimpleCardTitle>
-                          <SimpleCardDescription className="mt-1">
-                            Queue: {printer.queue_name}
+                          <SimpleCardDescription className="truncate">
+                            {printer.queue_name}
                           </SimpleCardDescription>
-                        </div>
-                        <div className="flex flex-col items-end gap-2">
                           <Badge
-                            variant="secondary"
-                            className={`${statusConfig[printer.status].color} text-white`}
+                            variant="outline"
+                            className={statusConfig[printer.status].color}
                           >
                             {statusConfig[printer.status].icon}
                             <span className="ml-1">{statusConfig[printer.status].label}</span>
                           </Badge>
-                          {/* Queue Count Badge */}
-                          <div
-                            className={cn(
-                              'min-w-[48px] h-9 rounded-md flex items-center justify-center px-3 text-white font-bold text-base shadow-md',
-                              printer.status === 'Online' && queueCount === 0
-                                ? 'bg-success'
-                                : printer.status !== 'Online'
-                                ? 'bg-destructive'
-                                : 'bg-warning text-warning-foreground'
-                            )}
-                          >
-                            {queueCount}
+                        </div>
+                        <div className={cn('shrink-0 rounded-md border px-3 py-2 text-center', queueTone)}>
+                          <div className="text-lg font-semibold leading-none">{queueCount}</div>
+                          <div className="mt-1 text-[11px] font-medium uppercase leading-none opacity-75">
+                            queue
                           </div>
                         </div>
                       </div>
                     </SimpleCardHeader>
-                    <SimpleCardContent className="space-y-4">
+                    <SimpleCardContent className="space-y-3">
                       {/* Location */}
                       <div className="flex items-start gap-2 text-sm">
-                        <MapPin className="w-4 h-4 mt-0.5 text-muted-foreground" />
-                        <div>
+                        <MapPin className="w-4 h-4 mt-0.5 shrink-0 text-muted-foreground" />
+                        <div className="min-w-0">
                           <div className="font-medium">{printer.location.building}</div>
                           <div className="text-muted-foreground">
                             {printer.location.room} - Floor {printer.location.floor}
@@ -314,14 +312,14 @@ export default function PrintQueuePage() {
 
                       {/* Distance (if user location is set) */}
                       {distance !== null && (
-                        <div className="flex items-center gap-2 text-sm text-primary">
-                          <Navigation className="w-4 h-4" />
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <Navigation className="w-4 h-4 shrink-0" />
                           <span>{formatDistance(distance)} away</span>
                         </div>
                       )}
 
                       {/* Features & Variant */}
-                      <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-wrap gap-1.5 pt-1">
                         {printer.supports_duplex && (
                           <Badge variant="outline">Duplex</Badge>
                         )}

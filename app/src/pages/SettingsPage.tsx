@@ -39,7 +39,6 @@ export default function SettingsPage() {
   const navigate = useNavigate()
   const {
     sshConfig,
-    setSshConfig,
     connectionStatus,
     savedCredentials,
     clearSavedCredentials,
@@ -86,21 +85,24 @@ export default function SettingsPage() {
 
     const result = await connect(formData)
     if (result.success) {
-      setSshConfig(formData)
       toast.success('Connection successful!')
     } else {
       toast.error(result.error || 'Connection failed')
     }
   }
 
-  const handleDisconnect = () => {
-    disconnect()
-    toast.info('Disconnected')
+  const handleDisconnect = async () => {
+    const result = await disconnect()
+    if (result.success) {
+      toast.info('Disconnected')
+    } else {
+      toast.error(result.error || 'Failed to disconnect')
+    }
   }
 
   const handleClearCredentials = () => {
     clearSavedCredentials()
-    toast.success('Auto-login credentials cleared')
+    toast.success('Saved account cleared')
   }
 
   const handleLogout = () => {
@@ -266,22 +268,22 @@ export default function SettingsPage() {
                 </SimpleCard>
               )}
 
-              {/* Auto-login Settings */}
+              {/* Saved account settings */}
               {savedCredentials && (
                 <SimpleCard variant="default">
                   <SimpleCardHeader>
                     <SimpleCardTitle className="flex items-center gap-2">
                       <Shield className="w-5 h-5 text-primary" />
-                      Auto-login
+                      Saved Account
                     </SimpleCardTitle>
                   </SimpleCardHeader>
                   <SimpleCardContent className="space-y-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <div className="font-medium">Auto-login Enabled</div>
-                        <div className="text-sm text-muted-foreground">
-                          Server: {savedCredentials.serverType.toUpperCase()} • User: {savedCredentials.username}
-                        </div>
+		                        <div className="font-medium">Account Remembered</div>
+		                        <div className="text-sm text-muted-foreground">
+		                          Server: {savedCredentials.serverType.toUpperCase()} • User: {savedCredentials.username}
+		                        </div>
                       </div>
                       <Badge variant="outline" className="bg-success/10 text-success border-success/20">
                         Active
@@ -292,9 +294,9 @@ export default function SettingsPage() {
                       variant="outline"
                       size="sm"
                       className="w-full"
-                    >
-                      Clear Auto-login
-                    </Button>
+	                    >
+		                      Clear Saved Account
+	                    </Button>
                   </SimpleCardContent>
                 </SimpleCard>
               )}
@@ -525,9 +527,9 @@ export default function SettingsPage() {
                       placeholder="Your NUS password"
                       disabled={isConnecting || connectionStatus.type === 'connected'}
                     />
-                    <p className="text-xs text-muted-foreground">
-                      Your password is only stored locally and never sent anywhere except to the SSH server
-                    </p>
+	                    <p className="text-xs text-muted-foreground">
+	                      Your password is used only for this SSH connection and is not stored by Print@SoC.
+	                    </p>
                   </div>
 
                   <Button

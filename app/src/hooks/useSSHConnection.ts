@@ -4,7 +4,7 @@ import { connectSSH, disconnectSSH } from '@/lib/printer-api'
 import type { SSHConfig } from '@/types/printer'
 
 export function useSSHConnection() {
-  const { setConnectionStatus, setIsConnected } = usePrinterStore()
+  const { setConnectionStatus, setConnectedSession, clearConnectionSession } = usePrinterStore()
   const [isConnecting, setIsConnecting] = useState(false)
 
   const connect = useCallback(async (config: SSHConfig) => {
@@ -32,51 +32,46 @@ export function useSSHConnection() {
       clearInterval(timerInterval)
 
       if (result.success) {
-        setConnectionStatus({
-          type: 'connected',
-          connectedAt: new Date(),
-        })
-        setIsConnected(true)
+        setConnectedSession(config)
         setIsConnecting(false)
         return { success: true, message: result.data || 'Connected successfully' }
       }
 
       // Connection failed
       const errorMessage = result.error || 'Connection failed'
+      clearConnectionSession()
       setConnectionStatus({
         type: 'error',
         message: errorMessage,
         lastAttempt: new Date(),
       })
-      setIsConnected(false)
       setIsConnecting(false)
       return { success: false, error: errorMessage }
 
     } catch (error) {
       clearInterval(timerInterval)
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      clearConnectionSession()
       setConnectionStatus({
         type: 'error',
         message: errorMessage,
         lastAttempt: new Date(),
       })
-      setIsConnected(false)
       setIsConnecting(false)
       return { success: false, error: errorMessage }
     }
-  }, [setConnectionStatus, setIsConnected])
+  }, [setConnectionStatus, setConnectedSession, clearConnectionSession])
 
   const disconnect = useCallback(async () => {
     try {
       await disconnectSSH()
-      setConnectionStatus({ type: 'disconnected' })
-      setIsConnected(false)
+      clearConnectionSession()
       return { success: true }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to disconnect'
       return { success: false, error: errorMessage }
     }
-  }, [setConnectionStatus, setIsConnected])
+  }, [clearConnectionSession])
 
   return {
     connect,

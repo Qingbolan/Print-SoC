@@ -86,11 +86,11 @@
   --destructive-foreground: oklch(0.99 0 0);
   --destructive-subtle: oklch(0.92 0.08 25);
 
-  /* Card surfaces - Layered Acrylic */
-  --card: var(--acrylic-base);
-  --card-hover: oklch(0.99 0.001 260 / 0.8);
+  /* Card surfaces - calm content panels */
+  --card: oklch(0.99 0.001 260 / 0.94);
+  --card-hover: oklch(0.975 0.003 260 / 0.96);
   --card-foreground: oklch(0.20 0.01 260);
-  --card-border: oklch(0.88 0.005 260 / 0.5);
+  --card-border: oklch(0.86 0.006 260 / 0.72);
 
   /* Elevated surfaces */
   --elevated: oklch(0.99 0.001 260 / 0.9);
@@ -110,11 +110,11 @@
 
   /* Fluent Shadows */
   --shadow-xs: 0 1px 2px 0 oklch(0 0 0 / 0.04);
-  --shadow-sm: 0 2px 4px 0 oklch(0 0 0 / 0.06);
-  --shadow-md: 0 4px 8px 0 oklch(0 0 0 / 0.08), 0 2px 4px 0 oklch(0 0 0 / 0.04);
-  --shadow-lg: 0 8px 16px 0 oklch(0 0 0 / 0.10), 0 4px 8px 0 oklch(0 0 0 / 0.06);
-  --shadow-xl: 0 16px 32px 0 oklch(0 0 0 / 0.12), 0 8px 16px 0 oklch(0 0 0 / 0.08);
-  --shadow-2xl: 0 24px 48px 0 oklch(0 0 0 / 0.14), 0 12px 24px 0 oklch(0 0 0 / 0.10);
+  --shadow-sm: 0 1px 3px 0 oklch(0 0 0 / 0.06);
+  --shadow-md: 0 4px 10px 0 oklch(0 0 0 / 0.07);
+  --shadow-lg: 0 10px 24px 0 oklch(0 0 0 / 0.09);
+  --shadow-xl: 0 16px 36px 0 oklch(0 0 0 / 0.11);
+  --shadow-2xl: 0 24px 52px 0 oklch(0 0 0 / 0.13);
 
   /* Fluent Radius */
   --radius-xs: 0.25rem;
@@ -203,10 +203,10 @@
   --accent-foreground: oklch(0.99 0 0);
 
   /* Card surfaces */
-  --card: var(--acrylic-base);
-  --card-hover: oklch(0.16 0.012 260 / 0.7);
+  --card: oklch(0.17 0.012 260 / 0.9);
+  --card-hover: oklch(0.20 0.014 260 / 0.92);
   --card-foreground: oklch(0.95 0.002 260);
-  --card-border: oklch(0.30 0.01 260 / 0.4);
+  --card-border: oklch(0.32 0.01 260 / 0.55);
 
   /* Elevated */
   --elevated: oklch(0.18 0.012 260 / 0.8);
@@ -226,11 +226,11 @@
 
   /* Shadows - more prominent in dark */
   --shadow-xs: 0 1px 2px 0 oklch(0 0 0 / 0.25);
-  --shadow-sm: 0 2px 4px 0 oklch(0 0 0 / 0.3);
-  --shadow-md: 0 4px 8px 0 oklch(0 0 0 / 0.35), 0 2px 4px 0 oklch(0 0 0 / 0.25);
-  --shadow-lg: 0 8px 16px 0 oklch(0 0 0 / 0.40), 0 4px 8px 0 oklch(0 0 0 / 0.3);
-  --shadow-xl: 0 16px 32px 0 oklch(0 0 0 / 0.45), 0 8px 16px 0 oklch(0 0 0 / 0.35);
-  --shadow-2xl: 0 24px 48px 0 oklch(0 0 0 / 0.50), 0 12px 24px 0 oklch(0 0 0 / 0.40);
+  --shadow-sm: 0 1px 4px 0 oklch(0 0 0 / 0.28);
+  --shadow-md: 0 4px 12px 0 oklch(0 0 0 / 0.34);
+  --shadow-lg: 0 10px 26px 0 oklch(0 0 0 / 0.40);
+  --shadow-xl: 0 16px 38px 0 oklch(0 0 0 / 0.46);
+  --shadow-2xl: 0 24px 54px 0 oklch(0 0 0 / 0.52);
 
   /* Theme Gradient - Cyan to Purple (brighter in dark) */
   --theme-gradient-start: oklch(0.75 0.17 200);  /* Cyan #50e3ff */
@@ -385,23 +385,23 @@
 
   /* Fluent Card Styles */
   .fluent-card {
-    background: var(--acrylic-base);
-    backdrop-filter: saturate(180%) blur(var(--blur-sm));
-    -webkit-backdrop-filter: saturate(180%) blur(var(--blur-sm));
+    background: var(--card);
     border: 1px solid var(--card-border);
-    border-radius: var(--radius-xl);
-    box-shadow: var(--shadow-sm);
-    transition: all var(--duration-normal) var(--motion-standard);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-xs);
+    transition:
+      background-color var(--duration-normal) var(--motion-standard),
+      border-color var(--duration-normal) var(--motion-standard),
+      box-shadow var(--duration-normal) var(--motion-standard);
   }
 
   .fluent-card:hover {
-    box-shadow: var(--shadow-md);
+    border-color: var(--border-hover);
     background: var(--card-hover);
-    transform: translateY(-2px);
+    box-shadow: var(--shadow-sm);
   }
 
   .fluent-card:active {
-    transform: translateY(0px) scale(0.99);
     transition-duration: var(--duration-fast);
   }
 

@@ -10,6 +10,7 @@ import { AntdProvider } from '@/components/providers/antd-provider'
 import { NetworkCheckProvider } from '@/components/providers/NetworkCheckProvider'
 import { PageBreadcrumb } from '@/components/layout/PageBreadcrumb'
 import { safeOpenDevTools } from '@/lib/tauri-utils'
+import { useBackgroundMonitor } from '@/hooks/useBackgroundMonitor'
 
 // Pages
 import LoginPage from '@/pages/LoginPage'
@@ -22,6 +23,7 @@ import SettingsPage from '@/pages/SettingsPage'
 import DebugPage from '@/pages/DebugPage'
 
 function AppLayout({ children }: { children: React.ReactNode }) {
+  useBackgroundMonitor()
 
   useEffect(() => {
     const handleKeyDown = async (e: KeyboardEvent) => {

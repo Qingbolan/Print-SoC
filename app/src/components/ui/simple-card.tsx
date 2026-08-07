@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 interface SimpleCardProps {
   children: React.ReactNode;
   className?: string;
-  variant?: 'default' | 'ghost' | 'bordered';
+  variant?: 'default' | 'subtle' | 'ghost' | 'bordered';
   padding?: 'sm' | 'md' | 'lg';
   hoverable?: boolean;
   onClick?: () => void;
@@ -27,20 +27,20 @@ export function SimpleCard({
     <div
       onClick={onClick}
       className={cn(
-        "rounded-lg transition-colors",
+        "rounded-lg text-card-foreground transition-[background-color,border-color,box-shadow] duration-150",
         {
-          // Variants
-          "bg-card border border-border": variant === 'default',
+          "border border-[var(--card-border)] bg-card shadow-[var(--shadow-xs)]": variant === 'default',
+          "border border-border/60 bg-muted/20": variant === 'subtle',
           "bg-transparent": variant === 'ghost',
-          "bg-transparent border border-border": variant === 'bordered',
+          "bg-transparent border border-border/70": variant === 'bordered',
 
           // Padding
-          "p-4": padding === 'sm',
-          "p-6": padding === 'md',
-          "p-8": padding === 'lg',
+          "p-3": padding === 'sm',
+          "p-5": padding === 'md',
+          "p-6": padding === 'lg',
 
           // Hover effect
-          "hover:bg-muted/50 cursor-pointer": hoverable,
+          "cursor-pointer hover:border-[var(--border-hover)] hover:bg-[var(--card-hover)] hover:shadow-[var(--shadow-sm)]": hoverable,
         },
         className
       )}
@@ -57,7 +57,7 @@ interface SimpleCardHeaderProps {
 
 export function SimpleCardHeader({ children, className }: SimpleCardHeaderProps) {
   return (
-    <div className={cn("space-y-1.5 mb-4", className)}>
+    <div className={cn("mb-4 space-y-1", className)}>
       {children}
     </div>
   );
@@ -70,7 +70,7 @@ interface SimpleCardTitleProps {
 
 export function SimpleCardTitle({ children, className }: SimpleCardTitleProps) {
   return (
-    <h3 className={cn("text-lg font-semibold leading-none tracking-tight", className)}>
+    <h3 className={cn("text-base font-semibold leading-6", className)}>
       {children}
     </h3>
   );
@@ -83,7 +83,7 @@ interface SimpleCardDescriptionProps {
 
 export function SimpleCardDescription({ children, className }: SimpleCardDescriptionProps) {
   return (
-    <p className={cn("text-sm text-muted-foreground", className)}>
+    <p className={cn("text-sm leading-5 text-muted-foreground", className)}>
       {children}
     </p>
   );

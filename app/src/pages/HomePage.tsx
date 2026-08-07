@@ -4,7 +4,7 @@ import { usePrinterStore } from '@/store/printer-store'
 import { getAllPrintJobs, getPDFInfo } from '@/lib/printer-api'
 import { safeDialogOpen } from '@/lib/tauri-utils'
 import { toast } from 'sonner'
-import { FileText, AlertCircle, Clock, Printer, Edit3, X } from 'lucide-react'
+import { FileText, AlertCircle, Clock, Printer, Edit3, X, Loader2, UploadCloud } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { AnimatedCard } from '@/components/magic/animated-card'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -31,7 +31,8 @@ const statusColors: Record<PrintJobStatus, string> = {
 
 export default function ModernHomePageV2() {
   const navigate = useNavigate()
-  const { isConnected, printJobs, setPrintJobs, setCurrentFile, draftJobs, removeDraftJob } = usePrinterStore()
+  const { connectionStatus, printJobs, setPrintJobs, setCurrentFile, draftJobs, removeDraftJob } = usePrinterStore()
+  const isConnected = connectionStatus.type === 'connected'
   const [loading, setLoading] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [errorDialog, setErrorDialog] = useState<{
@@ -190,20 +191,20 @@ export default function ModernHomePageV2() {
         {/* Left side - Upload area */}
         <div className="flex-1 p-6 overflow-y-auto">
           <AnimatedCard
-            className={`h-full flex items-center justify-center border-2 border-dashed backdrop-blur-sm fluent-transition ${
+            className={`h-full flex items-center justify-center border border-dashed shadow-none transition-[background-color,border-color] ${
               isDragging
-                ? 'border-primary bg-primary/10 scale-[0.98]'
-                : 'border-border bg-card/30'
+                ? 'border-primary bg-primary/5'
+                : 'border-border/70 bg-card/70'
             }`}
           >
             {loading ? (
               <div className="text-center">
-                <div className="text-4xl mb-4">⏳</div>
+                <Loader2 className="mx-auto mb-4 h-9 w-9 animate-spin text-muted-foreground" />
                 <p className="text-muted-foreground">Loading PDF...</p>
               </div>
             ) : isDragging ? (
               <div className="text-center">
-                <div className="text-5xl mb-4">📥</div>
+                <UploadCloud className="mx-auto mb-4 h-10 w-10 text-primary" />
                 <h2 className="text-xl font-semibold text-primary mb-2">
                   Drop PDF Here
                 </h2>
@@ -222,7 +223,7 @@ export default function ModernHomePageV2() {
                 <Button
                   onClick={handleBrowseFile}
                   size="lg"
-                  className="rounded-xl fluent-shadow-xs hover:fluent-shadow-sm fluent-transition"
+                  className="fluent-shadow-xs hover:fluent-shadow-sm fluent-transition"
                 >
                   Browse Files
                 </Button>

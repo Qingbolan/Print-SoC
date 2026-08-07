@@ -1,7 +1,7 @@
 import { useEffect, useCallback, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePrinterStore } from '@/store/printer-store'
-import { getAllPrintJobs, cancelPrintJob, deletePrintJob } from '@/lib/printer-api'
+import { getAllPrintJobs, cancelPrintJob, deletePrintJob, checkActiveJobs } from '@/lib/printer-api'
 import { JobDetailDialog } from '@/components/jobs/JobDetailDialog'
 import type { PrintJob } from '@/types/printer'
 import { SimpleCard, SimpleCardHeader, SimpleCardTitle, SimpleCardDescription, SimpleCardContent } from '@/components/ui/simple-card'
@@ -42,37 +42,37 @@ const statusConfig: Record<
   { color: string; icon: React.ReactNode; label: string }
 > = {
   Pending: {
-    color: 'bg-muted-foreground',
+    color: 'bg-muted text-muted-foreground border-border/70',
     icon: <Clock className="w-4 h-4" />,
     label: 'Pending',
   },
   Uploading: {
-    color: 'bg-accent',
+    color: 'bg-accent/10 text-accent border-accent/20',
     icon: <Upload className="w-4 h-4" />,
     label: 'Uploading',
   },
   Queued: {
-    color: 'bg-warning text-warning-foreground',
+    color: 'bg-warning/10 text-warning-foreground border-warning/25',
     icon: <Clock className="w-4 h-4" />,
     label: 'Queued',
   },
   Printing: {
-    color: 'bg-primary',
+    color: 'bg-primary/10 text-primary border-primary/20',
     icon: <PrinterIcon className="w-4 h-4" />,
     label: 'Printing',
   },
   Completed: {
-    color: 'bg-success',
+    color: 'bg-success/10 text-success border-success/20',
     icon: <CheckCircle2 className="w-4 h-4" />,
     label: 'Completed',
   },
   Failed: {
-    color: 'bg-destructive',
+    color: 'bg-destructive/10 text-destructive border-destructive/20',
     icon: <XCircle className="w-4 h-4" />,
     label: 'Failed',
   },
   Cancelled: {
-    color: 'bg-muted-foreground',
+    color: 'bg-muted text-muted-foreground border-border/70',
     icon: <XCircle className="w-4 h-4" />,
     label: 'Cancelled',
   },
@@ -80,24 +80,37 @@ const statusConfig: Record<
 
 export default function JobsPage() {
   const navigate = useNavigate()
-  const { printJobs, setPrintJobs, removePrintJob, sshConfig } = usePrinterStore()
+  const { printJobs, setPrintJobs, removePrintJob, sshConfig, connectionStatus } = usePrinterStore()
+  const activeSshConfig = connectionStatus.type === 'connected' ? sshConfig : null
   const [selectedTab, setSelectedTab] = useState<'active' | 'history'>('active')
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [selectedJob, setSelectedJob] = useState<PrintJob | null>(null)
   const [detailDialogOpen, setDetailDialogOpen] = useState(false)
 
-  useEffect(() => {
-    loadJobs()
-  }, [])
-
-  const loadJobs = async () => {
-    setIsRefreshing(true)
-    const result = await getAllPrintJobs()
-    if (result.success && result.data) {
-      setPrintJobs(result.data)
+  const loadJobs = useCallback(async (options?: { checkRemote?: boolean; silent?: boolean }) => {
+    if (!options?.silent) {
+      setIsRefreshing(true)
     }
-    setIsRefreshing(false)
-  }
+
+    try {
+      if (options?.checkRemote && activeSshConfig) {
+        await checkActiveJobs(activeSshConfig)
+      }
+
+      const result = await getAllPrintJobs()
+      if (result.success && result.data) {
+        setPrintJobs(result.data)
+      }
+    } finally {
+      if (!options?.silent) {
+        setIsRefreshing(false)
+      }
+    }
+  }, [activeSshConfig, setPrintJobs])
+
+  useEffect(() => {
+    loadJobs({ checkRemote: true })
+  }, [loadJobs])
 
   const handleViewJob = useCallback((job: PrintJob) => {
     setSelectedJob(job)
@@ -105,15 +118,15 @@ export default function JobsPage() {
   }, [])
 
   const handleCancelJob = async (jobId: string) => {
-    if (!sshConfig) {
+    if (!activeSshConfig) {
       toast.error('Not connected to SSH')
       return
     }
 
-    const result = await cancelPrintJob(jobId, sshConfig)
+    const result = await cancelPrintJob(jobId, activeSshConfig)
     if (result.success) {
       toast.success('Job cancelled')
-      loadJobs()
+      loadJobs({ checkRemote: true })
     } else {
       toast.error(result.error || 'Failed to cancel job')
     }
@@ -159,7 +172,7 @@ export default function JobsPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={loadJobs}
+              onClick={() => loadJobs({ checkRemote: true })}
               disabled={isRefreshing}
             >
               <RefreshCw className={`w-4 h-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
@@ -253,23 +266,23 @@ export default function JobsPage() {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-7xl">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-7xl">
             {displayJobs.map((job) => (
-              <SimpleCard key={job.id} variant="default" hoverable>
-                <SimpleCardHeader>
-                  <div className="flex items-start justify-between">
+              <SimpleCard key={job.id} variant="default" className="h-full">
+                <SimpleCardHeader className="mb-5">
+                  <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 min-w-0">
-                      <SimpleCardTitle className="flex items-center gap-2 truncate">
-                        <FileText className="w-5 h-5 flex-shrink-0" />
+                      <SimpleCardTitle className="flex items-center gap-2">
+                        <FileText className="w-4 h-4 flex-shrink-0 text-muted-foreground" />
                         <span className="truncate">{job.name}</span>
                       </SimpleCardTitle>
-                      <SimpleCardDescription className="mt-1">
-                        {job.printer} • {job.settings.copies} {job.settings.copies > 1 ? 'copies' : 'copy'}
+                      <SimpleCardDescription className="mt-1 truncate">
+                        {job.printer}
                       </SimpleCardDescription>
                     </div>
                     <Badge
-                      variant="secondary"
-                      className={`${statusConfig[job.status].color} text-white flex-shrink-0`}
+                      variant="outline"
+                      className={`${statusConfig[job.status].color} flex-shrink-0`}
                     >
                       {statusConfig[job.status].icon}
                       <span className="ml-1">{statusConfig[job.status].label}</span>
@@ -277,21 +290,31 @@ export default function JobsPage() {
                   </div>
                 </SimpleCardHeader>
                 <SimpleCardContent className="space-y-4">
-                  {/* Time */}
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Clock className="w-4 h-4" />
-                    {new Date(job.created_at).toLocaleString()}
+                  <div className="grid gap-2 text-sm">
+                    <div className="flex items-center justify-between gap-4">
+                      <span className="text-muted-foreground">Copies</span>
+                      <span className="font-medium text-foreground">
+                        {job.settings.copies} {job.settings.copies > 1 ? 'copies' : 'copy'}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-4">
+                      <span className="text-muted-foreground">Submitted</span>
+                      <span className="text-right font-medium text-foreground">
+                        {new Date(job.created_at).toLocaleString()}
+                      </span>
+                    </div>
                   </div>
 
                   {/* Error message */}
                   {job.error && (
-                    <div className="text-sm text-destructive bg-destructive/10 p-2 rounded">
+                    <div className="rounded-md border border-destructive/20 bg-destructive/10 p-2 text-sm text-destructive">
                       {job.error}
                     </div>
                   )}
 
                   {/* Settings badges */}
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-1.5">
                     {job.settings.duplex !== 'Simplex' && (
                       <Badge variant="outline">Duplex</Badge>
                     )}

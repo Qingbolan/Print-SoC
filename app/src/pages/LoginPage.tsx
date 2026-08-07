@@ -16,7 +16,7 @@ const hideSplash = () => {
 
 export default function LoginPage() {
   const navigate = useNavigate()
-  const { setSshConfig, savedCredentials, setSavedCredentials } = usePrinterStore()
+  const { savedCredentials, setSavedCredentials, setConnectedSession } = usePrinterStore()
   const { connect, isConnecting } = useSSHConnection()
 
   const [step, setStep] = useState<'welcome' | 'server' | 'credentials'>('welcome')
@@ -39,9 +39,8 @@ export default function LoginPage() {
     config: ReturnType<typeof buildConfig>,
     server: 'stu' | 'stf',
     user: string,
-    pass: string,
     remember: boolean,
-    isAutoLogin: boolean
+    isSavedProfileLogin: boolean
   ) => {
     const isDebugMode = import.meta.env.VITE_DEBUG_OFFLINE === 'true'
 
@@ -49,16 +48,18 @@ export default function LoginPage() {
       // Debug mode: skip actual SSH connection
       console.log('🔧 Debug mode - Skipping SSH connection')
       toast.info('🔧 Debug Mode: Skipping SSH connection')
-      setSshConfig(config)
+      setConnectedSession(config)
       if (remember) {
-        setSavedCredentials({ serverType: server, username: user, password: pass, rememberMe: true })
+        setSavedCredentials({ serverType: server, username: user, rememberMe: true })
+      } else {
+        setSavedCredentials(null)
       }
       hideSplash()
       navigate('/home')
       return
     }
 
-    if (!isAutoLogin) {
+    if (!isSavedProfileLogin) {
       toast.info(`Connecting to ${server.toUpperCase()} server...`)
     }
 
@@ -66,9 +67,8 @@ export default function LoginPage() {
     const result = await connect(config)
 
     if (result.success) {
-      setSshConfig(config)
       if (remember) {
-        setSavedCredentials({ serverType: server, username: user, password: pass, rememberMe: true })
+        setSavedCredentials({ serverType: server, username: user, rememberMe: true })
       } else {
         setSavedCredentials(null)
       }
@@ -78,8 +78,8 @@ export default function LoginPage() {
     } else {
       const errorMsg = result.error || 'Connection failed'
       hideSplash() // Hide splash to show login form
-      if (isAutoLogin) {
-        toast.error('Auto-login failed. Please login manually.')
+      if (isSavedProfileLogin) {
+        toast.error('Saved profile login failed. Please login manually.')
       } else {
         toast.error(errorMsg)
       }
@@ -87,35 +87,17 @@ export default function LoginPage() {
     }
   }
 
-  // Auto-login effect
+  // Restore saved login identity without storing or replaying secrets.
   useEffect(() => {
-    if (savedCredentials && savedCredentials.rememberMe && !autoLoginAttempted) {
-      // Auto-login - splash stays until login completes
+    if (savedCredentials && !autoLoginAttempted) {
+      // Restore the saved login identity only. Passwords are never stored.
       setAutoLoginAttempted(true)
       setServerType(savedCredentials.serverType)
       setUsername(savedCredentials.username)
-      setPassword(savedCredentials.password)
+      setPassword('')
       setRememberMe(true)
       setStep('credentials')
-
-      const config = buildConfig(
-        savedCredentials.serverType,
-        savedCredentials.username,
-        savedCredentials.password
-      )
-
-      const isDebugMode = import.meta.env.VITE_DEBUG_OFFLINE === 'true'
-      if (!isDebugMode) {
-        toast.info(`Connecting to ${savedCredentials.serverType.toUpperCase()}...`)
-      }
-
-      performLogin(config, savedCredentials.serverType, savedCredentials.username, savedCredentials.password, true, true)
-    } else if (savedCredentials && !autoLoginAttempted) {
-      // Pre-fill credentials but don't auto-login - show login form
-      setServerType(savedCredentials.serverType)
-      setUsername(savedCredentials.username)
-      setPassword(savedCredentials.password)
-      setStep('credentials')
+      toast.info('Saved account loaded. Enter your password to connect.')
       hideSplash() // Show login form
     } else if (!savedCredentials && !autoLoginAttempted) {
       // No saved credentials - show welcome screen
@@ -129,7 +111,7 @@ export default function LoginPage() {
     if (!username || !password || !serverType) return
 
     const config = buildConfig(serverType, username, password)
-    await performLogin(config, serverType, username, password, rememberMe, false)
+    await performLogin(config, serverType, username, rememberMe, false)
   }
 
   return (
@@ -197,32 +179,32 @@ export default function LoginPage() {
 
               <div className="grid grid-cols-2 gap-4 mb-8" role="group" aria-label="Server selection">
                 <motion.button
-                  whileHover={{ scale: 1.02, y: -5 }}
+                  whileHover={{ scale: 1.01 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={() => {
                     setServerType('stu')
                     setStep('credentials')
                   }}
-                  className="p-8 rounded-xl border-2 border-border bg-card hover:border-cyan-500 hover:bg-cyan-500/10 fluent-transition fluent-shadow-xs hover:fluent-shadow-sm group"
+                  className="rounded-lg border border-[var(--card-border)] bg-card p-6 shadow-[var(--shadow-xs)] transition-[background-color,border-color,box-shadow,transform] duration-150 hover:border-cyan-500/50 hover:bg-cyan-500/5 hover:shadow-[var(--shadow-sm)] group"
                   aria-label="Select student server: stu.comp.nus.edu.sg"
                 >
-                  <GraduationCap className="w-10 h-10 mx-auto mb-4 text-cyan-400 group-hover:scale-110 transition-transform" aria-hidden="true" />
-                  <div className="font-bold text-xl mb-2 text-foreground">Student</div>
+                  <GraduationCap className="w-9 h-9 mx-auto mb-4 text-cyan-500" aria-hidden="true" />
+                  <div className="mb-1 text-lg font-semibold text-foreground">Student</div>
                   <div className="text-sm text-muted-foreground">stu.comp.nus.edu.sg</div>
                 </motion.button>
 
                 <motion.button
-                  whileHover={{ scale: 1.02, y: -5 }}
+                  whileHover={{ scale: 1.01 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={() => {
                     setServerType('stf')
                     setStep('credentials')
                   }}
-                  className="p-8 rounded-xl border-2 border-border bg-card hover:border-primary hover:bg-primary/10 fluent-transition fluent-shadow-xs hover:fluent-shadow-sm group"
+                  className="rounded-lg border border-[var(--card-border)] bg-card p-6 shadow-[var(--shadow-xs)] transition-[background-color,border-color,box-shadow,transform] duration-150 hover:border-primary/50 hover:bg-primary/5 hover:shadow-[var(--shadow-sm)] group"
                   aria-label="Select staff server: stf.comp.nus.edu.sg"
                 >
-                  <Briefcase className="w-10 h-10 mx-auto mb-4 text-primary group-hover:scale-110 transition-transform" aria-hidden="true" />
-                  <div className="font-bold text-xl mb-2 text-foreground">Staff</div>
+                  <Briefcase className="w-9 h-9 mx-auto mb-4 text-primary" aria-hidden="true" />
+                  <div className="mb-1 text-lg font-semibold text-foreground">Staff</div>
                   <div className="text-sm text-muted-foreground">stf.comp.nus.edu.sg</div>
                 </motion.button>
               </div>
@@ -310,14 +292,14 @@ export default function LoginPage() {
                     onChange={(e) => setRememberMe(e.target.checked)}
                     className="h-4 w-4 rounded border-border text-cyan-500 focus:ring-cyan-500 focus:ring-offset-0"
                   />
-                  <label htmlFor="remember-me" className="text-sm text-foreground cursor-pointer">
-                    Remember me (auto-login next time)
-                  </label>
-                </div>
+	                  <label htmlFor="remember-me" className="text-sm text-foreground cursor-pointer">
+	                    Remember this account
+	                  </label>
+	                </div>
 
-                <p className="text-xs text-muted-foreground">
-                  Your credentials are stored locally on your device and never sent to third parties.
-                </p>
+	                <p className="text-xs text-muted-foreground">
+	                  Your password is used only for this SSH connection and is not stored by Print@SoC.
+	                </p>
 
                 <Button
                   type="submit"

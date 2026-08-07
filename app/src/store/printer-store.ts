@@ -1,7 +1,7 @@
 import { create, type StoreApi, type UseBoundStore } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { SSHConfig, PrintJob, Printer, PrinterGroup, DraftPrintJob, PrinterFilter, UserLocation } from '@/types/printer'
-import { groupPrinters, PRINTERS } from '@/data/printers'
+import { DEFAULT_PRINTER_QUEUE, groupPrinters, normalizePrintQueueName, PRINTERS } from '@/data/printers'
 
 export type ConnectionStatus =
   | { type: 'disconnected' }
@@ -12,7 +12,6 @@ export type ConnectionStatus =
 export interface SavedCredentials {
   serverType: 'stu' | 'stf'
   username: string
-  password: string
   rememberMe: boolean
 }
 
@@ -26,9 +25,10 @@ export interface AppSettings {
 interface PrinterState {
   // SSH Configuration
   sshConfig: SSHConfig | null
-  setSshConfig: (config: SSHConfig | null) => void
+  setConnectedSession: (config: SSHConfig) => void
+  clearConnectionSession: () => void
 
-  // Saved Credentials for auto-login
+  // Saved login identity. Secrets are intentionally never persisted here.
   savedCredentials: SavedCredentials | null
   setSavedCredentials: (credentials: SavedCredentials | null) => void
   clearSavedCredentials: () => void
@@ -91,20 +91,85 @@ interface PrinterState {
   connectionStatus: ConnectionStatus
   setConnectionStatus: (status: ConnectionStatus) => void
 
-  // Legacy UI State (kept for compatibility)
-  isConnected: boolean
-  setIsConnected: (connected: boolean) => void
-
   // Logout
   logout: () => void
 }
 
+const DEFAULT_SETTINGS: AppSettings = {
+  defaultPrinter: DEFAULT_PRINTER_QUEUE,
+  cacheLocation: null,
+  autoClearCache: false,
+  maxCacheSize: 100,
+}
+
+const DEFAULT_PRINTER_FILTER: PrinterFilter = {
+  building: null,
+  floor: null,
+  sortBy: 'default',
+}
+
+type PersistedPrinterState = Partial<
+  Pick<
+    PrinterState,
+    'selectedPrinter' | 'savedCredentials' | 'settings' | 'draftJobs' | 'userLocation' | 'printerFilter'
+  >
+>
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function sanitizeSavedCredentials(value: unknown): SavedCredentials | null {
+  if (!isRecord(value)) return null
+
+  const { serverType, username } = value
+  if ((serverType !== 'stu' && serverType !== 'stf') || typeof username !== 'string' || !username.trim()) {
+    return null
+  }
+
+  return {
+    serverType,
+    username: username.trim(),
+    rememberMe: true,
+  }
+}
+
+function sanitizePersistedState(value: unknown): PersistedPrinterState {
+  if (!isRecord(value)) return {}
+
+  return {
+    selectedPrinter: (value.selectedPrinter as Printer | null | undefined) ?? null,
+    savedCredentials: sanitizeSavedCredentials(value.savedCredentials),
+    settings: isRecord(value.settings)
+      ? {
+          ...DEFAULT_SETTINGS,
+          ...value.settings,
+          defaultPrinter: normalizePrintQueueName(value.settings.defaultPrinter as string | null | undefined),
+        }
+      : DEFAULT_SETTINGS,
+    draftJobs: Array.isArray(value.draftJobs) ? (value.draftJobs as DraftPrintJob[]) : [],
+    userLocation: (value.userLocation as UserLocation | null | undefined) ?? null,
+    printerFilter: isRecord(value.printerFilter)
+      ? { ...DEFAULT_PRINTER_FILTER, ...value.printerFilter }
+      : DEFAULT_PRINTER_FILTER,
+  }
+}
+
 export const usePrinterStore: UseBoundStore<StoreApi<PrinterState>> = create<PrinterState>()(
-  persist(
+  persist<PrinterState, [], [], PersistedPrinterState>(
     (set, get) => ({
       // SSH Configuration
       sshConfig: null,
-      setSshConfig: (config: SSHConfig | null) => set({ sshConfig: config }),
+      setConnectedSession: (config: SSHConfig) =>
+        set({
+          sshConfig: config,
+          connectionStatus: { type: 'connected', connectedAt: new Date() },
+        }),
+      clearConnectionSession: () =>
+        set({
+          sshConfig: null,
+          connectionStatus: { type: 'disconnected' },
+        }),
 
       // Saved Credentials
       savedCredentials: null,
@@ -112,15 +177,16 @@ export const usePrinterStore: UseBoundStore<StoreApi<PrinterState>> = create<Pri
       clearSavedCredentials: () => set({ savedCredentials: null }),
 
       // App Settings
-      settings: {
-        defaultPrinter: null,
-        cacheLocation: null,
-        autoClearCache: false,
-        maxCacheSize: 100, // 100MB default
-      },
+      settings: DEFAULT_SETTINGS,
       setSettings: (newSettings: Partial<AppSettings>) =>
         set((state) => ({
-          settings: { ...state.settings, ...newSettings },
+          settings: {
+            ...state.settings,
+            ...newSettings,
+            ...(Object.prototype.hasOwnProperty.call(newSettings, 'defaultPrinter')
+              ? { defaultPrinter: normalizePrintQueueName(newSettings.defaultPrinter) }
+              : {}),
+          },
         })),
 
       // Print Jobs
@@ -204,22 +270,14 @@ export const usePrinterStore: UseBoundStore<StoreApi<PrinterState>> = create<Pri
         set({ currentFile: file, currentFilePath: path }),
 
       // Printer Filter State
-      printerFilter: {
-        building: null,
-        floor: null,
-        sortBy: 'default',
-      },
+      printerFilter: DEFAULT_PRINTER_FILTER,
       setPrinterFilter: (filter: Partial<PrinterFilter>) =>
         set((state) => ({
           printerFilter: { ...state.printerFilter, ...filter },
         })),
       clearPrinterFilter: () =>
         set({
-          printerFilter: {
-            building: null,
-            floor: null,
-            sortBy: 'default',
-          },
+          printerFilter: DEFAULT_PRINTER_FILTER,
         }),
 
       // User Location
@@ -234,17 +292,12 @@ export const usePrinterStore: UseBoundStore<StoreApi<PrinterState>> = create<Pri
       connectionStatus: { type: 'disconnected' },
       setConnectionStatus: (status: ConnectionStatus) => set({ connectionStatus: status }),
 
-      // UI State
-      isConnected: false,
-      setIsConnected: (connected: boolean) => set({ isConnected: connected }),
-
       // Logout
       logout: () =>
         set({
           sshConfig: null,
           savedCredentials: null,
           connectionStatus: { type: 'disconnected' },
-          isConnected: false,
           selectedPrinter: null,
           currentFile: null,
           currentFilePath: null,
@@ -252,8 +305,8 @@ export const usePrinterStore: UseBoundStore<StoreApi<PrinterState>> = create<Pri
     }),
     {
       name: 'printer-storage',
+      version: 2,
       partialize: (state) => ({
-        sshConfig: state.sshConfig,
         selectedPrinter: state.selectedPrinter,
         savedCredentials: state.savedCredentials,
         settings: state.settings,
@@ -261,6 +314,17 @@ export const usePrinterStore: UseBoundStore<StoreApi<PrinterState>> = create<Pri
         userLocation: state.userLocation,
         printerFilter: state.printerFilter,
       }),
+      migrate: (persistedState) => sanitizePersistedState(persistedState),
+      merge: (persistedState, currentState) => {
+        const safePersistedState = sanitizePersistedState(persistedState)
+        return {
+          ...currentState,
+          ...safePersistedState,
+          sshConfig: null,
+          connectionStatus: { type: 'disconnected' },
+          printerGroups: groupPrinters(currentState.printers),
+        }
+      },
     }
   )
 )

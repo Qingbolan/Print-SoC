@@ -47,9 +47,11 @@ export function ToolbarButton({
   className,
   disabled,
 }: ToolbarButtonProps) {
+  const buttonVariant = variant === 'primary' ? 'default' : variant
+
   return (
     <Button
-      variant={variant}
+      variant={buttonVariant}
       size={size}
       onClick={onClick}
       disabled={disabled}

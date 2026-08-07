@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useNavigate, useLocation, useParams } from 'react-router-dom'
 import { usePrinterStore } from '@/store/printer-store'
-import { PRINTERS } from '@/data/printers'
+import { getDefaultPrinterQueue, normalizePrintQueueName } from '@/data/printers'
 import { Document, Page, pdfjs } from 'react-pdf'
 import {
   createPrintJob,
@@ -62,7 +62,18 @@ export default function ModernPreviewPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const { sessionId } = useParams<{ sessionId?: string }>()
-  const { sshConfig, printerGroups, setPrinters, addPrintJob, addDraftJob, removeDraftJob, quickPrintPrinter, setQuickPrintPrinter } = usePrinterStore()
+  const {
+    sshConfig,
+    connectionStatus,
+    printerGroups,
+    settings: appSettings,
+    addPrintJob,
+    addDraftJob,
+    removeDraftJob,
+    quickPrintPrinter,
+    setQuickPrintPrinter,
+  } = usePrinterStore()
+  const activeSshConfig = connectionStatus.type === 'connected' ? sshConfig : null
 
   // Get all printers from groups
   const printers = printerGroups.flatMap((g: PrinterGroup) => g.printers)
@@ -280,7 +291,6 @@ export default function ModernPreviewPage() {
       initialFileAddedRef.current = true
       addFileToQueue(initialFilePath, initialPdfInfo)
     }
-    setPrinters(PRINTERS)
   }, [])
 
   // Reset page/sheet number when switching files or settings change
@@ -420,60 +430,6 @@ export default function ModernPreviewPage() {
     }
   }
 
-  // Handle file drop (for future drag-and-drop support)
-  const _handleDrop = async (e: React.DragEvent) => {
-    e.preventDefault()
-
-    const files = Array.from(e.dataTransfer.files)
-    const pdfFiles = files.filter(f => f.name.toLowerCase().endsWith('.pdf'))
-
-    if (pdfFiles.length === 0) {
-      toast.error('Please drop PDF files only')
-      return
-    }
-
-    // In Tauri, we can get file path from dataTransfer
-    // For web compatibility, use file dialog if path not available
-    for (const file of pdfFiles) {
-      // Try to get path from file (Tauri provides this)
-      const filePath = (file as File & { path?: string }).path
-      if (filePath) {
-        await addFileToQueue(filePath)
-      } else {
-        // Fallback: show file dialog once for all files
-        toast.info('Please select the dropped file(s) in the dialog')
-        const { open } = await import('@tauri-apps/plugin-dialog')
-        const selectedPath = await open({
-          multiple: false,
-          filters: [{ name: 'PDF', extensions: ['pdf'] }]
-        })
-        if (selectedPath) {
-          await addFileToQueue(selectedPath as string)
-        }
-        break // Only show dialog once
-      }
-    }
-  }
-
-  // Handle file selection (for future use)
-  const _handleFileSelect = async () => {
-    const { open } = await import('@tauri-apps/plugin-dialog')
-    const filePaths = await open({
-      multiple: true,
-      filters: [{
-        name: 'PDF',
-        extensions: ['pdf']
-      }]
-    })
-
-    if (filePaths) {
-      const paths = Array.isArray(filePaths) ? filePaths : [filePaths]
-      for (const path of paths) {
-        await addFileToQueue(path)
-      }
-    }
-  }
-
   // Handle quick print printer (from printers page detail sheet)
   useEffect(() => {
     if (quickPrintPrinter) {
@@ -486,6 +442,14 @@ export default function ModernPreviewPage() {
   // Set recommended printer
   useEffect(() => {
     if (printers.length > 0 && !selectedPrinter && !quickPrintPrinter) {
+      const defaultQueue = normalizePrintQueueName(appSettings.defaultPrinter) || getDefaultPrinterQueue()
+      const defaultPrinter = printers.find((p: PrinterType) => p.queue_name === defaultQueue)
+      if (defaultPrinter) {
+        setRecommendedPrinter(defaultPrinter)
+        setSelectedPrinter(defaultPrinter.queue_name)
+        return
+      }
+
       const online = printers.filter((p: PrinterType) => p.status === 'Online')
       if (online.length > 0) {
         const recommended = online.sort((a: PrinterType, b: PrinterType) => (b.paper_level || 0) - (a.paper_level || 0))[0]
@@ -495,7 +459,7 @@ export default function ModernPreviewPage() {
         setSelectedPrinter(printers[0]?.queue_name || '')
       }
     }
-  }, [printers, selectedPrinter, quickPrintPrinter])
+  }, [printers, selectedPrinter, quickPrintPrinter, appSettings.defaultPrinter])
 
   const handlePrintCurrent = useCallback(async () => {
     if (!selectedFile) return
@@ -503,12 +467,12 @@ export default function ModernPreviewPage() {
       toast.error('Please select a printer')
       return
     }
-    if (!sshConfig) {
+    if (!activeSshConfig) {
       toast.error('Not connected to server. Please login first.')
       return
     }
     await printFile(selectedFile)
-  }, [selectedFile, selectedPrinter, sshConfig, settings])
+  }, [selectedFile, selectedPrinter, activeSshConfig, settings])
 
   const handlePrintAll = useCallback(async () => {
     if (fileQueue.length === 0) return
@@ -516,7 +480,7 @@ export default function ModernPreviewPage() {
       toast.error('Please select a printer')
       return
     }
-    if (!sshConfig) {
+    if (!activeSshConfig) {
       toast.error('Not connected to server. Please login first.')
       return
     }
@@ -563,14 +527,14 @@ export default function ModernPreviewPage() {
         error: `${successCount} succeeded, ${errorCount} failed`,
       })
     }
-  }, [fileQueue, selectedPrinter, sshConfig, settings])
+  }, [fileQueue, selectedPrinter, activeSshConfig, settings])
 
   const printFile = async (file: QueuedFile, silent = false) => {
     if (!selectedPrinter) {
       toast.error('Please select a printer')
       return
     }
-    if (!sshConfig) {
+    if (!activeSshConfig) {
       toast.error('Not connected to server. Please login first.')
       return
     }
@@ -610,7 +574,7 @@ export default function ModernPreviewPage() {
         const job = createResult.data
         addPrintJob(job)
 
-        const submitResult = await submitPrintJob(job.id, sshConfig)
+        const submitResult = await submitPrintJob(job.id, activeSshConfig)
 
         if (!submitResult.success) {
           throw new Error(submitResult.error || `Submission failed (copy ${copyNum})`)

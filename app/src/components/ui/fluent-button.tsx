@@ -1,6 +1,6 @@
 
 import * as React from 'react'
-import { Button as FluentButton, makeStyles, shorthands, type ButtonProps } from '@fluentui/react-components'
+import { Button as FluentButton, makeStyles, shorthands } from '@fluentui/react-components'
 import { cn } from '@/lib/utils'
 
 // Fluent UI Reveal effect styles
@@ -76,7 +76,10 @@ const useRevealButtonStyles = makeStyles({
   },
 })
 
-export interface RevealButtonProps extends Omit<ButtonProps, 'appearance'> {
+type RevealButtonElementProps = React.ButtonHTMLAttributes<HTMLButtonElement>
+const FluentButtonElement = FluentButton as React.ComponentType<RevealButtonElementProps>
+
+export interface RevealButtonProps extends RevealButtonElementProps {
   variant?: 'default' | 'primary' | 'subtle'
 }
 
@@ -101,7 +104,7 @@ export function RevealButton({
   }
 
   return (
-    <FluentButton
+    <FluentButtonElement
       className={cn(
         styles.root,
         variant === 'primary' && styles.primary,
@@ -129,6 +132,6 @@ export function RevealButton({
       <span style={{ position: 'relative', zIndex: 1 }}>
         {children}
       </span>
-    </FluentButton>
+    </FluentButtonElement>
   )
 }

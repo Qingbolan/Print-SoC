@@ -18,7 +18,6 @@ import {
   FileText,
   Printer,
   CheckCircle,
-  XCircle,
   HelpCircle,
   Mail,
   BookOpen,
