@@ -1,172 +1,139 @@
+# Print@SoC Python CLI
 
-# EasyPaper
-
-> Paper Management Platform for VLDB - Python CLI wrapper
-
-[![PyPI version](https://badge.fury.io/py/EasyPaper.svg)](https://badge.fury.io/py/EasyPaper)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-
-EasyPaper is a desktop application for managing academic papers and author information. This Python package provides a convenient command-line interface to download and launch the application.
-
-## Features
-
-- Import and manage academic papers from Excel
-- Track author profiles and affiliations
-- Visualize paper metadata and statistics
-- Export organized datasets with custom formatting
-- Cross-platform desktop application (macOS, Windows, Linux)
-- Simple one-command installation via pip
+Python wrapper for the Print@SoC desktop app and MCP stdio server.
 
 ## Installation
 
-### Quick Install
+```bash
+pip install print-at-soc
+```
+
+## Commands
+
+All command names launch the same wrapper:
 
 ```bash
-pip install EasyPaper
+print-at-soc
+print-soc
+psoc
 ```
 
-### Platform Support
-
-- **macOS**: Apple Silicon (ARM64) and Intel (x86_64)
-- **Windows**: x64
-- **Linux**: x64
-
-## Usage
-
-### Launch the Application
-
-Simply run:
+Useful options:
 
 ```bash
-EasyPaper
+print-soc --help
+print-soc --version
+print-soc --install
+print-soc --path
+print-soc --doctor
 ```
 
-On first run, the application binary will be automatically downloaded (~50-150 MB depending on platform). The binary is stored in `~/.EasyPaper/` for future use.
-
-### Command-Line Options
+Submit a file without opening the desktop UI:
 
 ```bash
-# Show help
-EasyPaper --help
-
-# Show version
-EasyPaper --version
-
-# Force reinstall the binary
-EasyPaper --install
-
-# Show binary installation path
-EasyPaper --path
+print-soc print assignment.pdf --printer psts-dx --copies 1
 ```
 
-## How It Works
-
-This Python package is a lightweight wrapper (~50 KB) that:
-
-1. Detects your operating system and architecture
-2. Downloads the appropriate pre-built binary from GitHub Releases (only on first run)
-3. Launches the desktop application
-
-The actual application is built with:
-
-- **Frontend**: React + TypeScript
-- **Backend**: Tauri (Rust)
-- **UI**: Ant Design + Fluent UI
-
-## Development
-
-### Project Structure
-
-```
-EasyPaper/
-├── app/                    # Tauri desktop application
-│   ├── src/               # React frontend
-│   └── src-tauri/         # Rust backend
-└── python-pip/        # Python CLI wrapper
-    ├── easy_paper/
-    │   ├── __init__.py
-    │   ├── cli.py         # CLI entry point
-    │   ├── config.py      # Configuration
-    │   └── downloader.py  # Binary downloader
-    └── pyproject.toml
-```
-
-### Building from Source
-
-To build the desktop application from source:
+Inspect live SoC printing state:
 
 ```bash
-cd app
-npm install
-npm run tauri:build
+print-soc printer list --username your-soc-id --ask-password
+print-soc job list --printer psts-dx --json
+print-soc quota show --json
 ```
 
-### Publishing to PyPI
+The inspection commands support `--server stu|stf`, `--host`, `--port`,
+`--username`, `--password-stdin`, `--ask-password`, `--key-path`, and the
+`PSOC_SSH_*` environment variables listed below. Human-readable commands print
+tables/key-value output; pass `--json` for scripts.
+
+## Virtual Printer
+
+macOS and Linux can install a CUPS virtual printer queue named `PrintAtSoC`.
+After installation, normal apps can print to `Print@SoC Virtual Printer`; the CUPS
+backend forwards the spool file to the configured SoC SSH server and submits it
+with remote `lpr`. The default remote queue is `psts-dx`; use `--printer` to
+choose another SOCprint queue such as `psc008-dx` or `psts-sx`.
+
+Install the Python package, configure SSH/default printer settings, and install
+the system queue:
 
 ```bash
-cd python-pip
-
-# Build the package
-python -m build
-
-# Upload to PyPI
-twine upload dist/*
+pip install print-at-soc
+print-soc --install-virtual-printer --username your-soc-id --ask-password --printer psts-dx
 ```
+
+Configuration is stored in `~/.PrintAtSoC/virtual-printer.json` with mode `0600`.
+Use `--password-stdin` instead of `--ask-password` for scripted setup, or use
+`--key-path` for SSH key authentication. The default server is
+`stu.comp.nus.edu.sg`; pass `--server stf` for staff accounts.
+
+Useful virtual printer commands:
+
+```bash
+print-soc virtual-printer configure --server stu --username your-soc-id --ask-password --printer psts-dx
+print-soc virtual-printer install
+print-soc virtual-printer status
+print-soc virtual-printer uninstall
+
+# Backward-compatible flag forms remain available:
+print-soc --configure-virtual-printer --server stu --username your-soc-id --ask-password --printer psts-dx
+print-soc --install-virtual-printer
+print-soc --virtual-printer-status
+print-soc --uninstall-virtual-printer
+```
+
+Run cleanup before uninstalling the Python package:
+
+```bash
+print-soc --uninstall-virtual-printer
+pip uninstall print-at-soc
+```
+
+`pip uninstall` only removes Python package files. It does not know about CUPS
+queues, backend files, or Print@SoC config created outside package metadata.
+
+Windows virtual printer support is not installed by this command. Windows needs
+the modern Print Support App/MSIX virtual printer path rather than a CUPS
+backend.
+
+Start the MCP server over stdio:
+
+```bash
+print-soc mcp
+psoc mcp
+```
+
+MCP mode requires the desktop binary to already be installed. Run `print-soc --install` first if needed.
+
+## MCP Environment Variables
+
+`connect_ssh` can read credentials from arguments or these environment variables:
+
+```bash
+PSOC_SSH_SERVER=stu
+PSOC_SSH_HOST=stu.comp.nus.edu.sg
+PSOC_SSH_PORT=22
+PSOC_SSH_USERNAME=your-soc-username
+PSOC_SSH_PASSWORD=your-password
+PSOC_SSH_KEY_PATH=/path/to/private/key
+PSOC_SSH_KEY_PASSPHRASE=optional-passphrase
+```
+
+## MCP Tools
+
+- `connect_ssh`
+- `disconnect_ssh`
+- `connection_status`
+- `list_print_queues`
+- `check_print_quota`
+- `check_printer_queue`
+- `submit_pdf_print_job`
+
+`submit_pdf_print_job` requires `confirm=true` because it submits a real print job.
 
 ## Requirements
 
 - Python 3.8+
-- Internet connection (for initial binary download)
-
-## Configuration
-
-The package stores data in:
-
-- **Binary**: `~/.EasyPaper/bin/`
-- **Version**: `~/.EasyPaper/version.txt`
-
-## Troubleshooting
-
-### Download Issues
-
-If download fails, try:
-
-```bash
-EasyPaper --install
-```
-
-### Permission Issues (Linux/macOS)
-
-If the binary is not executable:
-
-```bash
-chmod +x ~/.EasyPaper/bin/EasyPaper
-```
-
-### Manual Installation
-
-You can also download binaries directly from [GitHub Releases](https://github.com/Qingbolan/EasyPaper/releases).
-
-## License
-
-MIT License - see LICENSE file for details
-
-## Author
-
-**Silan Hu**
-
-- Email: silan.hu@u.nus.edu
-- GitHub: [@Qingbolan](https://github.com/Qingbolan)
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-## Acknowledgments
-
-Built with:
-
-- [Tauri](https://tauri.app/) - Desktop application framework
-- [React](https://react.dev/) - UI library
-- [Ant Design](https://ant.design/) - UI components
-- [Fluent UI](https://developer.microsoft.com/en-us/fluentui) - Microsoft design system
+- macOS, Linux, or Windows x64/arm64 as supported by the released desktop binaries
+- NUS SoC network access or VPN for SSH printing

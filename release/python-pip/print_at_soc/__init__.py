@@ -8,6 +8,9 @@ __version__ = "0.1.0"
 __author__ = "Silan Hu"
 __email__ = "silan.hu@u.nus.edu"
 
-from .cli import main
+def main():
+    from .cli import main as cli_main
+
+    return cli_main()
 
 __all__ = ["main", "__version__"]

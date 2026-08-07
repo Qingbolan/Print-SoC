@@ -1,7 +1,7 @@
 """Windows post-install hook invoked via .pth on next Python start.
 
 This sets up user-level PATH and App Paths registration so that
-`EasyPaper` can be launched directly from terminals without
+`Print@SoC` can be launched directly from terminals without
 manually editing PATH. It is safe and idempotent.
 """
 
@@ -16,7 +16,7 @@ def _run_once_guard() -> bool:
     """Return True if we've already run, else create guard and return False."""
     try:
         home = Path.home()
-        flag_dir = home / ".EasyPaper"
+        flag_dir = home / ".PrintAtSoC"
         flag_dir.mkdir(parents=True, exist_ok=True)
         flag = flag_dir / "win_postinstall_done"
         if flag.exists():
@@ -33,7 +33,7 @@ def run_post_install():  # pragma: no cover - side-effect hook
         if os.name != "nt":
             return
         # Allow users/CI to disable via env
-        if os.environ.get("easy_paper_NO_POSTINSTALL"):
+        if os.environ.get("PRINT_AT_SOC_NO_POSTINSTALL"):
             return
         # During build/installer contexts, skip
         if any(m in sys.modules for m in ("pip", "build", "setuptools")):
@@ -57,4 +57,3 @@ def run_post_install():  # pragma: no cover - side-effect hook
 # If imported via .pth, execute immediately
 if __name__ == "__main__":
     run_post_install()
-

@@ -19,7 +19,7 @@ For macOS users, the official configuration requires:
 3. Select IP Printer
 4. Enter printer address: `print.comp.nus.edu.sg`
 5. Select protocol: IPP (Internet Printing Protocol)
-6. Enter queue name (e.g., `psc011-sx`)
+6. Enter queue name (e.g., `psts-dx`)
 7. Download and install printer drivers (PPD files)
 8. Configure paper size, duplex printing, and other options
 9. ...15+ additional steps
@@ -58,8 +58,8 @@ macOS → Printer Driver → IPP Protocol → SoC Print Server → Printer
 
 **Print@SoC Approach:**
 ```
-Any Device → Print@SoC Web UI → SSH → stu/stf Server → lpr → Printer
-            ✅ Zero config      ✅ Automatic  ✅ Cross-platform
+Any Device → Print@SoC App/CLI → SSH → stu/stf Server → lpr → Printer
+            ✅ Zero config      ✅ Automatic   ✅ Cross-platform
 ```
 
 #### Key Insight
@@ -70,7 +70,7 @@ SoC students already have SSH credentials for accessing university servers and s
 
 **With Print@SoC:**
 
-1. Open Print@SoC web interface
+1. Open Print@SoC
 2. Log in with SoC credentials
 3. Upload PDF file
 4. Select printer queue
@@ -92,9 +92,9 @@ SoC students already have SSH credentials for accessing university servers and s
 │                                         │
 │  ┌─────────────────────────────────┐   │
 │  │  CUPS (Print Queue Manager)     │   │
-│  │  - psc011-sx (COM1-01-11)       │   │
-│  │  - psr222-sx (COM2-02-22)       │   │
-│  │  - psl215    (LT15)             │   │
+│  │  - psc008-dx / psc008-sx        │   │
+│  │  - psc011-dx / psc011-sx        │   │
+│  │  - psts-dx  / psts-sx           │   │
 │  └─────────────────────────────────┘   │
 │           ▲                             │
 │           │ Accepts lpr commands        │
@@ -122,16 +122,23 @@ When you upload `assignment.pdf`:
 scp assignment.pdf stu.comp.nus.edu.sg:~/temp/
 
 # 2. Submit print job via lpr
-ssh stu.comp.nus.edu.sg "lpr -P psc011-sx ~/temp/assignment.pdf"
+ssh stu.comp.nus.edu.sg "lpr -P psts-dx ~/temp/assignment.pdf"
 
 # 3. Check print queue status
-ssh stu.comp.nus.edu.sg "lpq -P psc011-sx"
+ssh stu.comp.nus.edu.sg "lpq -P psts-dx"
 
 # 4. Cleanup temporary file
 ssh stu.comp.nus.edu.sg "rm ~/temp/assignment.pdf"
 ```
 
 All of this happens automatically - users simply upload and print.
+
+Print@SoC defaults to `psts-dx`, one of the common public SOCprint queues in
+COM1 Level 1. The student-facing default list follows SOCprint's common public
+queues: `psc008-dx`, `psc008-sx`, `psc011-dx`, `psc011-sx`, `psts-dx`,
+`psts-sx`, `pstb-dx`, `pstb-sx`, `pstc-dx`, and `pstc-sx`. After SSH
+connection, the app also asks the selected SoC Unix server for `/etc/printcap`
+and filters the visible queues against that live list.
 
 ### Why This Works
 
@@ -180,16 +187,18 @@ All of this happens automatically - users simply upload and print.
 - **PDF Optimization:** Smart layout optimization for better print quality
 - **Queue Management:** View and manage your print jobs
 - **Multi-Printer Support:** Easy access to all SoC printer queues
+- **CLI Aliases:** Launch with `print-at-soc`, `print-soc`, or `psoc`
+- **MCP Server:** Start a local stdio MCP server with `print-soc mcp` or `psoc mcp`
 
 ---
 
 ## Technical Stack
 
-- **Backend:** Electron + Node.js
-- **SSH Integration:** SSH2 library for secure connections
-- **PDF Processing:** PDF-lib for layout optimization
+- **Desktop Backend:** Tauri + Rust
+- **SSH Integration:** `ssh2` for secure connections
+- **PDF Processing:** Rust PDF tooling for layout optimization
 - **Frontend:** React with modern UI components
-- **Authentication:** Secure credential management with system keychain integration
+- **Authentication:** SSH password is kept in memory for the active session; “remember account” stores only server and username
 
 ---
 
@@ -204,15 +213,64 @@ All of this happens automatically - users simply upload and print.
 
 Download the latest release for your platform from the [Releases](../../releases) page:
 
-- **macOS:** `Print@SoC-darwin-x64.zip`
-- **Windows:** `Print@SoC-win32-x64.zip`
-- **Linux:** `Print@SoC-linux-x64.zip`
+- **macOS Apple Silicon:** `Print_at_SoC_macos_aarch64.app.tar.gz`
+- **macOS Intel:** `Print_at_SoC_macos_x86_64.app.tar.gz`
+- **Windows:** `Print_at_SoC_windows_x86_64_setup.exe`
+- **Linux:** `Print_at_SoC_linux_x86_64.AppImage`
+
+Or install a CLI wrapper:
+
+```bash
+npm install -g print-at-soc
+print-soc
+
+pip install print-at-soc
+psoc
+```
+
+### Virtual Printer
+
+The Python CLI can install a macOS/Linux CUPS virtual printer queue. Apps print
+to `Print@SoC Virtual Printer`, and the backend forwards the spool file through
+SoC SSH to the configured remote `lpr` queue. The default remote queue is
+`psts-dx`; pass `--printer` to choose another SOCprint queue.
+
+```bash
+pip install print-at-soc
+print-soc --install-virtual-printer --username your-soc-id --ask-password --printer psts-dx
+```
+
+Useful maintenance commands:
+
+```bash
+print-soc --configure-virtual-printer --server stu --username your-soc-id --ask-password --printer psts-dx
+print-soc --virtual-printer-status
+print-soc --uninstall-virtual-printer
+```
+
+Run `print-soc --uninstall-virtual-printer` before `pip uninstall print-at-soc`.
+`pip uninstall` removes Python files only; it does not remove CUPS queues,
+backend files, or Print@SoC configuration created outside pip metadata.
+
+Windows virtual printer support is separate because Windows uses the modern
+Print Support App/MSIX virtual printer architecture rather than CUPS backends.
+
+### MCP Server
+
+After installing the desktop binary, start the stdio MCP server with either CLI alias:
+
+```bash
+print-soc mcp
+psoc mcp
+```
+
+The MCP server exposes SSH connection, printer queue, quota, and PDF print submission tools. `submit_pdf_print_job` requires `confirm=true` because it sends a real print job.
 
 ### First-Time Setup
 
 1. Launch Print@SoC
-2. Enter your SoC username and password
-3. Select your preferred print server (`stu` or `stf`)
+2. Select your preferred print server (`stu` or `stf`)
+3. Enter your SoC username and password
 4. Start printing
 
 ---

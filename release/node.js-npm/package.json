@@ -5,7 +5,9 @@
   "main": "lib/cli.js",
   "bin": {
     "print-at-soc": "lib/cli.js",
-    "print_at_soc": "lib/cli.js"
+    "print_at_soc": "lib/cli.js",
+    "print-soc": "lib/cli.js",
+    "psoc": "lib/cli.js"
   },
   "scripts": {
     "test": "node test/test.js",

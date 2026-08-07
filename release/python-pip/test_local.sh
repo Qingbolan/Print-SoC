@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# Local testing script for EasyPaper Python package
+# Local testing script for Print@SoC Python package
 
 set -e
 
 echo "================================"
-echo "EasyPaper Local Test Script"
+echo "Print@SoC Python Local Test Script"
 echo "================================"
 echo
 
@@ -48,16 +48,24 @@ echo
 # Step 4: Test CLI commands
 echo -e "${YELLOW}[4/6] Testing CLI commands...${NC}"
 
-echo "Testing: EasyPaper --version"
-EasyPaper --version
+echo "Testing: print-soc --version"
+print-soc --version
 echo
 
-echo "Testing: EasyPaper --help"
-EasyPaper --help
+echo "Testing: print-soc --help"
+print-soc --help
 echo
 
-echo "Testing: EasyPaper --path"
-EasyPaper --path
+echo "Testing: print-soc --path"
+print-soc --path
+echo
+
+echo "Testing: print-soc printer --help"
+print-soc printer --help
+echo
+
+echo "Testing: print-soc config show --json"
+print-soc config show --json
 echo
 
 echo -e "${GREEN}✓ CLI commands work${NC}"
@@ -66,15 +74,15 @@ echo
 # Step 5: Test package import
 echo -e "${YELLOW}[5/6] Testing Python import...${NC}"
 python << 'EOF'
-import easy_paper
-print(f"Package version: {easy_paper.__version__}")
-print(f"Author: {easy_paper.__author__}")
+import print_at_soc
+print(f"Package version: {print_at_soc.__version__}")
+print(f"Author: {print_at_soc.__author__}")
 
-from easy_paper import config
+from print_at_soc import config
 print(f"Config VERSION: {config.VERSION}")
 print(f"Install directory: {config.INSTALL_DIR}")
 
-from easy_paper.downloader import get_platform_key
+from print_at_soc.downloader import get_platform_key
 platform_key = get_platform_key()
 print(f"Detected platform: {platform_key}")
 EOF
@@ -98,10 +106,10 @@ echo -e "${GREEN}All tests passed! ✓${NC}"
 echo "================================"
 echo
 echo "Next steps:"
-echo "1. Test installation: EasyPaper --install"
+echo "1. Test installation: print-soc --install"
 echo "2. Build desktop app: cd ../app && npm run tauri:build"
 echo "3. Upload to GitHub Releases"
-echo "4. Test download: EasyPaper"
+echo "4. Test download: print-soc"
 echo
 
 echo "To publish to TestPyPI:"

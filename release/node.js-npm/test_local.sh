@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# Local testing script for EasyPaper npm package
+# Local testing script for Print@SoC npm package
 
 set -e
 
 echo "================================"
-echo "EasyPaper npm Test Script"
+echo "Print@SoC npm Test Script"
 echo "================================"
 echo
 
@@ -101,7 +101,7 @@ echo "4. Test download: node lib/cli.js"
 echo
 echo "To link globally for testing:"
 echo "  npm link"
-echo "  EasyPaper --version"
+echo "  print-soc --version"
 echo
 echo "To publish to npm:"
 echo "  npm login"

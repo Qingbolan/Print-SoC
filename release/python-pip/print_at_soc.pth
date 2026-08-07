@@ -1,2 +1,1 @@
-import easy_paper._post_install as _vlt_post; _vlt_post.run_post_install()
-
+import print_at_soc._post_install as _psoc_post; _psoc_post.run_post_install()

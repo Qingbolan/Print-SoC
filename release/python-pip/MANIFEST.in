@@ -1,5 +1,5 @@
 include README.md
 include LICENSE
 include pyproject.toml
-recursive-include easy_paper *.py
-recursive-include easy_paper py.typed
+recursive-include print_at_soc *.py
+recursive-include print_at_soc py.typed

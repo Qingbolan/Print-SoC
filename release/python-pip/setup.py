@@ -1,4 +1,4 @@
-"""Setup configuration for EasyPaper"""
+"""Setup configuration for Print@SoC"""
 
 from setuptools import setup
 
