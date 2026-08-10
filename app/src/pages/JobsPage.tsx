@@ -4,12 +4,11 @@ import { usePrinterStore } from '@/store/printer-store'
 import { getAllPrintJobs, cancelPrintJob, deletePrintJob, checkActiveJobs } from '@/lib/printer-api'
 import { JobDetailDialog } from '@/components/jobs/JobDetailDialog'
 import type { PrintJob } from '@/types/printer'
-import { SimpleCard, SimpleCardHeader, SimpleCardTitle, SimpleCardDescription, SimpleCardContent } from '@/components/ui/simple-card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { StatGroup, StatItem } from '@/components/ui/stat-item'
-import { cn } from '@/lib/utils'
+import { PageScaffold } from '@/components/layout/PageScaffold'
+import { SegmentedControl } from '@/components/ui/segmented-control'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -52,22 +51,22 @@ const statusConfig: Record<
     label: 'Uploading',
   },
   Queued: {
-    color: 'bg-warning/10 text-warning-foreground border-warning/25',
+    color: 'bg-warning/10 text-warning-foreground',
     icon: <Clock className="w-4 h-4" />,
     label: 'Queued',
   },
   Printing: {
-    color: 'bg-primary/10 text-primary border-primary/20',
+    color: 'bg-primary/10 text-primary',
     icon: <PrinterIcon className="w-4 h-4" />,
     label: 'Printing',
   },
   Completed: {
-    color: 'bg-success/10 text-success border-success/20',
+    color: 'bg-success/10 text-success',
     icon: <CheckCircle2 className="w-4 h-4" />,
     label: 'Completed',
   },
   Failed: {
-    color: 'bg-destructive/10 text-destructive border-destructive/20',
+    color: 'bg-destructive/10 text-destructive',
     icon: <XCircle className="w-4 h-4" />,
     label: 'Failed',
   },
@@ -158,17 +157,14 @@ export default function JobsPage() {
   const displayJobs = selectedTab === 'active' ? activeJobs : completedJobs
 
   return (
-    <div className="h-full flex flex-col">
-      {/* Header Section */}
-      <div className="p-8 space-y-8 border-b border-border/50">
-        {/* Header with Action Buttons */}
-        <div className="flex items-start justify-between">
-          <PageHeader
-            title="Print Jobs"
-            description="Manage and track your print jobs"
-            icon={<FileText className="w-8 h-8" />}
-          />
-          <div className="flex items-center gap-2">
+    <PageScaffold
+      header={
+        <PageHeader
+          title="Print queue"
+          description="Track active submissions and completed documents"
+          icon={<FileText />}
+          actions={
+            <>
             <Button
               variant="outline"
               size="sm"
@@ -182,104 +178,76 @@ export default function JobsPage() {
               <Upload className="w-4 h-4 mr-2" />
               New Print Job
             </Button>
-          </div>
+            </>
+          }
+        />
+      }
+      metrics={
+        <div className="grid grid-cols-3 overflow-hidden rounded-md bg-card">
+          {[
+            { label: 'Active', value: activeJobs.length, icon: Clock },
+            { label: 'Completed', value: completedJobs.filter(j => j.status === 'Completed').length, icon: CheckCircle2 },
+            { label: 'Failed', value: completedJobs.filter(j => j.status === 'Failed').length, icon: XCircle },
+          ].map(({ label, value, icon: Icon }, index) => (
+            <div key={label} className={`flex min-w-0 items-center gap-3 px-4 py-3 sm:px-5 ${index > 0 ? 'border-l border-border/60' : ''}`}>
+              <Icon className="hidden size-4 shrink-0 text-primary sm:block" />
+              <div className="min-w-0">
+                <div className="text-lg font-semibold leading-5 tabular-nums text-foreground">{value}</div>
+                <div className="truncate text-xs text-muted-foreground">{label}</div>
+              </div>
+            </div>
+          ))}
         </div>
-
-        {/* Stats */}
-        <StatGroup>
-          <StatItem
-            icon={Clock}
-            value={activeJobs.length}
-            label="Active"
-          />
-          <div className="w-px h-8 bg-border/50" />
-          <StatItem
-            icon={CheckCircle2}
-            value={completedJobs.filter(j => j.status === 'Completed').length}
-            label="Completed"
-          />
-          <div className="w-px h-8 bg-border/50" />
-          <StatItem
-            icon={XCircle}
-            value={completedJobs.filter(j => j.status === 'Failed').length}
-            label="Failed"
-          />
-        </StatGroup>
-      </div>
-
-      {/* Navigation Tabs */}
-      <div className="border-b border-border/50 px-4 py-3">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setSelectedTab('active')}
-            className={cn(
-              'px-6 py-2 rounded-md font-medium transition-colors flex items-center gap-2',
-              selectedTab === 'active'
-                ? 'bg-accent text-foreground'
-                : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
-            )}
-          >
-            <PrinterIcon className="w-4 h-4" />
-            <span>Active</span>
-            <span
-              className={cn(
-                "w-7 h-7 rounded-full flex items-center justify-center font-semibold text-sm",
-                activeJobs.length > 0
-                  ? "bg-warning text-warning-foreground"
-                  : "bg-muted text-muted-foreground"
-              )}
-            >
-              {activeJobs.length}
-            </span>
-          </button>
-
-          <button
-            onClick={() => setSelectedTab('history')}
-            className={cn(
-              'px-6 py-2 rounded-md font-medium transition-colors flex items-center gap-2',
-              selectedTab === 'history'
-                ? 'bg-accent text-foreground'
-                : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
-            )}
-          >
-            <History className="w-4 h-4" />
-            <span>History</span>
-            <span
-              className="w-7 h-7 rounded-full flex items-center justify-center font-semibold text-sm bg-muted text-muted-foreground"
-            >
-              {completedJobs.length}
-            </span>
-          </button>
-        </div>
-      </div>
-
-      {/* Job Cards */}
-      <div className="flex-1 overflow-y-auto p-6">
+      }
+      navigation={
+        <SegmentedControl
+          ariaLabel="Job view"
+          value={selectedTab}
+          onValueChange={setSelectedTab}
+          mobileLayout="equal"
+          items={[
+            { value: 'active', label: 'Active', icon: PrinterIcon, count: activeJobs.length },
+            { value: 'history', label: 'History', icon: History, count: completedJobs.length },
+          ]}
+        />
+      }
+      contentWidth="wide"
+    >
         {displayJobs.length === 0 ? (
-          <div className="text-center py-12 text-muted-foreground">
+          <div className="flex items-center justify-center rounded-md bg-card px-6 py-16 text-center text-muted-foreground">
+            <div>
             <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
-            <p className="text-lg font-medium">
+            <p className="text-sm font-medium text-foreground">
               {selectedTab === 'active' ? 'No active print jobs' : 'No job history'}
             </p>
             <p className="text-sm mt-2">
               {selectedTab === 'active' ? 'Start a new print job from the Home page' : 'Completed jobs will appear here'}
             </p>
+            </div>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-7xl">
+          <div className="overflow-hidden rounded-md bg-card">
+            <div className="hidden grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)_auto] items-center gap-4 bg-[#0B3556] px-5 py-2.5 text-xs font-semibold uppercase text-slate-200 md:grid">
+              <span>Document</span>
+              <span>Status</span>
+              <span>Options</span>
+              <span>Submitted</span>
+              <span className="text-right">Actions</span>
+            </div>
+            <div className="divide-y divide-border/60">
             {displayJobs.map((job) => (
-              <SimpleCard key={job.id} variant="default" className="h-full">
-                <SimpleCardHeader className="mb-5">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      <SimpleCardTitle className="flex items-center gap-2">
-                        <FileText className="w-4 h-4 flex-shrink-0 text-muted-foreground" />
-                        <span className="truncate">{job.name}</span>
-                      </SimpleCardTitle>
-                      <SimpleCardDescription className="mt-1 truncate">
-                        {job.printer}
-                      </SimpleCardDescription>
-                    </div>
+              <div key={job.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-3 px-4 py-4 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)_auto] md:px-5">
+                <div className="flex min-w-0 items-start gap-3">
+                  <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                    <FileText className="size-4" />
+                  </span>
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-semibold text-foreground">{job.name}</div>
+                    <div className="mt-1 truncate font-mono text-xs text-muted-foreground">{job.printer}</div>
+                    {job.error && <div className="mt-2 truncate text-xs text-destructive">{job.error}</div>}
+                  </div>
+                </div>
+                <div className="justify-self-end md:justify-self-start">
                     <Badge
                       variant="outline"
                       className={`${statusConfig[job.status].color} flex-shrink-0`}
@@ -287,60 +255,34 @@ export default function JobsPage() {
                       {statusConfig[job.status].icon}
                       <span className="ml-1">{statusConfig[job.status].label}</span>
                     </Badge>
-                  </div>
-                </SimpleCardHeader>
-                <SimpleCardContent className="space-y-4">
-                  <div className="grid gap-2 text-sm">
-                    <div className="flex items-center justify-between gap-4">
-                      <span className="text-muted-foreground">Copies</span>
-                      <span className="font-medium text-foreground">
-                        {job.settings.copies} {job.settings.copies > 1 ? 'copies' : 'copy'}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center justify-between gap-4">
-                      <span className="text-muted-foreground">Submitted</span>
-                      <span className="text-right font-medium text-foreground">
-                        {new Date(job.created_at).toLocaleString()}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Error message */}
-                  {job.error && (
-                    <div className="rounded-md border border-destructive/20 bg-destructive/10 p-2 text-sm text-destructive">
-                      {job.error}
-                    </div>
-                  )}
-
-                  {/* Settings badges */}
-                  <div className="flex flex-wrap gap-1.5">
-                    {job.settings.duplex !== 'Simplex' && (
-                      <Badge variant="outline">Duplex</Badge>
-                    )}
-                    {job.settings.pages_per_sheet > 1 && (
-                      <Badge variant="outline">{job.settings.pages_per_sheet}-up</Badge>
-                    )}
-                    <Badge variant="outline">{job.settings.paper_size}</Badge>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex items-center gap-2 pt-2 border-t border-border/50">
+                </div>
+                <div className="hidden text-xs leading-5 text-muted-foreground md:block">
+                  <div className="font-medium text-foreground">{job.settings.copies} × {job.settings.paper_size}</div>
+                  <div>{job.settings.duplex === 'Simplex' ? 'Simplex' : 'Duplex'}{job.settings.pages_per_sheet > 1 ? ` · ${job.settings.pages_per_sheet}-up` : ''}</div>
+                </div>
+                <div className="hidden text-xs leading-5 text-muted-foreground md:block">
+                  <div>{new Date(job.created_at).toLocaleDateString('en-SG', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
+                  <div>{new Date(job.created_at).toLocaleTimeString('en-SG', { hour: '2-digit', minute: '2-digit' })}</div>
+                </div>
+                <div className="col-span-2 flex items-center justify-end gap-2 md:col-span-1 md:gap-1">
                     <Button
                       variant="outline"
-                      size="sm"
+                      size="icon"
                       onClick={() => handleViewJob(job)}
-                      className="flex-1"
+                      title="View job"
+                      aria-label="View job"
+                      className="max-md:w-auto max-md:px-3"
                     >
-                      <Eye className="w-4 h-4 mr-2" />
-                      View
+                      <Eye className="size-4" />
+                      <span className="md:hidden">View</span>
                     </Button>
 
                     {selectedTab === 'active' ? (
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
-                          <Button variant="outline" size="sm" className="text-destructive hover:text-destructive/80">
+                          <Button variant="outline" size="icon" className="text-destructive hover:text-destructive/80 max-md:w-auto max-md:px-3" title="Cancel job" aria-label="Cancel job">
                             <Ban className="w-4 h-4" />
+                            <span className="md:hidden">Cancel</span>
                           </Button>
                         </AlertDialogTrigger>
                         <AlertDialogContent>
@@ -361,8 +303,9 @@ export default function JobsPage() {
                     ) : (
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
-                          <Button variant="outline" size="sm" className="text-destructive hover:text-destructive/80">
+                          <Button variant="outline" size="icon" className="text-destructive hover:text-destructive/80 max-md:w-auto max-md:px-3" title="Delete job" aria-label="Delete job">
                             <Trash2 className="w-4 h-4" />
+                            <span className="md:hidden">Delete</span>
                           </Button>
                         </AlertDialogTrigger>
                         <AlertDialogContent>
@@ -381,20 +324,18 @@ export default function JobsPage() {
                         </AlertDialogContent>
                       </AlertDialog>
                     )}
-                  </div>
-                </SimpleCardContent>
-              </SimpleCard>
+                </div>
+              </div>
             ))}
+            </div>
           </div>
         )}
-      </div>
-
       {/* Job Detail Dialog */}
       <JobDetailDialog
         job={selectedJob}
         open={detailDialogOpen}
         onOpenChange={setDetailDialogOpen}
       />
-    </div>
+    </PageScaffold>
   )
 }

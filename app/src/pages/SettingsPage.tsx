@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Settings, LogOut, Printer, FolderOpen, Trash2, Terminal, Wifi, User, Shield, Info } from "lucide-react"
 import { PageHeader } from "@/components/layout/PageHeader"
-import { StatGroup, StatItem } from '@/components/ui/stat-item'
+import { PageScaffold } from '@/components/layout/PageScaffold'
+import { SegmentedControl } from '@/components/ui/segmented-control'
 import { usePrinterStore } from "@/store/printer-store"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -13,7 +14,6 @@ import { SimpleCard, SimpleCardHeader, SimpleCardTitle, SimpleCardContent } from
 import { safeOpenDevTools } from '@/lib/tauri-utils'
 import { useSSHConnection } from '@/hooks/useSSHConnection'
 import { toast } from 'sonner'
-import { cn } from '@/lib/utils'
 import type { SSHConfig } from '@/types/printer'
 import {
   Select,
@@ -142,107 +142,73 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="h-full flex flex-col">
-      {/* Header Section */}
-      <div className="p-8 space-y-8 border-b border-border/50">
-        {/* Header */}
-        <div className="flex items-start justify-between">
-          <PageHeader
-            title="Settings"
-            description="Manage your account, preferences, and connection settings"
-            icon={<Settings className="w-8 h-8" />}
-          />
-          {connectionStatus.type === 'connected' && (
-            <Badge variant="outline" className="bg-success/10 text-success border-success/20">
-              Connected
-            </Badge>
-          )}
-        </div>
-
-        {/* Stats */}
-        <StatGroup>
-          <StatItem
-            icon={User}
-            value={sshConfig?.username || '-'}
-            label="User"
-          />
-          <div className="w-px h-8 bg-border/50" />
-          <StatItem
-            icon={Printer}
-            value={settings.defaultPrinter ? '1' : '0'}
-            label="Default Printer"
-          />
-          <div className="w-px h-8 bg-border/50" />
-          <StatItem
-            icon={FolderOpen}
-            value={printJobs.length}
-            label="Jobs in History"
-          />
-        </StatGroup>
+    <PageScaffold
+      header={
+        <PageHeader
+          title="Settings"
+          description="Manage your account, preferences, and connection settings"
+          icon={<Settings />}
+        />
+      }
+      contentWidth="wide"
+    >
+      <div className="mb-4 lg:hidden">
+        <SegmentedControl
+          ariaLabel="Settings category"
+          value={selectedTab}
+          onValueChange={setSelectedTab}
+          mobileLayout="equal"
+          items={[
+            { value: 'account', label: 'Account', icon: User },
+            { value: 'print', label: 'Print', icon: Printer },
+            { value: 'connection', label: 'Connection', icon: Wifi },
+            { value: 'advanced', label: 'Advanced', icon: Terminal },
+          ]}
+        />
       </div>
-
-      {/* Navigation Tabs */}
-      <div className="border-b border-border/50 px-4 py-3">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setSelectedTab('account')}
-            className={cn(
-              'px-6 py-2 rounded-md font-medium transition-colors flex items-center gap-2',
-              selectedTab === 'account'
-                ? 'bg-accent text-foreground'
-                : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
-            )}
-          >
-            <User className="w-4 h-4" />
-            <span>Account</span>
-          </button>
-
-          <button
-            onClick={() => setSelectedTab('print')}
-            className={cn(
-              'px-6 py-2 rounded-md font-medium transition-colors flex items-center gap-2',
-              selectedTab === 'print'
-                ? 'bg-accent text-foreground'
-                : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
-            )}
-          >
-            <Printer className="w-4 h-4" />
-            <span>Print</span>
-          </button>
-
-          <button
-            onClick={() => setSelectedTab('connection')}
-            className={cn(
-              'px-6 py-2 rounded-md font-medium transition-colors flex items-center gap-2',
-              selectedTab === 'connection'
-                ? 'bg-accent text-foreground'
-                : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
-            )}
-          >
-            <Wifi className="w-4 h-4" />
-            <span>Connection</span>
-          </button>
-
-          <button
-            onClick={() => setSelectedTab('advanced')}
-            className={cn(
-              'px-6 py-2 rounded-md font-medium transition-colors flex items-center gap-2',
-              selectedTab === 'advanced'
-                ? 'bg-accent text-foreground'
-                : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
-            )}
-          >
-            <Terminal className="w-4 h-4" />
-            <span>Advanced</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto p-6">
-        <div className="max-w-3xl space-y-6">
+      <div className="grid items-start gap-5 lg:grid-cols-4">
+        <aside className="sticky top-0 hidden overflow-hidden rounded-md bg-[#0B3556] p-2 text-slate-200 lg:block">
+          <div className="px-3 pb-3 pt-2 text-xs font-semibold uppercase text-slate-400">Preferences</div>
+          {([
+            { value: 'account', label: 'Account', icon: User },
+            { value: 'print', label: 'Print defaults', icon: Printer },
+            { value: 'connection', label: 'Connection', icon: Wifi },
+            { value: 'advanced', label: 'Advanced', icon: Terminal },
+          ] as const).map(({ value, label, icon: Icon }) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setSelectedTab(value)}
+              className={`relative flex h-10 w-full items-center gap-3 rounded-md px-3 text-sm transition-colors ${selectedTab === value ? 'bg-white/10 text-white' : 'hover:bg-white/7 hover:text-white'}`}
+            >
+              <Icon className="size-4" />
+              <span>{label}</span>
+            </button>
+          ))}
+        </aside>
+        <div className="min-w-0 space-y-4 lg:col-span-3">
           {selectedTab === 'account' && (
             <>
+              {!sshConfig && !savedCredentials && (
+                <SimpleCard variant="default">
+                  <SimpleCardHeader>
+                    <SimpleCardTitle className="flex items-center gap-2">
+                      <Shield className="size-5 text-primary" />
+                      No account connected
+                    </SimpleCardTitle>
+                  </SimpleCardHeader>
+                  <SimpleCardContent>
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="text-sm text-muted-foreground">
+                        Connect your NUS SoC account to load printers and submit jobs.
+                      </p>
+                      <Button size="sm" onClick={() => setSelectedTab('connection')}>
+                        Connection settings
+                      </Button>
+                    </div>
+                  </SimpleCardContent>
+                </SimpleCard>
+              )}
               {/* Current User Info */}
               {sshConfig && (
                 <SimpleCard variant="default">
@@ -253,13 +219,13 @@ export default function SettingsPage() {
                     </SimpleCardTitle>
                   </SimpleCardHeader>
                   <SimpleCardContent>
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div>
                         <div className="font-medium">{sshConfig.username}</div>
                         <div className="text-sm text-muted-foreground">{sshConfig.host}</div>
                       </div>
                       {connectionStatus.type === 'connected' && (
-                        <Badge variant="outline" className="bg-success/10 text-success border-success/20">
+                        <Badge variant="outline" className="bg-success/10 text-success">
                           Connected
                         </Badge>
                       )}
@@ -278,14 +244,14 @@ export default function SettingsPage() {
                     </SimpleCardTitle>
                   </SimpleCardHeader>
                   <SimpleCardContent className="space-y-4">
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div>
 		                        <div className="font-medium">Account Remembered</div>
 		                        <div className="text-sm text-muted-foreground">
 		                          Server: {savedCredentials.serverType.toUpperCase()} • User: {savedCredentials.username}
 		                        </div>
                       </div>
-                      <Badge variant="outline" className="bg-success/10 text-success border-success/20">
+                      <Badge variant="outline" className="bg-success/10 text-success">
                         Active
                       </Badge>
                     </div>
@@ -302,7 +268,7 @@ export default function SettingsPage() {
               )}
 
               {/* Logout */}
-              <SimpleCard variant="default">
+              {(sshConfig || savedCredentials) && <SimpleCard variant="default">
                 <SimpleCardHeader>
                   <SimpleCardTitle className="flex items-center gap-2">
                     <LogOut className="w-5 h-5 text-destructive" />
@@ -310,7 +276,7 @@ export default function SettingsPage() {
                   </SimpleCardTitle>
                 </SimpleCardHeader>
                 <SimpleCardContent>
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <div className="text-sm text-muted-foreground">
                         Sign out and clear your session
@@ -326,7 +292,7 @@ export default function SettingsPage() {
                     </Button>
                   </div>
                 </SimpleCardContent>
-              </SimpleCard>
+              </SimpleCard>}
             </>
           )}
 
@@ -365,7 +331,7 @@ export default function SettingsPage() {
                     </SelectContent>
                   </Select>
                   {settings.defaultPrinter && (
-                    <div className="flex items-center justify-between pt-2 border-t border-border/50">
+                    <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
                       <span className="text-sm text-muted-foreground">
                         Current: {allPrinters.find(p => p.queue_name === settings.defaultPrinter)?.name || 'Unknown'}
                       </span>
@@ -393,7 +359,7 @@ export default function SettingsPage() {
                   </SimpleCardTitle>
                 </SimpleCardHeader>
                 <SimpleCardContent className="space-y-4">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <div className="font-medium">Auto-clear Cache</div>
                       <div className="text-sm text-muted-foreground">
@@ -417,7 +383,7 @@ export default function SettingsPage() {
                   </SimpleCardTitle>
                 </SimpleCardHeader>
                 <SimpleCardContent>
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <div className="font-medium">{printJobs.length} job{printJobs.length !== 1 ? 's' : ''}</div>
                       <div className="text-sm text-muted-foreground">
@@ -450,7 +416,7 @@ export default function SettingsPage() {
                   </SimpleCardTitle>
                 </SimpleCardHeader>
                 <SimpleCardContent>
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <div className="font-medium">
                         {connectionStatus.type === 'connected' ? 'Connected' :
@@ -480,8 +446,8 @@ export default function SettingsPage() {
                   </SimpleCardTitle>
                 </SimpleCardHeader>
                 <SimpleCardContent className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                    <div className="space-y-2 sm:col-span-2">
                       <Label htmlFor="host">Host</Label>
                       <Input
                         id="host"
@@ -582,7 +548,7 @@ export default function SettingsPage() {
                   </SimpleCardTitle>
                 </SimpleCardHeader>
                 <SimpleCardContent className="space-y-2">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <span className="font-medium">Print@SoC</span>
                     <Badge variant="secondary">v0.1.0</Badge>
                   </div>
@@ -634,6 +600,6 @@ export default function SettingsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </PageScaffold>
   )
 }

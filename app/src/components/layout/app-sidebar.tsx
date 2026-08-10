@@ -1,10 +1,11 @@
-import { useMemo } from "react"
 import { Link, useLocation } from "react-router-dom"
 import { GlobeIcon } from "@/components/common/icons"
+import { BrandLogo } from "@/components/common/brand"
 import { Home, Printer, History, HelpCircle, Settings as SettingsIcon, PanelLeftIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useI18n } from "@/lib/i18n"
 import { ThemeToggle } from "@/components/common/theme-toggle"
+import { ConnectionStatusBadge } from '@/components/common/ConnectionStatusBadge'
 import { useRBSidebar } from "@/components/reactbits/sidebar"
 
 export function AppSidebar() {
@@ -14,7 +15,7 @@ export function AppSidebar() {
   const { collapsed, toggle } = useRBSidebar()
 
   // Static navigation items - always show all items to prevent layout shift
-  const navigation = useMemo(() => [
+  const navigation = [
     {
       name: "Home",
       href: "/home",
@@ -40,32 +41,20 @@ export function AppSidebar() {
       href: "/settings",
       icon: SettingsIcon,
     },
-  ], [])
+  ]
 
   const toggleLocale = () => {
     setLocale(locale === "en" ? "zh" : "en")
   }
 
   return (
-    <div
-      className="flex h-full w-full flex-col relative overflow-hidden mica"
-    >
-      {/* Noise texture overlay for Mica effect */}
-      <div
-        className="absolute inset-0 opacity-[0.03] pointer-events-none z-0"
-        style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='3.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
-          backgroundSize: '150px 150px',
-        }}
-      />
-
-      {/* Content */}
-      <div className="relative z-10 flex h-full w-full flex-col">
-      {/* Logo Header with modern styling */}
+    <div className="app-sidebar flex h-full w-full flex-col overflow-hidden bg-sidebar px-3 pb-3 pt-2 text-sidebar-foreground">
       <div
         className={cn(
-          "flex h-16 items-center justify-between transition-all backdrop-blur-sm",
-          collapsed ? "px-3 cursor-pointer hover:bg-sidebar-accent/50" : "px-5"
+          "flex shrink-0 items-center justify-between transition-[padding]",
+          collapsed
+            ? "cursor-pointer px-1 py-4 hover:bg-sidebar-accent/50"
+            : "px-2 pb-4 pt-8"
         )}
         onClick={collapsed ? toggle : undefined}
       >
@@ -73,19 +62,10 @@ export function AppSidebar() {
           "flex items-center gap-3 flex-1 min-w-0",
           collapsed && "justify-center"
         )}>
-          <div className="relative">
-            <img
-              src="/logo.png"
-              alt="Print@SoC"
-              className="h-10 w-10 flex-shrink-0"
-            />
-          </div>
-          {!collapsed && (
-            <div className="flex flex-col">
-              <span className="text-base font-semibold whitespace-nowrap overflow-hidden bg-gradient-to-r from-[var(--theme-gradient-start)] to-[var(--theme-gradient-end)] bg-clip-text text-transparent">
-                Print@SoC
-              </span>
-            </div>
+          {collapsed ? (
+            <img src="/logo-mark-white.png" alt="Print@SoC" className="size-10 shrink-0 object-contain" />
+          ) : (
+            <BrandLogo className="min-w-0 gap-2" iconClassName="size-8" subtitle="NUS SoC Utility" inverse />
           )}
         </div>
         {!collapsed && (
@@ -94,16 +74,16 @@ export function AppSidebar() {
               e.stopPropagation()
               toggle()
             }}
-            className="p-2 rounded-lg hover:bg-sidebar-accent/70 transition-all duration-167 fluent-transition hover:fluent-shadow-xs"
+            className="rounded-md p-2 text-slate-300 transition-colors hover:bg-sidebar-accent hover:text-white"
             title="Collapse sidebar"
+            aria-label="Collapse sidebar"
           >
-            <PanelLeftIcon className="h-4 w-4 text-muted-foreground" />
+            <PanelLeftIcon className="h-4 w-4" />
           </button>
         )}
       </div>
 
-      {/* Navigation with modern styling */}
-      <nav className="flex-1 p-3 pt-0 overflow-y-auto overscroll-y-contain">
+      <nav aria-label="Primary" className="flex-1 space-y-1 overflow-y-auto overscroll-y-contain">
         {(() => {
           // Check if any navigation item matches the current path
           const hasActiveItem = navigation.some(item =>
@@ -122,43 +102,39 @@ export function AppSidebar() {
               to={item.href}
               title={collapsed ? item.name : undefined}
               className={cn(
-                "group relative flex items-center py-3 text-sm font-medium overflow-hidden",
-                collapsed ? "justify-center px-3 rounded-full" : "gap-3 px-4 rounded-xl",
+                "group relative flex h-11 items-center overflow-hidden rounded-md text-sm font-medium transition-colors md:h-10",
+                collapsed ? "justify-center px-2" : "gap-3 px-3",
                 isActive
-                  ? "bg-gradient-to-r from-[var(--theme-gradient-start)]/15 to-[var(--theme-gradient-end)]/10 text-[var(--theme-gradient-start)] border border-[var(--theme-gradient-start)]/20 fluent-shadow-sm"
-                  : "text-sidebar-foreground hover:bg-sidebar-accent/70 border border-transparent hover:border-sidebar-border/30",
+                  ? "bg-white/12 text-white"
+                  : "text-sidebar-foreground hover:bg-sidebar-accent/90 hover:text-white",
               )}
+              aria-current={isActive ? 'page' : undefined}
             >
-              <item.icon className="h-5 w-5 flex-shrink-0" />
+              <item.icon className="size-4 shrink-0" />
               {!collapsed && (
                 <span className="font-medium">{item.name}</span>
               )}
-              {/* Hover effect */}
-              <div className="absolute inset-0 bg-gradient-to-r from-[var(--theme-gradient-start)]/5 to-[var(--theme-gradient-end)]/5 opacity-0 group-hover:opacity-100 transition-opacity duration-167 pointer-events-none" />
             </Link>
             )
           })
         })()}
       </nav>
 
-      {/* Bottom section with backdrop */}
-      <div className="backdrop-blur-sm bg-sidebar/30">
-        {/* Theme Toggle */}
-        <div className="p-3">
+      <div className="shrink-0 space-y-1 rounded-md bg-black/10 p-1.5 text-sidebar-foreground">
+        <div className={cn('flex h-9 items-center px-2', collapsed ? 'justify-center' : 'justify-start')}>
+          <ConnectionStatusBadge compact={collapsed} />
+        </div>
+        <div>
             <ThemeToggle collapsed={collapsed} />
         </div>
 
-        {/* Language Toggle */}
-        <div className="p-3 pt-0">
+        <div>
           <button
             onClick={toggleLocale}
             title={collapsed ? (locale === "en" ? "中文" : "English") : undefined}
             className={cn(
-              "w-full gap-2.5 transition-all px-3 py-2.5 rounded-xl border fluent-transition",
-              "border-sidebar-border/50 hover:border-primary/30",
-              "hover:bg-gradient-to-r hover:from-sidebar-accent/70 hover:to-sidebar-accent/50",
-              "hover:fluent-shadow-xs",
-              collapsed ? "justify-center px-3 flex items-center" : "justify-start flex items-center"
+              "flex h-9 w-full items-center gap-2.5 rounded-md px-3 text-sm text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-white",
+              collapsed ? "justify-center" : "justify-start"
             )}
           >
             <GlobeIcon className="h-4 w-4 flex-shrink-0" />
@@ -167,7 +143,6 @@ export function AppSidebar() {
             )}
           </button>
         </div>
-      </div>
       </div>
     </div>
   )

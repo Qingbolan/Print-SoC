@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Document, Page, pdfjs } from 'react-pdf'
 import {
   Dialog,
@@ -53,6 +53,8 @@ export function JobDetailDialog({ job, open, onOpenChange }: JobDetailDialogProp
   const [error, setError] = useState<string | null>(null)
   const [numPages, setNumPages] = useState(0)
   const [currentPage, setCurrentPage] = useState(1)
+  const previewRef = useRef<HTMLDivElement>(null)
+  const [pageWidth, setPageWidth] = useState(1)
 
   useEffect(() => {
     if (open && job?.file_path) {
@@ -69,6 +71,23 @@ export function JobDetailDialog({ job, open, onOpenChange }: JobDetailDialogProp
   useEffect(() => {
     setCurrentPage(1)
   }, [job?.id])
+
+  useEffect(() => {
+    const container = previewRef.current
+    if (!open || !pdfUrl || !container) return
+
+    const updatePageWidth = () => {
+      const { width, height } = container.getBoundingClientRect()
+      const widthFromContainer = width * 0.78
+      const widthFromHeight = height * 0.78 * (210 / 297)
+      setPageWidth(Math.max(1, Math.floor(Math.min(widthFromContainer, widthFromHeight))))
+    }
+
+    updatePageWidth()
+    const observer = new ResizeObserver(updatePageWidth)
+    observer.observe(container)
+    return () => observer.disconnect()
+  }, [open, pdfUrl])
 
   const loadPdf = async (filePath: string) => {
     setLoading(true)
@@ -97,7 +116,7 @@ export function JobDetailDialog({ job, open, onOpenChange }: JobDetailDialogProp
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="!max-w-5xl w-[900px] max-h-[85vh] p-0 overflow-hidden flex flex-col">
+      <DialogContent className="flex h-5/6 w-4/5 flex-col overflow-hidden p-0 sm:max-w-none">
         <DialogHeader className="px-6 pt-6 pb-4 border-b border-border/50 flex-shrink-0">
           <div className="flex items-start justify-between gap-4 pr-8">
             <div className="flex-1 min-w-0">
@@ -125,9 +144,9 @@ export function JobDetailDialog({ job, open, onOpenChange }: JobDetailDialogProp
           </div>
         </DialogHeader>
 
-        <div className="flex flex-1 overflow-hidden min-h-0">
+        <div className="grid min-h-0 flex-1 overflow-hidden md:grid-cols-3">
           {/* PDF Preview */}
-          <div className="flex-1 flex flex-col bg-muted/30 overflow-hidden min-w-0">
+          <div className="flex min-w-0 flex-col overflow-hidden bg-muted/30 md:col-span-2">
             {loading ? (
               <div className="flex-1 flex items-center justify-center">
                 <div className="text-center">
@@ -156,7 +175,7 @@ export function JobDetailDialog({ job, open, onOpenChange }: JobDetailDialogProp
                   >
                     <ChevronLeft className="w-4 h-4" />
                   </Button>
-                  <span className="text-sm font-medium px-3 min-w-[80px] text-center">
+                  <span className="px-3 text-center text-sm font-medium tabular-nums">
                     {currentPage} / {numPages}
                   </span>
                   <Button
@@ -171,20 +190,20 @@ export function JobDetailDialog({ job, open, onOpenChange }: JobDetailDialogProp
                 </div>
 
                 {/* PDF viewer */}
-                <div className="flex-1 overflow-auto flex items-center justify-center p-4">
+                <div ref={previewRef} className="flex flex-1 items-center justify-center overflow-auto p-4">
                   <div className="shadow-lg rounded-lg overflow-hidden bg-white">
                     <Document
                       file={pdfUrl}
                       onLoadSuccess={onDocumentLoadSuccess}
                       loading={
-                        <div className="flex items-center justify-center w-[400px] h-[500px]">
+                        <div className="flex aspect-[1/1.414] items-center justify-center" style={{ width: `${pageWidth}px` }}>
                           <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
                         </div>
                       }
                     >
                       <Page
                         pageNumber={currentPage}
-                        width={400}
+                        width={pageWidth}
                         renderTextLayer={false}
                         renderAnnotationLayer={false}
                       />
@@ -196,7 +215,7 @@ export function JobDetailDialog({ job, open, onOpenChange }: JobDetailDialogProp
           </div>
 
           {/* Settings panel */}
-          <div className="w-72 flex-shrink-0 border-l border-border/50 bg-background overflow-y-auto">
+          <div className="overflow-y-auto bg-background">
             <div className="p-4 space-y-4">
               <h3 className="text-sm font-semibold text-foreground">Print Settings</h3>
 

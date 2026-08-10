@@ -1,0 +1,212 @@
+[
+  {
+    "viewport": "desktop",
+    "route": "home",
+    "layout": {
+      "viewportWidth": 1440,
+      "documentWidth": 1440,
+      "overflowElements": []
+    },
+    "consoleErrors": []
+  },
+  {
+    "viewport": "desktop",
+    "route": "printers",
+    "layout": {
+      "viewportWidth": 1440,
+      "documentWidth": 1440,
+      "overflowElements": []
+    },
+    "consoleErrors": []
+  },
+  {
+    "viewport": "desktop",
+    "route": "jobs",
+    "layout": {
+      "viewportWidth": 1440,
+      "documentWidth": 1440,
+      "overflowElements": []
+    },
+    "consoleErrors": []
+  },
+  {
+    "viewport": "desktop",
+    "route": "preview",
+    "layout": {
+      "viewportWidth": 1440,
+      "documentWidth": 1440,
+      "overflowElements": []
+    },
+    "consoleErrors": []
+  },
+  {
+    "viewport": "desktop",
+    "route": "settings",
+    "layout": {
+      "viewportWidth": 1440,
+      "documentWidth": 1440,
+      "overflowElements": []
+    },
+    "consoleErrors": []
+  },
+  {
+    "viewport": "desktop",
+    "route": "help",
+    "layout": {
+      "viewportWidth": 1440,
+      "documentWidth": 1440,
+      "overflowElements": []
+    },
+    "consoleErrors": []
+  },
+  {
+    "viewport": "desktop",
+    "route": "login",
+    "layout": {
+      "viewportWidth": 1440,
+      "documentWidth": 1440,
+      "overflowElements": []
+    },
+    "consoleErrors": []
+  },
+  {
+    "viewport": "tablet",
+    "route": "home",
+    "layout": {
+      "viewportWidth": 1024,
+      "documentWidth": 1024,
+      "overflowElements": []
+    },
+    "consoleErrors": []
+  },
+  {
+    "viewport": "tablet",
+    "route": "printers",
+    "layout": {
+      "viewportWidth": 1024,
+      "documentWidth": 1024,
+      "overflowElements": []
+    },
+    "consoleErrors": []
+  },
+  {
+    "viewport": "tablet",
+    "route": "jobs",
+    "layout": {
+      "viewportWidth": 1024,
+      "documentWidth": 1024,
+      "overflowElements": []
+    },
+    "consoleErrors": []
+  },
+  {
+    "viewport": "tablet",
+    "route": "preview",
+    "layout": {
+      "viewportWidth": 1024,
+      "documentWidth": 1024,
+      "overflowElements": []
+    },
+    "consoleErrors": []
+  },
+  {
+    "viewport": "tablet",
+    "route": "settings",
+    "layout": {
+      "viewportWidth": 1024,
+      "documentWidth": 1024,
+      "overflowElements": []
+    },
+    "consoleErrors": []
+  },
+  {
+    "viewport": "tablet",
+    "route": "help",
+    "layout": {
+      "viewportWidth": 1024,
+      "documentWidth": 1024,
+      "overflowElements": []
+    },
+    "consoleErrors": []
+  },
+  {
+    "viewport": "tablet",
+    "route": "login",
+    "layout": {
+      "viewportWidth": 1024,
+      "documentWidth": 1024,
+      "overflowElements": []
+    },
+    "consoleErrors": []
+  },
+  {
+    "viewport": "mobile",
+    "route": "home",
+    "layout": {
+      "viewportWidth": 390,
+      "documentWidth": 390,
+      "overflowElements": []
+    },
+    "consoleErrors": []
+  },
+  {
+    "viewport": "mobile",
+    "route": "printers",
+    "layout": {
+      "viewportWidth": 390,
+      "documentWidth": 390,
+      "overflowElements": []
+    },
+    "consoleErrors": []
+  },
+  {
+    "viewport": "mobile",
+    "route": "jobs",
+    "layout": {
+      "viewportWidth": 390,
+      "documentWidth": 390,
+      "overflowElements": []
+    },
+    "consoleErrors": []
+  },
+  {
+    "viewport": "mobile",
+    "route": "preview",
+    "layout": {
+      "viewportWidth": 390,
+      "documentWidth": 390,
+      "overflowElements": []
+    },
+    "consoleErrors": []
+  },
+  {
+    "viewport": "mobile",
+    "route": "settings",
+    "layout": {
+      "viewportWidth": 390,
+      "documentWidth": 390,
+      "overflowElements": []
+    },
+    "consoleErrors": []
+  },
+  {
+    "viewport": "mobile",
+    "route": "help",
+    "layout": {
+      "viewportWidth": 390,
+      "documentWidth": 390,
+      "overflowElements": []
+    },
+    "consoleErrors": []
+  },
+  {
+    "viewport": "mobile",
+    "route": "login",
+    "layout": {
+      "viewportWidth": 390,
+      "documentWidth": 390,
+      "overflowElements": []
+    },
+    "consoleErrors": []
+  }
+]

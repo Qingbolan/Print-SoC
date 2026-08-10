@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { BrandLogo } from '@/components/common/brand'
+import { Surface } from '@/components/ui/surface'
 import { useSSHConnection } from '@/hooks/useSSHConnection'
 import { usePrinterStore } from '@/store/printer-store'
 import { toast } from 'sonner'
@@ -115,7 +117,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
+    <div className="relative grid min-h-dvh grid-cols-12 items-center overflow-y-auto p-6">
       {/* Optimized animated background - Removed, using App.tsx background */}
 
       <AnimatePresence mode="wait">
@@ -126,7 +128,7 @@ export default function LoginPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="max-w-2xl w-full text-center space-y-8 relative z-10"
+            className="relative z-10 col-span-12 space-y-7 text-center md:col-span-8 md:col-start-3 xl:col-span-6 xl:col-start-4"
             role="main"
           >
             <motion.div
@@ -135,11 +137,16 @@ export default function LoginPage() {
               transition={{ delay: 0.4 }}
               className="space-y-4"
             >
-              <h1 className="text-5xl font-bold bg-gradient-to-r from-cyan-500 via-blue-500 to-purple-500 dark:from-cyan-400 dark:via-blue-400 dark:to-purple-400 bg-clip-text text-transparent">
-                Hi, first time to use?
+              <BrandLogo
+                className="mx-auto w-fit rounded-lg bg-card p-3"
+                iconClassName="h-12 w-12"
+                showName={false}
+              />
+              <h1 className="text-lg font-semibold tracking-normal text-primary">
+                Print<span className="text-[var(--brand-orange)]">@</span>SoC
               </h1>
-              <p className="text-xl text-muted-foreground">
-                Welcome to Print@SoC
+              <p className="text-sm text-muted-foreground">
+                NUS School of Computing Printing Service
               </p>
             </motion.div>
 
@@ -150,7 +157,7 @@ export default function LoginPage() {
             >
               <Button
                 size="lg"
-                className="text-lg px-8 py-6 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 fluent-shadow-sm hover:fluent-shadow fluent-transition border-0"
+                className="h-10 rounded-md bg-primary px-7 text-sm text-white hover:bg-[var(--primary-hover)]"
                 onClick={() => setStep('server')}
                 aria-label="Get started with setup"
               >
@@ -168,42 +175,40 @@ export default function LoginPage() {
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
-            className="max-w-2xl w-full relative z-10"
+            className="relative z-10 col-span-12 md:col-span-8 md:col-start-3 xl:col-span-6 xl:col-start-4"
             role="main"
           >
-            <div>
+            <Surface className="p-8">
               <div className="text-center mb-8">
-                <h2 className="text-3xl font-bold mb-2 text-foreground">Choose your server</h2>
+                <h2 className="mb-2 text-lg font-semibold text-foreground">Choose your server</h2>
                 <p className="text-muted-foreground">Select your NUS SoC account type</p>
               </div>
 
-              <div className="grid grid-cols-2 gap-4 mb-8" role="group" aria-label="Server selection">
+              <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2" role="group" aria-label="Server selection">
                 <motion.button
-                  whileHover={{ scale: 1.01 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={() => {
                     setServerType('stu')
                     setStep('credentials')
                   }}
-                  className="rounded-lg border border-[var(--card-border)] bg-card p-6 shadow-[var(--shadow-xs)] transition-[background-color,border-color,box-shadow,transform] duration-150 hover:border-cyan-500/50 hover:bg-cyan-500/5 hover:shadow-[var(--shadow-sm)] group"
+                  className="group rounded-lg bg-muted/55 p-6 transition-colors duration-150 hover:bg-primary/7"
                   aria-label="Select student server: stu.comp.nus.edu.sg"
                 >
-                  <GraduationCap className="w-9 h-9 mx-auto mb-4 text-cyan-500" aria-hidden="true" />
+                  <GraduationCap className="mx-auto mb-4 h-9 w-9 text-primary" aria-hidden="true" />
                   <div className="mb-1 text-lg font-semibold text-foreground">Student</div>
                   <div className="text-sm text-muted-foreground">stu.comp.nus.edu.sg</div>
                 </motion.button>
 
                 <motion.button
-                  whileHover={{ scale: 1.01 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={() => {
                     setServerType('stf')
                     setStep('credentials')
                   }}
-                  className="rounded-lg border border-[var(--card-border)] bg-card p-6 shadow-[var(--shadow-xs)] transition-[background-color,border-color,box-shadow,transform] duration-150 hover:border-primary/50 hover:bg-primary/5 hover:shadow-[var(--shadow-sm)] group"
+                  className="group rounded-lg bg-muted/55 p-6 transition-colors duration-150 hover:bg-[var(--brand-orange-subtle)]"
                   aria-label="Select staff server: stf.comp.nus.edu.sg"
                 >
-                  <Briefcase className="w-9 h-9 mx-auto mb-4 text-primary" aria-hidden="true" />
+                  <Briefcase className="mx-auto mb-4 h-9 w-9 text-[var(--brand-orange)]" aria-hidden="true" />
                   <div className="mb-1 text-lg font-semibold text-foreground">Staff</div>
                   <div className="text-sm text-muted-foreground">stf.comp.nus.edu.sg</div>
                 </motion.button>
@@ -211,13 +216,13 @@ export default function LoginPage() {
 
               <Button
                 variant="ghost"
-                className="w-full text-muted-foreground hover:text-foreground fluent-transition"
+                className="w-full text-muted-foreground hover:text-foreground"
                 onClick={() => setStep('welcome')}
                 aria-label="Go back to welcome screen"
               >
                 Back
               </Button>
-            </div>
+            </Surface>
           </motion.div>
         )}
 
@@ -228,12 +233,12 @@ export default function LoginPage() {
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
-            className="max-w-md w-full relative z-10"
+            className="relative z-10 col-span-12 sm:col-span-8 sm:col-start-3 lg:col-span-4 lg:col-start-5"
             role="main"
           >
-            <div>
+            <Surface className="p-8">
               <div className="text-center mb-8">
-                <h2 className="text-2xl font-bold mb-2 text-foreground">
+                <h2 className="mb-2 text-lg font-semibold text-foreground">
                   Sign in to {serverType.toUpperCase()}
                 </h2>
                 <p className="text-sm text-muted-foreground">
@@ -259,7 +264,7 @@ export default function LoginPage() {
                     placeholder="Your (SOC)ID [e.g. silan-hu]"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    className="h-12 text-lg bg-input border-border text-foreground placeholder:text-muted-foreground focus:border-cyan-500 focus:ring-cyan-500"
+                    className="h-10 text-sm"
                     autoFocus
                     autoComplete="username"
                     required
@@ -277,7 +282,7 @@ export default function LoginPage() {
                     placeholder="Enter your password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="h-12 text-lg bg-input border-border text-foreground placeholder:text-muted-foreground focus:border-cyan-500 focus:ring-cyan-500"
+                    className="h-10 text-sm"
                     autoComplete="current-password"
                     required
                     aria-required="true"
@@ -290,20 +295,20 @@ export default function LoginPage() {
                     type="checkbox"
                     checked={rememberMe}
                     onChange={(e) => setRememberMe(e.target.checked)}
-                    className="h-4 w-4 rounded border-border text-cyan-500 focus:ring-cyan-500 focus:ring-offset-0"
+                    className="h-4 w-4 rounded border-border text-primary focus:ring-primary focus:ring-offset-0"
                   />
-	                  <label htmlFor="remember-me" className="text-sm text-foreground cursor-pointer">
-	                    Remember this account
-	                  </label>
-	                </div>
+                  <label htmlFor="remember-me" className="cursor-pointer text-sm text-foreground">
+                    Remember this account
+                  </label>
+                </div>
 
-	                <p className="text-xs text-muted-foreground">
-	                  Your password is used only for this SSH connection and is not stored by Print@SoC.
-	                </p>
+                <p className="text-xs text-muted-foreground">
+                  Your password is used only for this SSH connection and is not stored by Print@SoC.
+                </p>
 
                 <Button
                   type="submit"
-                  className="w-full h-12 text-lg rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 fluent-shadow-sm hover:fluent-shadow fluent-transition border-0"
+                  className="h-10 w-full bg-primary text-sm text-white hover:bg-[var(--primary-hover)]"
                   disabled={isConnecting || !username || !password}
                   aria-label={isConnecting ? 'Connecting to server' : 'Connect to server'}
                 >
@@ -320,14 +325,14 @@ export default function LoginPage() {
                 <Button
                   type="button"
                   variant="ghost"
-                  className="w-full text-muted-foreground hover:text-foreground fluent-transition"
+                  className="w-full text-muted-foreground hover:text-foreground"
                   onClick={() => setStep('server')}
                   aria-label="Go back to server selection"
                 >
                   Back
                 </Button>
               </form>
-            </div>
+            </Surface>
           </motion.div>
         )}
       </AnimatePresence>
@@ -339,15 +344,15 @@ export default function LoginPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background/95 backdrop-blur-sm"
+            className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background/95"
           >
-            <motion.img
-              src="/logo.png"
-              alt="Print@SoC"
-              className="w-24 h-24 mb-6"
+            <motion.div
+              className="mb-6 flex size-24 items-center justify-center rounded-md bg-primary"
               animate={{ scale: [1, 1.05, 1] }}
               transition={{ duration: 2, repeat: Infinity }}
-            />
+            >
+              <img src="/logo-mark-white.png" alt="Print@SoC" className="size-full object-contain" />
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

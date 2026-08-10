@@ -9,12 +9,10 @@ function Input({ className, type, ...props }: React.ComponentProps<'input'>) {
       data-slot="input"
       className={cn(
         // Base Fluent styles
-        'h-9 w-full min-w-0 rounded-md px-3 py-1 text-sm',
+        'h-11 w-full min-w-0 rounded-md px-3 py-1 text-sm sm:h-9',
         'bg-input border border-border',
-        'fluent-shadow-xs',
 
-        // Smooth transitions
-        'fluent-transition',
+        'transition-[border-color,box-shadow,background-color] duration-150',
 
         // Text and placeholder styling
         'text-foreground placeholder:text-muted-foreground',
@@ -23,7 +21,7 @@ function Input({ className, type, ...props }: React.ComponentProps<'input'>) {
         // Focus states - Fluent ring style
         'outline-none',
         'focus-visible:border-primary',
-        'focus-visible:ring-2 focus-visible:ring-ring',
+        'focus-visible:ring-2 focus-visible:ring-ring/50',
         'focus-visible:bg-input-hover',
 
         // Hover state

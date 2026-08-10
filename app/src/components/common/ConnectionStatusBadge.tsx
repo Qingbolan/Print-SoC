@@ -2,8 +2,11 @@ import { usePrinterStore } from '@/store/printer-store'
 import { Badge } from '@/components/ui/badge'
 import { Wifi, WifiOff, Loader2, AlertCircle } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { Button } from '@/components/ui/button'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 
-export function ConnectionStatusBadge() {
+export function ConnectionStatusBadge({ compact = false }: { compact?: boolean }) {
   const { connectionStatus } = usePrinterStore()
   const [elapsedTime, setElapsedTime] = useState(0)
 
@@ -22,38 +25,52 @@ export function ConnectionStatusBadge() {
     switch (connectionStatus.type) {
       case 'disconnected':
         return (
-          <Badge variant="secondary" className="bg-gray-500 text-white">
+          <Badge variant="secondary" className="bg-secondary text-secondary-foreground">
             <WifiOff className="w-3 h-3 mr-1" />
-            Disconnected
+            {!compact && 'Disconnected'}
           </Badge>
         )
 
       case 'connecting':
         return (
-          <Badge variant="secondary" className="bg-blue-500 text-white">
+          <Badge variant="secondary" className="bg-primary text-primary-foreground">
             <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-            Connecting{elapsedTime > 0 && ` • ${elapsedTime}s`}
+            {!compact && <>Connecting{elapsedTime > 0 && ` · ${elapsedTime}s`}</>}
           </Badge>
         )
 
       case 'connected':
         return (
-          <Badge variant="secondary" className="bg-green-500 text-white">
+          <Badge variant="secondary" className="bg-success text-success-foreground">
             <Wifi className="w-3 h-3 mr-1" />
-            Connected
+            {!compact && 'Connected'}
           </Badge>
         )
 
       case 'error':
         return (
-          <Badge
-            variant="secondary"
-            className="bg-red-500 text-white cursor-help"
-            title={connectionStatus.message}
-          >
-            <AlertCircle className="w-3 h-3 mr-1" />
-            Connection Failed
-          </Badge>
+          <Popover>
+            <PopoverTrigger asChild>
+              <button type="button" aria-label="Show connection error details">
+                <Badge
+                  variant="secondary"
+                  className="cursor-pointer bg-destructive text-destructive-foreground"
+                >
+                  <AlertCircle className="w-3 h-3 mr-1" />
+                  {!compact && 'Connection Failed'}
+                </Badge>
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-72 space-y-3">
+              <div>
+                <div className="text-sm font-semibold text-foreground">Connection failed</div>
+                <p className="mt-1 text-sm text-muted-foreground">{connectionStatus.message}</p>
+              </div>
+              <Button asChild size="sm" variant="secondary" className="w-full">
+                <Link to="/settings">Open connection settings</Link>
+              </Button>
+            </PopoverContent>
+          </Popover>
         )
 
       default:
@@ -62,7 +79,7 @@ export function ConnectionStatusBadge() {
   }
 
   return (
-    <div className="flex items-center">
+    <div className="flex items-center" aria-label={`Connection status: ${connectionStatus.type}`}>
       {renderStatus()}
     </div>
   )

@@ -5,7 +5,14 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { Terminal } from 'lucide-react'
+import { PageScaffold } from '@/components/layout/PageScaffold'
+import {
+  SimpleCard,
+  SimpleCardContent,
+  SimpleCardHeader,
+  SimpleCardTitle,
+} from '@/components/ui/simple-card'
+import { Circle, Play, Plug, Terminal, Trash2 } from 'lucide-react'
 import type { PrintQuota } from '@/types/printer'
 
 interface ApiResponse<T> {
@@ -159,48 +166,67 @@ export default function DebugPage() {
   }
 
   return (
-    <div className="h-full overflow-auto p-8">
-      <div className="max-w-4xl mx-auto space-y-6">
+    <PageScaffold
+      header={
         <PageHeader
           title="SSH Debug Console"
           description="Test SSH connection and commands directly"
-          icon={<Terminal className="w-8 h-8" />}
+          icon={<Terminal />}
+          actions={
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Circle
+                className={isConnected ? 'size-3 fill-success text-success' : 'size-3 fill-muted-foreground/35 text-muted-foreground/35'}
+              />
+              {isConnected ? 'Connected' : 'Not connected'}
+            </div>
+          }
         />
-
-        {/* Connection */}
-        <div className="p-4 border rounded-lg space-y-4">
-          <h2 className="font-semibold">1. SSH Connection</h2>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
+      }
+      contentWidth="reading"
+    >
+      <div className="space-y-4">
+        <SimpleCard>
+          <SimpleCardHeader>
+            <SimpleCardTitle className="flex items-center gap-2">
+              <Plug className="size-4 text-primary" />
+              SSH Connection
+            </SimpleCardTitle>
+          </SimpleCardHeader>
+          <SimpleCardContent className="space-y-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
               <Label>Host</Label>
               <Input value={host} onChange={e => setHost(e.target.value)} disabled={isConnected} />
             </div>
-            <div>
+            <div className="space-y-2">
               <Label>Username</Label>
               <Input value={username} onChange={e => setUsername(e.target.value)} disabled={isConnected} />
             </div>
           </div>
-          <div>
+          <div className="space-y-2">
             <Label>Password</Label>
             <Input type="password" value={password} onChange={e => setPassword(e.target.value)} disabled={isConnected} />
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button onClick={handleConnect} disabled={isLoading || isConnected}>
               Connect
             </Button>
             <Button onClick={handleDisconnect} disabled={isLoading || !isConnected} variant="outline">
               Disconnect
             </Button>
-            <span className={`ml-4 self-center ${isConnected ? 'text-success' : 'text-muted-foreground'}`}>
-              {isConnected ? 'Connected' : 'Not connected'}
-            </span>
           </div>
-        </div>
+          </SimpleCardContent>
+        </SimpleCard>
 
-        {/* Command */}
-        <div className="p-4 border rounded-lg space-y-4">
-          <h2 className="font-semibold">2. Run Command</h2>
-          <div className="flex gap-2">
+        <SimpleCard>
+          <SimpleCardHeader>
+            <SimpleCardTitle className="flex items-center gap-2">
+              <Play className="size-4 text-primary" />
+              Run Command
+            </SimpleCardTitle>
+          </SimpleCardHeader>
+          <SimpleCardContent className="space-y-4">
+          <div className="flex flex-col gap-2 sm:flex-row">
             <Input
               value={command}
               onChange={e => setCommand(e.target.value)}
@@ -220,21 +246,28 @@ export default function DebugPage() {
             <Button size="sm" variant="outline" onClick={handleCheckQuota} disabled={!isConnected}>Check Quota</Button>
             <Button size="sm" variant="outline" onClick={handleTestPrint} disabled={!isConnected}>Test Print</Button>
           </div>
-        </div>
+          </SimpleCardContent>
+        </SimpleCard>
 
-        {/* Output */}
-        <div className="p-4 border rounded-lg space-y-2">
-          <div className="flex justify-between items-center">
-            <h2 className="font-semibold">Output</h2>
-            <Button size="sm" variant="ghost" onClick={() => setOutput('')}>Clear</Button>
-          </div>
+        <SimpleCard>
+          <SimpleCardHeader className="flex flex-row items-center justify-between space-y-0">
+            <SimpleCardTitle className="flex items-center gap-2">
+              <Terminal className="size-4 text-primary" />
+              Output
+            </SimpleCardTitle>
+            <Button size="icon" variant="ghost" onClick={() => setOutput('')} aria-label="Clear output">
+              <Trash2 />
+            </Button>
+          </SimpleCardHeader>
+          <SimpleCardContent>
           <Textarea
             value={output}
             readOnly
-            className="font-mono text-sm h-80 bg-black text-green-400"
+            className="h-80 resize-none bg-[#101820] font-mono text-sm text-[#B7E4C7]"
           />
-        </div>
+          </SimpleCardContent>
+        </SimpleCard>
       </div>
-    </div>
+    </PageScaffold>
   )
 }

@@ -20,12 +20,15 @@ interface StatItemProps {
 
 export function StatItem({ value, label, icon: Icon, trend, className }: StatItemProps) {
   return (
-    <div className={cn("flex flex-col gap-1", className)}>
+    <div className={cn("flex min-w-0 items-center gap-3", className)}>
+      {Icon && (
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary/7 text-primary">
+          <Icon className="size-4" />
+        </span>
+      )}
+      <div className="min-w-0">
       <div className="flex items-center gap-2">
-        {Icon && (
-          <Icon className="h-4 w-4 text-muted-foreground" />
-        )}
-        <span className="text-2xl font-semibold text-foreground">{value}</span>
+        <span className="truncate text-lg font-semibold leading-5 text-foreground tabular-nums">{value}</span>
         {trend && (
           <span
             className={cn(
@@ -37,7 +40,8 @@ export function StatItem({ value, label, icon: Icon, trend, className }: StatIte
           </span>
         )}
       </div>
-      <span className="text-sm text-muted-foreground">{label}</span>
+      <span className="block truncate text-xs leading-5 text-muted-foreground">{label}</span>
+      </div>
     </div>
   );
 }
@@ -51,7 +55,7 @@ export function StatGroup({ children, className }: StatGroupProps) {
   return (
     <div
       className={cn(
-        "flex items-center gap-8 py-4 px-6 bg-muted/30 rounded-lg border border-border/50",
+        "grid grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] items-center gap-x-7 gap-y-3 rounded-md border border-[var(--card-border)] bg-card px-4 py-3 sm:px-5 [&>.w-px]:hidden",
         className
       )}
     >

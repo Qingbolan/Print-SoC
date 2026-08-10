@@ -5,24 +5,24 @@ import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '@/lib/utils'
 
 const badgeVariants = cva(
-  'inline-flex items-center justify-center rounded-md border px-2.5 py-0.5 text-xs font-medium w-fit whitespace-nowrap shrink-0 [&>svg]:size-3 gap-1.5 [&>svg]:pointer-events-none fluent-transition',
+  'inline-flex w-fit shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-2 py-0.5 text-xs font-medium [&>svg]:size-3 [&>svg]:pointer-events-none transition-colors',
   {
     variants: {
       variant: {
         default:
-          'bg-primary/10 text-primary border-primary/20 fluent-shadow-xs [a&]:hover:bg-primary/15 [a&]:hover:fluent-shadow-sm',
+          'bg-primary/10 text-primary [a&]:hover:bg-primary/15',
         secondary:
-          'bg-secondary text-secondary-foreground border-transparent fluent-shadow-xs [a&]:hover:bg-[var(--secondary-hover)] [a&]:hover:fluent-shadow-sm',
+          'bg-secondary text-secondary-foreground [a&]:hover:bg-[var(--secondary-hover)]',
         destructive:
-          'bg-destructive/10 text-destructive border-destructive/20 fluent-shadow-xs [a&]:hover:bg-destructive/15 [a&]:hover:fluent-shadow-sm',
+          'bg-destructive/10 text-destructive [a&]:hover:bg-destructive/15',
         outline:
-          'border-border bg-background/60 backdrop-blur-sm text-foreground fluent-shadow-xs [a&]:hover:bg-accent [a&]:hover:text-accent-foreground [a&]:hover:border-[var(--border-hover)]',
+          'bg-muted text-foreground [a&]:hover:bg-accent [a&]:hover:text-accent-foreground',
         success:
-          'bg-success/10 text-success border-success/20 fluent-shadow-xs [a&]:hover:bg-success/15 [a&]:hover:fluent-shadow-sm',
+          'bg-success/10 text-success [a&]:hover:bg-success/15',
         warning:
-          'bg-warning/10 text-warning-foreground border-warning/20 fluent-shadow-xs [a&]:hover:bg-warning/15 [a&]:hover:fluent-shadow-sm',
+          'bg-warning/10 text-warning-foreground [a&]:hover:bg-warning/15',
         accent:
-          'bg-accent/10 text-accent border-accent/20 fluent-shadow-xs [a&]:hover:bg-accent/15 [a&]:hover:fluent-shadow-sm',
+          'bg-accent text-accent-foreground [a&]:hover:bg-[var(--accent-hover)]',
       },
     },
     defaultVariants: {

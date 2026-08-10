@@ -92,12 +92,12 @@ export function PrinterDetailSheet({
   const handlePrintWithPrinter = () => {
     setQuickPrintPrinter(printer.queue_name)
     onOpenChange(false)
-    navigate('/')
+    navigate('/home')
   }
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto">
+      <SheetContent side="right" className="overflow-y-auto sm:max-w-none sm:w-2/5">
         <SheetHeader className="pb-4">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-accent">

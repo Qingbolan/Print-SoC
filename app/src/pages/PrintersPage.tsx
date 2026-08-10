@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { usePrinterStore } from '@/store/printer-store'
 import { refreshPrinters } from '@/hooks/useBackgroundMonitor'
 import { getPrintersForServerType, groupPrinters } from '@/data/printers'
@@ -6,12 +7,13 @@ import { calculateDistance, formatDistance, sortByDistance, sortByQueueCount } f
 import type { Printer, PrinterStatus } from '@/types/printer'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
-import { RefreshCw, MapPin, Printer as PrinterIcon, CheckCircle, AlertCircle, Navigation, List, Map } from 'lucide-react'
+import { RefreshCw, MapPin, Printer as PrinterIcon, CheckCircle, AlertCircle, Navigation, List, Map, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { SimpleCard, SimpleCardHeader, SimpleCardTitle, SimpleCardDescription, SimpleCardContent } from '@/components/ui/simple-card'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { StatGroup, StatItem } from '@/components/ui/stat-item'
+import { PageScaffold } from '@/components/layout/PageScaffold'
+import { SegmentedControl } from '@/components/ui/segmented-control'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PrinterFilter } from '@/components/printer/PrinterFilter'
 import { PrinterDetailDialog } from '@/components/printer/PrinterDetailDialog'
 import { PrinterMap } from '@/components/printer/PrinterMap'
@@ -21,7 +23,7 @@ const statusConfig: Record<
   { color: string; label: string; icon: React.ReactNode }
 > = {
   Online: {
-    color: 'bg-success/10 text-success border-success/20',
+    color: 'bg-success/10 text-success',
     label: 'Online',
     icon: <CheckCircle className="w-4 h-4" />,
   },
@@ -31,23 +33,24 @@ const statusConfig: Record<
     icon: <AlertCircle className="w-4 h-4" />,
   },
   Busy: {
-    color: 'bg-warning/10 text-warning-foreground border-warning/25',
+    color: 'bg-warning/10 text-warning-foreground',
     label: 'Busy',
     icon: <AlertCircle className="w-4 h-4" />,
   },
   OutOfPaper: {
-    color: 'bg-destructive/10 text-destructive border-destructive/20',
+    color: 'bg-destructive/10 text-destructive',
     label: 'Out of Paper',
     icon: <AlertCircle className="w-4 h-4" />,
   },
   Error: {
-    color: 'bg-destructive/10 text-destructive border-destructive/20',
+    color: 'bg-destructive/10 text-destructive',
     label: 'Error',
     icon: <AlertCircle className="w-4 h-4" />,
   },
 }
 
 export default function PrintQueuePage() {
+  const navigate = useNavigate()
   const { sshConfig, connectionStatus, isRefreshing, savedCredentials, printerFilter, userLocation } = usePrinterStore()
   const [selectedGroup, setSelectedGroup] = useState<string | null>('info')
   const [selectedPrinter, setSelectedPrinter] = useState<Printer | null>(null)
@@ -103,7 +106,14 @@ export default function PrintQueuePage() {
   // Get display printers and apply sorting
   const displayPrinters = useMemo(() => {
     let printers = selectedGroup === 'info'
-      ? groups.flatMap(g => g.printers.filter(p => p.variant === 'main'))
+      ? groups.flatMap((group) => {
+          const representative =
+            group.printers.find((printer) => printer.variant === 'main') ??
+            group.printers.find((printer) => printer.variant === 'dx') ??
+            group.printers[0]
+
+          return representative ? [representative] : []
+        })
       : displayGroup?.printers || []
 
     // Apply sorting
@@ -118,54 +128,56 @@ export default function PrintQueuePage() {
 
   if (!isConnected || !sshConfig) {
     return (
-      <div className="h-full flex flex-col items-center justify-center">
-        <div className="p-8 max-w-md text-center">
-          <h2 className="text-xl font-bold mb-4">Not Connected</h2>
-          <p className="text-muted-foreground mb-6">
-            Please connect to SSH in Settings to view the print queue
-          </p>
-          <Button onClick={() => window.location.href = '/settings'}>
-            Go to Settings
-          </Button>
+      <PageScaffold
+        header={
+          <PageHeader
+            title="Printer directory"
+            description="Live queues across the School of Computing"
+            icon={<PrinterIcon />}
+          />
+        }
+        contentWidth="wide"
+      >
+        <div className="overflow-hidden rounded-md bg-card">
+          <div className="p-6 sm:p-7">
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-primary/8 text-primary">
+              <AlertCircle className="size-5" />
+            </span>
+            <div className="min-w-0 flex-1">
+            <h2 className="mb-1 text-lg font-semibold">Connection required</h2>
+            <p className="mb-5 text-sm leading-6 text-muted-foreground">
+              Add your NUS SoC SSH account in Settings before loading printer availability.
+            </p>
+            <Button size="sm" onClick={() => navigate('/settings')}>
+              Go to Settings
+            </Button>
+            </div>
+          </div>
+          </div>
         </div>
-      </div>
+      </PageScaffold>
     )
   }
 
   return (
-    <div className="h-full flex flex-col">
-      {/* Header Section */}
-      <div className="p-8 space-y-8 border-b border-border/50">
-        {/* Header with Refresh Button */}
-        <div className="flex items-start justify-between">
-          <PageHeader
-            title="Available Printers"
-            description="Browse and select from SoC printers across campus"
-            icon={<PrinterIcon className="w-8 h-8" />}
-          />
-          <div className="flex items-center gap-2">
-            {/* View Toggle */}
-            <div className="flex items-center rounded-lg border border-border p-1">
-              <Button
-                variant={viewMode === 'list' ? 'secondary' : 'ghost'}
-                size="sm"
-                onClick={() => setViewMode('list')}
-                className="gap-2 h-8"
-              >
-                <List className="w-4 h-4" />
-                List
-              </Button>
-              <Button
-                variant={viewMode === 'map' ? 'secondary' : 'ghost'}
-                size="sm"
-                onClick={() => setViewMode('map')}
-                className="gap-2 h-8"
-              >
-                <Map className="w-4 h-4" />
-                Map
-              </Button>
-            </div>
-
+    <PageScaffold
+      header={
+        <PageHeader
+          title="Printer directory"
+          description="Live queues across the School of Computing"
+          icon={<PrinterIcon />}
+          actions={
+            <>
+              <SegmentedControl
+                ariaLabel="Printer view"
+                value={viewMode}
+                onValueChange={setViewMode}
+                items={[
+                  { value: 'list', label: 'List', icon: List },
+                  { value: 'map', label: 'Map', icon: Map },
+                ]}
+              />
             <Button
               variant="outline"
               size="sm"
@@ -175,177 +187,154 @@ export default function PrintQueuePage() {
               <RefreshCw className={`w-4 h-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
               Refresh
             </Button>
+            </>
+          }
+        />
+      }
+      metrics={
+        <div className="flex flex-col gap-4 rounded-md bg-card px-4 py-4 lg:flex-row lg:items-center lg:justify-between lg:px-5">
+          <div className="flex items-center gap-6">
+            <div>
+              <div className="text-lg font-semibold tabular-nums text-foreground">{filteredPrinters.filter((p) => p.status === 'Online').length}</div>
+              <div className="text-xs text-muted-foreground">Online queues</div>
+            </div>
+            <div className="h-8 w-px bg-border/70" />
+            <div>
+              <div className="text-lg font-semibold tabular-nums text-foreground">{groups.length}</div>
+              <div className="text-xs text-muted-foreground">Locations</div>
+            </div>
           </div>
+          <PrinterFilter />
         </div>
-
-        {/* Stats */}
-        <StatGroup>
-          <StatItem
-            icon={CheckCircle}
-            value={filteredPrinters.filter((p) => p.status === 'Online').length}
-            label="Online"
+      }
+      navigation={viewMode === 'list' ? (
+        <>
+          <div className="sm:hidden">
+            <Select value={selectedGroup || 'info'} onValueChange={setSelectedGroup}>
+              <SelectTrigger className="w-full" aria-label="Printer location">
+                <SelectValue placeholder="Select printer location" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="info">All Printers</SelectItem>
+                {groups.map((group) => (
+                  <SelectItem key={group.id} value={group.id}>
+                    {group.name} ({group.total_queue_count})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <SegmentedControl
+            className="hidden sm:inline-flex"
+            ariaLabel="Printer location"
+            value={selectedGroup || 'info'}
+            onValueChange={setSelectedGroup}
+            items={[
+              { value: 'info', label: 'All Printers' },
+              ...groups.map((group) => ({
+                value: group.id,
+                label: group.name,
+                count: group.total_queue_count > 0 ? group.total_queue_count : undefined,
+              })),
+            ]}
           />
-          <div className="w-px h-8 bg-border/50" />
-          <StatItem
-            icon={PrinterIcon}
-            value={filteredPrinters.length}
-            label="Total Printers"
-          />
-        </StatGroup>
-
-        {/* Filter Bar */}
-        <PrinterFilter />
-      </div>
-
-      {/* Content Area */}
+        </>
+      ) : undefined}
+      contentWidth="wide"
+    >
       {viewMode === 'map' ? (
-        /* Map View */
-        <div className="flex-1 p-4">
+        <div className="aspect-square pb-6 sm:aspect-[16/10]">
           <PrinterMap
             printers={filteredPrinters}
             onPrinterClick={handlePrinterClick}
             selectedPrinterId={selectedPrinter?.id}
-            className="rounded-lg border border-border shadow-sm"
+            className="rounded-lg"
           />
         </div>
       ) : (
-        /* List View */
-        <>
-          {/* Navigation Tabs */}
-          <div className="border-b border-border/50 px-4 py-3 overflow-x-auto">
-            <div className="flex items-center gap-3 min-w-max">
-              {/* Info Tab */}
-              <button
-                onClick={() => setSelectedGroup('info')}
-                className={cn(
-                  'px-6 py-2 rounded-md font-medium transition-colors flex items-center gap-2',
-                  selectedGroup === 'info'
-                    ? 'bg-accent text-foreground'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
-                )}
-              >
-                <span>Info</span>
-              </button>
-
-              {/* Group Tabs */}
-              {groups.map((group) => (
-                <button
-                  key={group.id}
-                  onClick={() => setSelectedGroup(group.id)}
-                  className={cn(
-                    'px-6 py-2 rounded-md font-medium transition-colors flex items-center gap-2',
-                    selectedGroup === group.id
-                      ? 'bg-accent text-foreground'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
-                  )}
-                >
-                  <span>{group.name}</span>
-                  <span
-                    className="w-7 h-7 rounded-full flex items-center justify-center text-white font-semibold text-sm"
-                    style={{ backgroundColor: '#EF7C00' }}
-                  >
-                    {group.total_queue_count}
-                  </span>
-                </button>
-              ))}
+        <div className="overflow-hidden rounded-md bg-card">
+            <div className="hidden grid-cols-[minmax(0,2fr)_minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,.7fr)_auto] items-center gap-4 bg-[#0B3556] px-5 py-2.5 text-xs font-semibold uppercase text-slate-200 md:grid">
+              <span>Printer / queue</span>
+              <span>Location</span>
+              <span>Capabilities</span>
+              <span>Queue</span>
+              <span className="sr-only">Open</span>
             </div>
-          </div>
-
-          {/* Printer Cards Grid */}
-          <div className="flex-1 overflow-y-auto p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-7xl">
+            <div className="divide-y divide-border/60">
               {displayPrinters.map((printer) => {
                 const queueCount = printer.queue_count || 0
                 const distance = calculateDistance(userLocation, printer)
                 const queueTone =
                   printer.status === 'Online' && queueCount === 0
-                    ? 'border-success/20 bg-success/10 text-success'
+                    ? 'bg-success/10 text-success'
                     : printer.status !== 'Online'
-                    ? 'border-destructive/20 bg-destructive/10 text-destructive'
-                    : 'border-warning/25 bg-warning/10 text-warning-foreground'
+                    ? 'bg-destructive/10 text-destructive'
+                    : 'bg-warning/10 text-warning-foreground'
 
                 return (
-                  <SimpleCard
+                  <button
                     key={printer.id}
-                    variant="default"
-                    hoverable
-                    className="h-full cursor-pointer"
+                    type="button"
+                    className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-3 px-4 py-4 text-left transition-colors hover:bg-accent/55 md:grid-cols-[minmax(0,2fr)_minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,.7fr)_auto] md:px-5"
                     onClick={() => handlePrinterClick(printer)}
                   >
-                    <SimpleCardHeader className="mb-5">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="min-w-0 space-y-2">
-                          <SimpleCardTitle className="flex items-center gap-2">
-                            <PrinterIcon className="w-4 h-4 shrink-0 text-muted-foreground" />
-                            <span className="truncate">{printer.name}</span>
-                          </SimpleCardTitle>
-                          <SimpleCardDescription className="truncate">
-                            {printer.queue_name}
-                          </SimpleCardDescription>
+                    <div className="flex min-w-0 items-start gap-3">
+                      <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md bg-primary/8 text-primary">
+                        <PrinterIcon className="size-4" />
+                      </span>
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-semibold text-foreground">{printer.name}</div>
+                        <div className="mt-1 flex min-w-0 items-center gap-2">
+                          <span className="truncate font-mono text-xs text-muted-foreground">{printer.queue_name}</span>
                           <Badge
                             variant="outline"
-                            className={statusConfig[printer.status].color}
+                            className={cn('px-1.5 py-0 text-xs', statusConfig[printer.status].color)}
                           >
-                            {statusConfig[printer.status].icon}
-                            <span className="ml-1">{statusConfig[printer.status].label}</span>
+                            {statusConfig[printer.status].label}
                           </Badge>
                         </div>
-                        <div className={cn('shrink-0 rounded-md border px-3 py-2 text-center', queueTone)}>
-                          <div className="text-lg font-semibold leading-none">{queueCount}</div>
-                          <div className="mt-1 text-[11px] font-medium uppercase leading-none opacity-75">
-                            queue
-                          </div>
-                        </div>
                       </div>
-                    </SimpleCardHeader>
-                    <SimpleCardContent className="space-y-3">
-                      {/* Location */}
-                      <div className="flex items-start gap-2 text-sm">
-                        <MapPin className="w-4 h-4 mt-0.5 shrink-0 text-muted-foreground" />
-                        <div className="min-w-0">
-                          <div className="font-medium">{printer.location.building}</div>
-                          <div className="text-muted-foreground">
-                            {printer.location.room} - Floor {printer.location.floor}
-                          </div>
-                        </div>
-                      </div>
+                    </div>
 
-                      {/* Distance (if user location is set) */}
+                    <div className="min-w-0 text-sm max-md:col-span-2 max-md:pl-11">
+                      <div className="flex items-start gap-2">
+                        <MapPin className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                        <div className="min-w-0">
+                          <div className="font-medium text-foreground">{printer.location.building} · Floor {printer.location.floor}</div>
+                          <div className="mt-0.5 truncate text-xs text-muted-foreground">{printer.location.room}</div>
+                        </div>
+                      </div>
                       {distance !== null && (
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <Navigation className="w-4 h-4 shrink-0" />
-                          <span>{formatDistance(distance)} away</span>
+                        <div className="mt-1 flex items-center gap-1.5 pl-6 text-xs text-muted-foreground">
+                          <Navigation className="size-3" />
+                          <span>{formatDistance(distance)}</span>
                         </div>
                       )}
+                    </div>
 
-                      {/* Features & Variant */}
-                      <div className="flex flex-wrap gap-1.5 pt-1">
-                        {printer.supports_duplex && (
-                          <Badge variant="outline">Duplex</Badge>
-                        )}
-                        {printer.supports_color && (
-                          <Badge variant="outline">Color</Badge>
-                        )}
-                        {printer.variant && (
-                          <Badge variant="outline" className="uppercase">
-                            {printer.variant}
-                          </Badge>
-                        )}
-                      </div>
-                    </SimpleCardContent>
-                  </SimpleCard>
+                    <div className="hidden flex-wrap gap-1.5 md:flex">
+                      <span className="text-xs font-medium text-foreground">{printer.supports_color ? 'Colour' : 'Mono'}</span>
+                      <span className="text-xs text-muted-foreground">·</span>
+                      <span className="text-xs text-muted-foreground">{printer.supports_duplex ? 'Duplex' : 'Simplex'}</span>
+                    </div>
+
+                    <div className={cn('justify-self-end rounded-md px-2.5 py-1.5 text-center', queueTone)}>
+                      <div className="text-base font-semibold leading-none tabular-nums">{queueCount}</div>
+                      <div className="mt-1 text-xs font-semibold uppercase leading-none opacity-75">waiting</div>
+                    </div>
+                    <ChevronRight className="hidden size-4 text-muted-foreground md:block" />
+                  </button>
                 )
               })}
             </div>
 
             {displayPrinters.length === 0 && (
-              <div className="text-center py-12 text-muted-foreground">
-                <p className="text-lg">No printers match your filters</p>
+              <div className="py-12 text-center text-muted-foreground">
+                <p className="text-sm font-medium text-foreground">No printers match your filters</p>
                 <p className="text-sm mt-2">Try adjusting your filter criteria</p>
               </div>
             )}
-          </div>
-        </>
+        </div>
       )}
 
       {/* Printer Detail Dialog */}
@@ -354,6 +343,6 @@ export default function PrintQueuePage() {
         open={sheetOpen}
         onOpenChange={setSheetOpen}
       />
-    </div>
+    </PageScaffold>
   )
 }

@@ -36,6 +36,11 @@ export function PageBreadcrumb() {
 
   // For home page, just show Home as current page
   const isHomePage = location.pathname === '/home' || location.pathname === '/'
+  const isNestedRoute = location.pathname.startsWith('/preview/')
+
+  if (!isNestedRoute) {
+    return null
+  }
 
   if (isHomePage) {
     breadcrumbItems.push({
@@ -93,8 +98,12 @@ export function PageBreadcrumb() {
     return null
   }
 
+  if (isHomePage) {
+    return null
+  }
+
   return (
-    <div className="sticky top-0 z-20 px-6 py-3 border-b border-border/50">
+    <div className="sticky top-0 z-20 shrink-0 bg-transparent px-6 py-3">
       <div className="flex items-center justify-between">
         <Breadcrumb>
           <BreadcrumbList>

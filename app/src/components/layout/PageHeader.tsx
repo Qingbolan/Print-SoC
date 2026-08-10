@@ -17,17 +17,30 @@ export function PageHeader({
   className,
 }: PageHeaderProps) {
   return (
-    <div className={cn('flex items-start justify-between', className)}>
-      <div className="space-y-1">
-        <h1 className="text-3xl font-bold flex items-center gap-3">
-          {icon}
+    <div className={cn('flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start sm:justify-between', className)}>
+      <div
+        className={cn(
+          'grid min-w-0 items-start gap-x-3 gap-y-0.5',
+          icon ? 'grid-cols-[1.5rem_minmax(0,1fr)]' : 'grid-cols-1',
+        )}
+      >
+        {icon && (
+          <span className="row-span-2 mt-1 flex size-6 items-center justify-center text-primary [&>svg]:size-[1.125rem]">
+            {icon}
+          </span>
+        )}
+        <h1 className="min-w-0 truncate text-xl font-semibold leading-7 text-foreground">
           {title}
         </h1>
         {description && (
-          <p className="text-muted-foreground">{description}</p>
+          <p className="min-w-0 text-sm leading-5 text-muted-foreground">{description}</p>
         )}
       </div>
-      {actions && <div className="flex items-center gap-2">{actions}</div>}
+      {actions && (
+        <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end sm:pl-4">
+          {actions}
+        </div>
+      )}
     </div>
   )
 }

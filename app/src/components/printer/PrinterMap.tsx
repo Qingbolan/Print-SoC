@@ -157,7 +157,7 @@ export function PrinterMap({
   }, [isSupported, position, loading, permissionDenied, requestPosition])
 
   return (
-    <div className={cn('relative w-full h-full min-h-[400px]', className)}>
+    <div className={cn('relative size-full', className)}>
       {/* Location status bar */}
       <div className="absolute top-3 left-3 z-[1000] flex items-center gap-2">
         {loading && (
@@ -189,7 +189,7 @@ export function PrinterMap({
       <MapContainer
         center={[NUS_SOC_CENTER.lat, NUS_SOC_CENTER.lng]}
         zoom={16}
-        className="w-full h-full rounded-lg"
+        className="size-full rounded-lg"
         zoomControl={false}
       >
         <TileLayer
@@ -257,7 +257,7 @@ export function PrinterMap({
               }}
             >
               <Popup>
-                <div className="min-w-[200px]">
+                <div>
                   <div className="font-bold text-base mb-1">{building}</div>
                   <div className="text-sm text-muted-foreground mb-2">{coords.name}</div>
 

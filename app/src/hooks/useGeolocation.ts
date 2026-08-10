@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { isTauriAvailable } from '@/lib/tauri-utils'
 
 export interface GeolocationPosition {
   lat: number
@@ -47,6 +48,8 @@ export function useGeolocation(options: UseGeolocationOptions = {}) {
 
   // Check if Tauri geolocation is available
   const loadTauriGeolocation = useCallback(async () => {
+    if (!isTauriAvailable()) return null
+
     try {
       const geo = await import('@tauri-apps/plugin-geolocation')
       tauriGeoRef.current = geo
@@ -201,7 +204,11 @@ export function useGeolocation(options: UseGeolocationOptions = {}) {
         }
       },
       (err) => {
-        console.error('[Geolocation] Browser error:', err.code, err.message)
+        if (err.code === 1) {
+          console.info('[Geolocation] Location permission was not granted')
+        } else {
+          console.error('[Geolocation] Browser error:', err.code, err.message)
+        }
         setState(prev => ({
           ...prev,
           error: {

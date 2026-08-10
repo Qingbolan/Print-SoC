@@ -5,6 +5,7 @@
  */
 
 import { cn } from '@/lib/utils';
+import { Surface } from '@/components/ui/surface';
 
 interface SimpleCardProps {
   children: React.ReactNode;
@@ -24,29 +25,28 @@ export function SimpleCard({
   onClick,
 }: SimpleCardProps) {
   return (
-    <div
+    <Surface
       onClick={onClick}
+      tone={variant === 'subtle' ? 'muted' : 'default'}
+      interactive={hoverable}
       className={cn(
-        "rounded-lg text-card-foreground transition-[background-color,border-color,box-shadow] duration-150",
+        "text-card-foreground",
         {
-          "border border-[var(--card-border)] bg-card shadow-[var(--shadow-xs)]": variant === 'default',
-          "border border-border/60 bg-muted/20": variant === 'subtle',
-          "bg-transparent": variant === 'ghost',
-          "bg-transparent border border-border/70": variant === 'bordered',
+          "border-0 bg-transparent": variant === 'ghost',
+          "border border-border bg-transparent": variant === 'bordered',
 
           // Padding
           "p-3": padding === 'sm',
           "p-5": padding === 'md',
-          "p-6": padding === 'lg',
+          "p-7": padding === 'lg',
 
           // Hover effect
-          "cursor-pointer hover:border-[var(--border-hover)] hover:bg-[var(--card-hover)] hover:shadow-[var(--shadow-sm)]": hoverable,
         },
         className
       )}
     >
       {children}
-    </div>
+    </Surface>
   );
 }
 
@@ -57,7 +57,7 @@ interface SimpleCardHeaderProps {
 
 export function SimpleCardHeader({ children, className }: SimpleCardHeaderProps) {
   return (
-    <div className={cn("mb-4 space-y-1", className)}>
+    <div className={cn("mb-4 space-y-1.5", className)}>
       {children}
     </div>
   );
@@ -70,7 +70,7 @@ interface SimpleCardTitleProps {
 
 export function SimpleCardTitle({ children, className }: SimpleCardTitleProps) {
   return (
-    <h3 className={cn("text-base font-semibold leading-6", className)}>
+    <h3 className={cn("text-lg font-semibold leading-6", className)}>
       {children}
     </h3>
   );

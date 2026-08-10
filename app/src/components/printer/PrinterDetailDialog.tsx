@@ -115,7 +115,7 @@ export function PrinterDetailDialog({
   const handlePrintWithPrinter = () => {
     setQuickPrintPrinter(printer.queue_name)
     onOpenChange(false)
-    navigate('/')
+    navigate('/home')
   }
 
   // Generate Google Maps navigation URL
@@ -145,7 +145,7 @@ export function PrinterDetailDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="!min-w-[700px] !max-w-4xl !w-[85vw] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="h-5/6 w-4/5 overflow-y-auto sm:max-w-none">
         <DialogHeader>
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-accent">
@@ -268,7 +268,7 @@ export function PrinterDetailDialog({
 
             {/* OpenStreetMap Embed */}
             {buildingCoords && osmEmbedUrl && (
-              <div className="relative rounded-lg overflow-hidden border border-border bg-muted">
+              <div className="relative aspect-[16/9] overflow-hidden rounded-lg bg-muted">
                 {/* Loading overlay */}
                 {!mapLoaded && (
                   <div className="absolute inset-0 flex items-center justify-center bg-muted z-10">
@@ -282,14 +282,12 @@ export function PrinterDetailDialog({
                 {/* OSM iframe */}
                 <iframe
                   src={osmEmbedUrl}
-                  width="100%"
-                  height="280"
                   style={{ border: 0 }}
                   loading="lazy"
                   referrerPolicy="no-referrer-when-downgrade"
                   onLoad={() => setMapLoaded(true)}
                   title={`Map showing ${printer.name} location`}
-                  className="w-full"
+                  className="absolute inset-0 size-full"
                 />
 
                 {/* Distance badge */}

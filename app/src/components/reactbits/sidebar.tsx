@@ -28,11 +28,21 @@ export function RBSidebarProvider({
 }) {
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     if (typeof window === "undefined") return false
+    const compactViewport = window.innerWidth >= 768 && window.innerWidth < 1200
     try {
       const v = localStorage.getItem("rb_sidebar_collapsed")
-      return v === "1"
+      const initialCollapsed = compactViewport || v === "1"
+      document.documentElement.style.setProperty(
+        "--rb-sidebar-width",
+        `${initialCollapsed ? collapsedWidth : expandedWidth}px`,
+      )
+      return initialCollapsed
     } catch {
-      return false
+      document.documentElement.style.setProperty(
+        "--rb-sidebar-width",
+        `${compactViewport ? collapsedWidth : expandedWidth}px`,
+      )
+      return compactViewport
     }
   })
 
@@ -58,6 +68,17 @@ export function RBSidebarProvider({
     applyWidthVar(collapsed)
   }, [])
 
+  useEffect(() => {
+    const compactQuery = window.matchMedia('(min-width: 768px) and (max-width: 1199px)')
+    const collapseForCompactViewport = () => {
+      if (compactQuery.matches) setCollapsed(true)
+    }
+
+    collapseForCompactViewport()
+    compactQuery.addEventListener('change', collapseForCompactViewport)
+    return () => compactQuery.removeEventListener('change', collapseForCompactViewport)
+  }, [])
+
   const toggle = useCallback(() => setCollapsed((v) => !v), [])
 
   const value = useMemo(
@@ -69,22 +90,16 @@ export function RBSidebarProvider({
 }
 
 export function RBSidebar({ children, className }: { children: React.ReactNode; className?: string }) {
-  // The aside visual shell; width driven by CSS var and transitions
   return (
     <aside
       className={className}
       style={{
-        position: "fixed",
-        left: 0,
-        top: 0,
-        width: "var(--rb-sidebar-width)",
-        height: "100vh",
+        position: "relative",
+        width: "100%",
+        height: "100%",
         zIndex: 30,
         overflow: "hidden",
-        backgroundColor: "hsl(var(--background) / 0.7)",
-        backdropFilter: "blur(40px) saturate(150%)",
-        WebkitBackdropFilter: "blur(40px) saturate(150%)",
-        transition: "width 200ms ease",
+        backgroundColor: "var(--sidebar)",
       }}
     >
       {children}
@@ -104,4 +119,3 @@ export function RBMainOffset({ children, className }: { children: React.ReactNod
     </div>
   )
 }
-

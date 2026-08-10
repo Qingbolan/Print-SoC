@@ -1,13 +1,13 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { usePrinterStore } from '@/store/printer-store'
 import { getAllPrintJobs, getPDFInfo } from '@/lib/printer-api'
-import { safeDialogOpen } from '@/lib/tauri-utils'
+import { isTauriAvailable, safeDialogOpen } from '@/lib/tauri-utils'
 import { toast } from 'sonner'
-import { FileText, AlertCircle, Clock, Printer, Edit3, X, Loader2, UploadCloud } from 'lucide-react'
+import { FileText, AlertCircle, Printer, Edit3, X, Loader2, UploadCloud, ArrowRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { AnimatedCard } from '@/components/magic/animated-card'
 import { PageHeader } from '@/components/layout/PageHeader'
+import { PageScaffold } from '@/components/layout/PageScaffold'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,8 +21,8 @@ import type { PrintJobStatus, PrintJob, DraftPrintJob } from '@/types/printer'
 
 const statusColors: Record<PrintJobStatus, string> = {
   Pending: 'text-muted-foreground',
-  Uploading: 'text-accent',
-  Queued: 'text-warning',
+  Uploading: 'text-[var(--brand-orange)]',
+  Queued: 'text-[var(--brand-orange)]',
   Printing: 'text-primary',
   Completed: 'text-success',
   Failed: 'text-destructive',
@@ -31,8 +31,10 @@ const statusColors: Record<PrintJobStatus, string> = {
 
 export default function ModernHomePageV2() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { connectionStatus, printJobs, setPrintJobs, setCurrentFile, draftJobs, removeDraftJob } = usePrinterStore()
   const isConnected = connectionStatus.type === 'connected'
+  const isUiPreview = import.meta.env.DEV && new URLSearchParams(location.search).has('ui-preview')
   const [loading, setLoading] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [errorDialog, setErrorDialog] = useState<{
@@ -127,15 +129,17 @@ export default function ModernHomePageV2() {
   }, [removeDraftJob])
 
   useEffect(() => {
-    if (!isConnected) {
+    if (!isConnected && !isUiPreview) {
       navigate('/login')
       return
     }
     loadJobs()
-  }, [isConnected, navigate])
+  }, [isConnected, isUiPreview, navigate])
 
   // Tauri file drop event listener (Tauri v2 API)
   useEffect(() => {
+    if (!isTauriAvailable()) return
+
     let unlisten: (() => void) | undefined
 
     const setupListeners = async () => {
@@ -172,189 +176,164 @@ export default function ModernHomePageV2() {
     }
   }, [handleFileSelect])
 
-  const recentJobs = useMemo(() => printJobs.slice(0, 10), [printJobs])
-
+  const recentJobs = useMemo(() => printJobs.slice(0, 6), [printJobs])
   return (
-    <div className="h-full flex flex-col">
-      {/* Header */}
-      <div className="p-8 border-b border-border/50">
+    <PageScaffold
+      header={
         <PageHeader
-          title="Print@SoC"
-          description="NUS School of Computing Printing Service"
-          icon={<Printer className="w-8 h-8" />}
+          title="Print workbench"
+          description="Prepare and review a PDF before printing"
+          icon={<Printer />}
         />
-      </div>
-
-      {/* Main content - Left/Right layout */}
-      <div className="flex-1 flex overflow-hidden">
-
-        {/* Left side - Upload area */}
-        <div className="flex-1 p-6 overflow-y-auto">
-          <AnimatedCard
-            className={`h-full flex items-center justify-center border border-dashed shadow-none transition-[background-color,border-color] ${
+      }
+      contentClassName="overflow-y-auto"
+      contentInnerClassName="xl:h-full"
+      contentWidth="full"
+    >
+      <div className="grid items-stretch gap-4 xl:h-full xl:min-h-0 xl:grid-cols-3">
+        <section className="flex min-h-0 flex-col overflow-hidden rounded-md bg-card xl:col-span-2">
+          <div className="flex items-start justify-between gap-4 px-5 pb-4 pt-5 sm:px-6">
+            <div>
+              <p className="text-xs font-semibold uppercase text-primary">New job</p>
+              <h2 className="mt-1 text-lg font-semibold text-foreground">Add a PDF document</h2>
+            </div>
+            <span className="font-mono text-xs text-muted-foreground">PDF / A4 / A3</span>
+          </div>
+          <div
+            className={`relative mx-3 mb-3 flex flex-1 items-center justify-center overflow-hidden rounded-md border border-dashed px-6 py-16 transition-colors sm:mx-4 sm:mb-4 sm:py-24 ${
               isDragging
-                ? 'border-primary bg-primary/5'
-                : 'border-border/70 bg-card/70'
+                ? 'border-[var(--border-hover)] bg-primary/7'
+                : 'border-[var(--border-hover)]/70 bg-workspace'
             }`}
+            aria-label="PDF upload area"
           >
             {loading ? (
-              <div className="text-center">
-                <Loader2 className="mx-auto mb-4 h-9 w-9 animate-spin text-muted-foreground" />
-                <p className="text-muted-foreground">Loading PDF...</p>
+              <div className="flex items-center justify-center text-center">
+                <div>
+                  <Loader2 className="mx-auto mb-4 h-9 w-9 animate-spin text-muted-foreground" />
+                  <p className="text-muted-foreground">Loading PDF...</p>
+                </div>
               </div>
             ) : isDragging ? (
-              <div className="text-center">
-                <UploadCloud className="mx-auto mb-4 h-10 w-10 text-primary" />
-                <h2 className="text-xl font-semibold text-primary mb-2">
-                  Drop PDF Here
-                </h2>
-                <p className="text-muted-foreground">
-                  Release to upload
-                </p>
-              </div>
-            ) : (
-              <div className="text-center">
-                <h2 className="text-xl font-semibold text-foreground mb-2">
-                  Upload PDF Document
-                </h2>
-                <p className="text-muted-foreground mb-6">
-                  Drag and drop a file here, or click to browse
-                </p>
-                <Button
-                  onClick={handleBrowseFile}
-                  size="lg"
-                  className="fluent-shadow-xs hover:fluent-shadow-sm fluent-transition"
-                >
-                  Browse Files
-                </Button>
-                <div className="mt-4 text-sm text-muted-foreground/70">
-                  PDF files only · Instant preview
-                </div>
-              </div>
-            )}
-          </AnimatedCard>
-        </div>
-
-        {/* Right side - Drafts & Recent jobs */}
-        <div className="w-80 border-l border-border/50 bg-card/30 flex flex-col">
-          {/* Drafts Section */}
-          {draftJobs.length > 0 && (
-            <>
-              <div className="px-4 py-3 border-b border-border/50 bg-warning/5">
-                <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                  <Edit3 className="w-4 h-4 text-warning" />
-                  Unsaved Drafts
-                  <span className="ml-auto text-xs text-warning bg-warning/20 px-1.5 py-0.5 rounded-full">
-                    {draftJobs.length}
-                  </span>
-                </h3>
-              </div>
-              <div className="divide-y divide-border/50 border-b border-border/50">
-                {draftJobs.slice(0, 3).map((draft: DraftPrintJob) => (
-                  <div
-                    key={draft.id}
-                    onClick={() => handleContinueDraft(draft)}
-                    className="w-full px-4 py-3 hover:bg-warning/10 fluent-transition overflow-hidden group cursor-pointer"
-                  >
-                    <div className="flex items-center gap-3 w-full overflow-hidden">
-                      <FileText className="w-4 h-4 text-warning flex-shrink-0" />
-                      <div className="flex-1 min-w-0 overflow-hidden text-left">
-                        <div className="text-sm font-medium text-foreground truncate">
-                          {draft.name}
-                        </div>
-                        <div className="text-xs text-muted-foreground mt-0.5">
-                          {draft.pdf_info.num_pages} pages · {draft.settings.copies} copies
-                        </div>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                        onClick={(e) => handleDeleteDraft(draft.id, e)}
-                      >
-                        <X className="w-3 h-3 text-muted-foreground hover:text-destructive" />
-                      </Button>
-                    </div>
+              <div className="flex items-center justify-center text-center">
+                <div>
+                  <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-md bg-primary/10 text-primary dark:bg-background/30">
+                    <UploadCloud className="h-8 w-8" />
                   </div>
-                ))}
-              </div>
-            </>
-          )}
-
-          {/* Recent Jobs Section */}
-          <div className="px-4 py-3 border-b border-border/50">
-            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-              <Clock className="w-4 h-4 text-muted-foreground" />
-              Recent Print Jobs
-            </h3>
-          </div>
-
-          <div className="flex-1 overflow-y-auto">
-            {recentJobs.length === 0 ? (
-              <div className="flex items-center justify-center h-full px-4">
-                <div className="text-center text-muted-foreground">
-                  <FileText className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                  <p className="text-sm">No print history</p>
-                  <p className="text-xs mt-1">Upload a PDF to start</p>
+                  <h3 className="mb-2 text-lg font-semibold text-primary">
+                    Drop PDF Here
+                  </h3>
+                  <p className="text-muted-foreground">
+                    Release to upload
+                  </p>
                 </div>
               </div>
             ) : (
-              <div className="divide-y divide-border/50">
-                {recentJobs.map((job: PrintJob) => (
+              <div className="flex items-center justify-center text-center">
+                <div>
+                  <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-md bg-primary/10 text-primary">
+                    <UploadCloud className="h-6 w-6" />
+                  </div>
+                  <h3 className="mb-2 text-lg font-semibold text-foreground">Choose a PDF</h3>
+                  <p className="mb-6 text-sm leading-6 text-muted-foreground">
+                    <span className="sm:hidden">Select a PDF from your device.</span>
+                    <span className="hidden sm:inline">Drag a file here or browse your computer.</span>
+                  </p>
                   <Button
-                    key={job.id}
-                    onClick={() => {
-                      if (job.file_path) {
-                        handleFileSelect(job.file_path)
-                      } else {
-                        navigate('/jobs')
-                      }
-                    }}
-                    variant="ghost"
-                    className="w-full h-auto px-4 py-3 justify-start rounded-none hover:bg-accent/50 fluent-transition overflow-hidden"
+                    onClick={handleBrowseFile}
+                    className="px-6"
                   >
-                    <div className="flex items-center gap-3 w-full overflow-hidden">
-                      <FileText className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                      <div className="flex-1 min-w-0 overflow-hidden text-left">
-                        <div className="text-sm font-medium text-foreground truncate">
-                          {job.name}
-                        </div>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <span className="text-xs text-muted-foreground">
-                            {new Date(job.created_at).toLocaleString('en-US', {
-                              month: 'short',
-                              day: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                          </span>
-                          <span className={`text-xs font-medium ${statusColors[job.status]}`}>
-                            {job.status}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
+                    Browse Files
                   </Button>
-                ))}
+                  <div className="mt-4 text-xs text-muted-foreground/80">
+                    The document opens in print preview before submission
+                  </div>
+                </div>
               </div>
             )}
           </div>
+        </section>
 
-          {printJobs.length > 10 && (
-            <div className="px-4 py-3 border-t border-border/50">
-              <Button
-                onClick={() => navigate('/jobs')}
-                variant="ghost"
-                size="sm"
-                className="w-full text-sm fluent-transition"
-              >
-                View all {printJobs.length} jobs
-              </Button>
+        <aside className="flex min-h-0 flex-col overflow-hidden rounded-md bg-card">
+          <div className="flex items-center justify-between gap-4 px-5 py-4">
+            <div className="min-w-0">
+              <h2 className="text-base font-semibold text-foreground">Recent activity</h2>
+              <p className="mt-0.5 truncate text-xs text-muted-foreground">Submitted from this device</p>
+            </div>
+            <Button variant="ghost" size="sm" onClick={() => navigate('/jobs')}>
+              All jobs <ArrowRight className="size-4" />
+            </Button>
+          </div>
+          {recentJobs.length === 0 ? (
+            <div className="flex flex-1 items-center justify-center bg-workspace/60 px-6 py-12 text-center">
+              <div>
+                <FileText className="mx-auto mb-2 size-6 text-muted-foreground/60" />
+                <p className="text-sm font-medium text-foreground">No print activity yet</p>
+                <p className="mt-1 text-xs text-muted-foreground">Submitted documents will appear here.</p>
+              </div>
+            </div>
+          ) : (
+            <div className="flex-1 divide-y divide-border/60 overflow-y-auto">
+              {recentJobs.map((job: PrintJob) => (
+                <button
+                  key={job.id}
+                  onClick={() => job.file_path ? handleFileSelect(job.file_path) : navigate('/jobs')}
+                  className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-5 py-3 text-left transition-colors hover:bg-accent/60"
+                >
+                  <span className="flex min-w-0 items-center gap-3">
+                    <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                      <FileText className="size-4" />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-medium text-foreground">{job.name}</span>
+                      <span className="block truncate text-xs text-muted-foreground">
+                        {job.printer} · {new Date(job.created_at).toLocaleDateString('en-SG', { day: '2-digit', month: 'short' })}
+                      </span>
+                    </span>
+                  </span>
+                  <span className={`text-xs font-semibold ${statusColors[job.status]}`}>{job.status}</span>
+                </button>
+              ))}
             </div>
           )}
-        </div>
-
+        </aside>
       </div>
+
+      {draftJobs.length > 0 && (
+        <section className="mt-4 overflow-hidden rounded-md bg-card">
+          <div className="flex items-center gap-3 px-5 py-4 sm:px-6">
+            <Edit3 className="size-4 text-primary" />
+            <h2 className="text-base font-semibold text-foreground">Continue drafts</h2>
+            <span className="ml-auto text-xs tabular-nums text-muted-foreground">{draftJobs.length}</span>
+          </div>
+          <div className="divide-y divide-border/60">
+            {draftJobs.slice(0, 3).map((draft: DraftPrintJob) => (
+              <div
+                key={draft.id}
+                onClick={() => handleContinueDraft(draft)}
+                className="group flex w-full cursor-pointer items-center gap-3 overflow-hidden px-5 py-3 transition-colors hover:bg-primary/5 sm:px-6"
+              >
+                <FileText className="size-4 shrink-0 text-primary" />
+                <div className="min-w-0 flex-1 overflow-hidden text-left">
+                  <div className="truncate text-sm font-medium text-foreground">{draft.name}</div>
+                  <div className="mt-0.5 text-xs text-muted-foreground">
+                    {draft.pdf_info.num_pages} pages · {draft.settings.copies} copies
+                  </div>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-7 opacity-70 transition-opacity hover:opacity-100 focus-visible:opacity-100"
+                  onClick={(e) => handleDeleteDraft(draft.id, e)}
+                  aria-label={`Remove ${draft.name} draft`}
+                >
+                  <X className="size-3 text-muted-foreground hover:text-destructive" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Error Dialog */}
       <AlertDialog
@@ -375,7 +354,7 @@ export default function ModernHomePageV2() {
           {errorDialog.technicalDetails && (
             <div className="mt-2">
               <div className="text-sm font-medium text-foreground mb-2">Technical Details:</div>
-              <div className="bg-muted rounded-lg p-3 max-h-64 overflow-y-auto">
+              <div className="overflow-y-auto rounded-lg bg-muted p-3">
                 <pre className="text-xs font-mono text-muted-foreground whitespace-pre-wrap break-words">
                   {errorDialog.technicalDetails}
                 </pre>
@@ -390,6 +369,6 @@ export default function ModernHomePageV2() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </PageScaffold>
   )
 }

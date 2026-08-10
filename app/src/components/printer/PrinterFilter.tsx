@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { usePrinterStore } from '@/store/printer-store'
 import { BUILDINGS, FLOORS_BY_BUILDING, getAllFloors } from '@/data/printers'
 import { Button } from '@/components/ui/button'
@@ -13,9 +14,12 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover'
-import { MapPin, X, Navigation } from 'lucide-react'
+import { MapPin, X, Navigation, SlidersHorizontal } from 'lucide-react'
+import { useIsMobile } from '@/hooks/use-mobile'
 
 export function PrinterFilter() {
+  const isMobile = useIsMobile()
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
   const {
     printerFilter,
     setPrinterFilter,
@@ -30,9 +34,10 @@ export function PrinterFilter() {
     : getAllFloors()
 
   const hasActiveFilters = printerFilter.building || printerFilter.floor || printerFilter.sortBy !== 'default'
+  const activeFilterCount = [printerFilter.building, printerFilter.floor, printerFilter.sortBy !== 'default'].filter(Boolean).length
 
-  return (
-    <div className="flex flex-wrap items-center gap-3">
+  const controls = (
+    <div className={isMobile ? 'flex flex-col gap-3' : 'flex flex-wrap items-center gap-3'}>
       {/* Building Filter */}
       <Select
         value={printerFilter.building || 'all'}
@@ -47,7 +52,7 @@ export function PrinterFilter() {
           })
         }}
       >
-        <SelectTrigger className="w-[130px]">
+        <SelectTrigger className={isMobile ? 'w-full' : undefined}>
           <SelectValue placeholder="Building" />
         </SelectTrigger>
         <SelectContent>
@@ -65,7 +70,7 @@ export function PrinterFilter() {
         value={printerFilter.floor || 'all'}
         onValueChange={(value) => setPrinterFilter({ floor: value === 'all' ? null : value })}
       >
-        <SelectTrigger className="w-[120px]">
+        <SelectTrigger className={isMobile ? 'w-full' : undefined}>
           <SelectValue placeholder="Floor" />
         </SelectTrigger>
         <SelectContent>
@@ -83,7 +88,7 @@ export function PrinterFilter() {
         value={printerFilter.sortBy}
         onValueChange={(value) => setPrinterFilter({ sortBy: value as 'default' | 'distance' | 'queue' })}
       >
-        <SelectTrigger className="w-[160px]">
+        <SelectTrigger className={isMobile ? 'w-full' : undefined}>
           <SelectValue placeholder="Sort by" />
         </SelectTrigger>
         <SelectContent>
@@ -101,13 +106,13 @@ export function PrinterFilter() {
           <Button
             variant={userLocation ? 'default' : 'outline'}
             size="sm"
-            className="gap-2"
+            className={isMobile ? 'w-full gap-2' : 'gap-2'}
           >
             <Navigation className="w-4 h-4" />
             {userLocation ? `${userLocation.building} F${userLocation.floor}` : 'Set Location'}
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-64" align="start">
+        <PopoverContent align="start">
           <div className="space-y-4">
             <div className="flex items-center gap-2">
               <MapPin className="w-4 h-4 text-muted-foreground" />
@@ -185,11 +190,39 @@ export function PrinterFilter() {
           variant="ghost"
           size="sm"
           onClick={clearPrinterFilter}
-          className="gap-1 text-muted-foreground hover:text-foreground"
+          className={isMobile ? 'w-full gap-1 text-muted-foreground hover:text-foreground' : 'gap-1 text-muted-foreground hover:text-foreground'}
         >
           <X className="w-4 h-4" />
           Clear
         </Button>
+      )}
+    </div>
+  )
+
+  if (!isMobile) return controls
+
+  return (
+    <div>
+      <Button
+        variant="secondary"
+        size="sm"
+        className="w-full justify-between"
+        aria-expanded={mobileFiltersOpen}
+        onClick={() => setMobileFiltersOpen((open) => !open)}
+      >
+        <span className="flex items-center gap-2">
+          <SlidersHorizontal className="size-4" />
+          Filters & sorting
+        </span>
+        {activeFilterCount > 0 && (
+          <span className="rounded bg-primary/10 px-1.5 text-xs font-semibold text-primary">{activeFilterCount}</span>
+        )}
+      </Button>
+      {mobileFiltersOpen && (
+        <div className="mt-3 pt-3">
+          <div className="mb-3 text-sm font-semibold text-foreground">Printer filters</div>
+          {controls}
+        </div>
       )}
     </div>
   )

@@ -35,38 +35,49 @@
 }
 
 :root {
-  /* Windows 11 Fluent Design Color System */
+  /* Print@SoC product system: NUS identity on quiet operational surfaces. */
 
-  /* Base - Soft, warm whites */
-  --background: oklch(0.985 0.001 260);
-  --foreground: oklch(0.20 0.01 260);
+  --brand-blue: #003D7C;
+  --brand-blue-hover: #07366B;
+  --brand-blue-active: #082B56;
+  --brand-blue-subtle: #E9F1F8;
+  --brand-orange: #EF7C00;
+  --brand-orange-hover: #D87000;
+  --brand-orange-active: #B96100;
+  --brand-orange-subtle: #FFF4E8;
+  --brand-orange-border: color-mix(in srgb, var(--brand-orange) 24%, transparent);
+  --brand-gold: #C9A64A;
+
+  --background: #DDE4EA;
+  --workspace: #F4F6F7;
+  --foreground: #10243A;
 
   /* Acrylic/Mica materials */
-  --acrylic-base: oklch(0.98 0.001 260 / 0.7);
-  --acrylic-overlay: oklch(0.95 0.002 260 / 0.3);
-  --mica-base: oklch(0.97 0.002 260 / 0.85);
+  --acrylic-base: #FFFFFF;
+  --acrylic-overlay: #F8FAFC;
+  --mica-base: #F4F7FA;
 
   /* Material tint colors (RGB for rgba usage) */
-  --acrylic-tint: 252 252 253;
-  --mica-tint: 248 248 250;
-  --mica-alt-tint: 245 245 248;
+  --acrylic-tint: 250 252 255;
+  --mica-tint: 247 250 253;
+  --mica-alt-tint: 238 244 250;
 
-  /* Primary - Modern Purple */
-  --primary: oklch(0.60 0.20 285);
-  --primary-hover: oklch(0.56 0.22 285);
-  --primary-active: oklch(0.52 0.24 285);
-  --primary-foreground: oklch(0.99 0 0);
-  --primary-subtle: oklch(0.92 0.08 285);
+  /* Primary - NUS Blue */
+  --primary: var(--brand-blue);
+  --primary-hover: var(--brand-blue-hover);
+  --primary-active: var(--brand-blue-active);
+  --primary-foreground: #FFFFFF;
+  --primary-subtle: var(--brand-blue-subtle);
 
-  /* Secondary - Fluent Gray */
-  --secondary: oklch(0.94 0.005 260);
-  --secondary-hover: oklch(0.90 0.008 260);
-  --secondary-foreground: oklch(0.25 0.01 260);
+  /* Secondary - cool neutral */
+  --secondary: #E9EEF3;
+  --secondary-hover: #DEE6ED;
+  --secondary-foreground: #18324D;
 
-  /* Accent - Can be customized */
-  --accent: oklch(0.60 0.16 230);
-  --accent-hover: oklch(0.56 0.18 230);
-  --accent-foreground: oklch(0.99 0 0);
+  /* Accent - subtle hover surface; NUS Orange lives in brand tokens */
+  --accent: #E8EDF2;
+  --accent-hover: #DDE5EC;
+  --accent-foreground: #102033;
 
   /* Success */
   --success: oklch(0.62 0.15 145);
@@ -75,10 +86,10 @@
   --success-subtle: oklch(0.92 0.08 145);
 
   /* Warning */
-  --warning: oklch(0.70 0.14 80);
-  --warning-hover: oklch(0.66 0.16 80);
+  --warning: var(--brand-orange);
+  --warning-hover: var(--brand-orange-hover);
   --warning-foreground: oklch(0.15 0.01 80);
-  --warning-subtle: oklch(0.94 0.08 80);
+  --warning-subtle: var(--brand-orange-subtle);
 
   /* Destructive */
   --destructive: oklch(0.60 0.20 25);
@@ -87,34 +98,34 @@
   --destructive-subtle: oklch(0.92 0.08 25);
 
   /* Card surfaces - calm content panels */
-  --card: oklch(0.99 0.001 260 / 0.94);
-  --card-hover: oklch(0.975 0.003 260 / 0.96);
-  --card-foreground: oklch(0.20 0.01 260);
-  --card-border: oklch(0.86 0.006 260 / 0.72);
+  --card: #FFFFFF;
+  --card-hover: #F6F8F9;
+  --card-foreground: #102033;
+  --card-border: #D7DEE4;
 
   /* Elevated surfaces */
-  --elevated: oklch(0.99 0.001 260 / 0.9);
-  --elevated-hover: oklch(1 0 0 / 0.95);
+  --elevated: #FFFFFF;
+  --elevated-hover: #FFFFFF;
 
   /* Muted */
-  --muted: oklch(0.96 0.003 260);
-  --muted-hover: oklch(0.94 0.005 260);
-  --muted-foreground: oklch(0.50 0.01 260);
+  --muted: #E9EEF1;
+  --muted-hover: #DFE6EA;
+  --muted-foreground: #5A6C7E;
 
   /* Borders & Inputs */
-  --border: oklch(0.86 0.005 260 / 0.6);
-  --border-hover: oklch(0.82 0.008 260 / 0.8);
-  --input: oklch(0.94 0.003 260);
-  --input-hover: oklch(0.96 0.002 260);
-  --ring: oklch(0.58 0.18 250 / 0.5);
+  --border: #D8E0E7;
+  --border-hover: #AEBCC9;
+  --input: #FFFFFF;
+  --input-hover: #FFFFFF;
+  --ring: oklch(0.42 0.13 258 / 0.46);
 
-  /* Fluent Shadows */
-  --shadow-xs: 0 1px 2px 0 oklch(0 0 0 / 0.04);
-  --shadow-sm: 0 1px 3px 0 oklch(0 0 0 / 0.06);
-  --shadow-md: 0 4px 10px 0 oklch(0 0 0 / 0.07);
-  --shadow-lg: 0 10px 24px 0 oklch(0 0 0 / 0.09);
-  --shadow-xl: 0 16px 36px 0 oklch(0 0 0 / 0.11);
-  --shadow-2xl: 0 24px 52px 0 oklch(0 0 0 / 0.13);
+  /* Elevation is reserved for transient overlays and the physical page preview. */
+  --shadow-xs: none;
+  --shadow-sm: none;
+  --shadow-md: 0 12px 30px -22px rgb(23 37 54 / 0.32);
+  --shadow-lg: 0 18px 44px -26px rgb(23 37 54 / 0.36);
+  --shadow-xl: 0 24px 56px -30px rgb(23 37 54 / 0.42);
+  --shadow-2xl: 0 28px 64px -30px rgb(23 37 54 / 0.48);
 
   /* Fluent Radius */
   --radius-xs: 0.25rem;
@@ -148,114 +159,135 @@
   /* Noise texture for Mica/Acrylic */
   --noise-opacity: 0.02;
 
-  /* Theme Gradient - Cyan to Purple */
-  --theme-gradient-start: oklch(0.70 0.15 200);  /* Cyan #3dd8ff */
-  --theme-gradient-end: oklch(0.68 0.20 285);    /* Purple #9b87ff */
+  /* Theme Gradient - NUS Blue to NUS Orange */
+  --theme-gradient-start: var(--brand-blue);
+  --theme-gradient-end: #2F6DA8;
 
   /* Sidebar */
-  --sidebar: var(--mica-base);
-  --sidebar-foreground: oklch(0.25 0.01 260);
-  --sidebar-primary: var(--primary);
-  --sidebar-accent: oklch(0.94 0.003 260);
-  --sidebar-border: oklch(0.88 0.005 260 / 0.4);
+  --sidebar: #082B4A;
+  --sidebar-foreground: #DDE8F1;
+  --sidebar-primary: #FFFFFF;
+  --sidebar-accent: #123B5D;
+  --sidebar-border: #214761;
 
-  /* Chart Colors - Purple palette */
-  --chart-1: oklch(0.60 0.20 285);
-  --chart-2: oklch(0.62 0.18 310);
+  /* Chart Colors - NUS SoC palette */
+  --chart-1: var(--brand-blue);
+  --chart-2: var(--brand-orange);
   --chart-3: oklch(0.62 0.15 145);
-  --chart-4: oklch(0.64 0.16 200);
-  --chart-5: oklch(0.70 0.14 80);
+  --chart-4: oklch(0.58 0.12 220);
+  --chart-5: var(--brand-gold);
 
   /* ReactBits Sidebar defaults */
-  --rb-sidebar-width: 360px;
+  --rb-sidebar-width: 236px;
 }
 
 .dark {
-  /* Dark mode - Fluent Dark theme */
-  --background: oklch(0.12 0.01 260);
-  --foreground: oklch(0.95 0.002 260);
+  --background: #111416;
+  --workspace: #191D20;
+  --foreground: #F0F3F5;
+
+  --brand-blue: #003D7C;
+  --brand-blue-hover: #0E5BA8;
+  --brand-blue-active: #1D6FC5;
+  --brand-blue-subtle: #1B344A;
+  --brand-orange: #EF7C00;
+  --brand-orange-hover: #FF9326;
+  --brand-orange-active: #FFAA4D;
+  --brand-orange-subtle: #35291D;
+  --brand-orange-border: color-mix(in srgb, var(--brand-orange) 34%, transparent);
+  --brand-gold: #D8BC6A;
 
   /* Acrylic/Mica materials - darker with better contrast */
-  --acrylic-base: oklch(0.16 0.012 260 / 0.7);
-  --acrylic-overlay: oklch(0.20 0.014 260 / 0.4);
-  --mica-base: oklch(0.18 0.014 260 / 0.85);
+  --acrylic-base: #202428;
+  --acrylic-overlay: #24292E;
+  --mica-base: #171A1D;
 
   /* Material tint colors (RGB for rgba usage) - darker for dark mode */
-  --acrylic-tint: 35 35 42;
-  --mica-tint: 32 32 38;
-  --mica-alt-tint: 28 28 35;
+  --acrylic-tint: 32 36 40;
+  --mica-tint: 23 26 29;
+  --mica-alt-tint: 17 20 22;
 
-  /* Primary - brighter in dark */
-  --primary: oklch(0.68 0.22 285);
-  --primary-hover: oklch(0.72 0.24 285);
-  --primary-active: oklch(0.76 0.26 285);
-  --primary-foreground: oklch(0.99 0 0);
-  --primary-subtle: oklch(0.25 0.10 285);
+  /* Primary - accessible NUS Blue family for dark surfaces */
+  --primary: #1F6DAA;
+  --primary-hover: #2B7DBD;
+  --primary-active: #398DCC;
+  --primary-foreground: #FFFFFF;
+  --primary-subtle: var(--brand-blue-subtle);
 
   /* Secondary */
-  --secondary: oklch(0.22 0.01 260);
-  --secondary-hover: oklch(0.26 0.012 260);
-  --secondary-foreground: oklch(0.95 0.002 260);
+  --secondary: #252B30;
+  --secondary-hover: #2D343A;
+  --secondary-foreground: #EEF6FF;
 
   /* Accent */
-  --accent: oklch(0.66 0.18 230);
-  --accent-hover: oklch(0.70 0.20 230);
-  --accent-foreground: oklch(0.99 0 0);
+  --accent: #293036;
+  --accent-hover: #333B42;
+  --accent-foreground: #EEF6FF;
 
   /* Card surfaces */
-  --card: oklch(0.17 0.012 260 / 0.9);
-  --card-hover: oklch(0.20 0.014 260 / 0.92);
-  --card-foreground: oklch(0.95 0.002 260);
-  --card-border: oklch(0.32 0.01 260 / 0.55);
+  --card: #202428;
+  --card-hover: #252A2F;
+  --card-foreground: #EEF6FF;
+  --card-border: #363D43;
 
   /* Elevated */
-  --elevated: oklch(0.18 0.012 260 / 0.8);
-  --elevated-hover: oklch(0.20 0.014 260 / 0.85);
+  --elevated: #252A2F;
+  --elevated-hover: #2B3136;
 
   /* Muted */
-  --muted: oklch(0.20 0.01 260);
-  --muted-hover: oklch(0.24 0.012 260);
-  --muted-foreground: oklch(0.65 0.008 260);
+  --muted: #252A2F;
+  --muted-hover: #2D3338;
+  --muted-foreground: #AAB5BE;
 
   /* Borders & Inputs */
-  --border: oklch(0.28 0.01 260 / 0.5);
-  --border-hover: oklch(0.32 0.012 260 / 0.7);
-  --input: oklch(0.20 0.01 260);
-  --input-hover: oklch(0.22 0.012 260);
-  --ring: oklch(0.64 0.20 250 / 0.6);
+  --border: #363D43;
+  --border-hover: #59636C;
+  --input: #1C2023;
+  --input-hover: #22272B;
+  --ring: oklch(0.72 0.12 250 / 0.60);
 
-  /* Shadows - more prominent in dark */
-  --shadow-xs: 0 1px 2px 0 oklch(0 0 0 / 0.25);
-  --shadow-sm: 0 1px 4px 0 oklch(0 0 0 / 0.28);
-  --shadow-md: 0 4px 12px 0 oklch(0 0 0 / 0.34);
-  --shadow-lg: 0 10px 26px 0 oklch(0 0 0 / 0.40);
-  --shadow-xl: 0 16px 38px 0 oklch(0 0 0 / 0.46);
-  --shadow-2xl: 0 24px 54px 0 oklch(0 0 0 / 0.52);
+  --shadow-xs: none;
+  --shadow-sm: none;
+  --shadow-md: 0 14px 34px -20px rgb(0 0 0 / 0.65);
+  --shadow-lg: 0 20px 50px -24px rgb(0 0 0 / 0.72);
+  --shadow-xl: 0 26px 60px -26px rgb(0 0 0 / 0.78);
+  --shadow-2xl: 0 30px 70px -28px rgb(0 0 0 / 0.82);
 
-  /* Theme Gradient - Cyan to Purple (brighter in dark) */
-  --theme-gradient-start: oklch(0.75 0.17 200);  /* Cyan #50e3ff */
-  --theme-gradient-end: oklch(0.72 0.22 285);    /* Purple #a798ff */
+  /* Brand gradients stay within the blue family; orange communicates status. */
+  --theme-gradient-start: #4A9DDB;
+  --theme-gradient-end: #1F6DAA;
 
   /* Sidebar */
-  --sidebar: var(--mica-base);
-  --sidebar-foreground: oklch(0.92 0.005 260);
-  --sidebar-accent: oklch(0.20 0.01 260);
-  --sidebar-border: oklch(0.30 0.01 260 / 0.3);
+  --sidebar: #081B2A;
+  --sidebar-foreground: #DDE8F1;
+  --sidebar-accent: #123047;
+  --sidebar-border: #274258;
 
   /* Charts - adjusted for dark */
-  --chart-1: oklch(0.68 0.22 285);
-  --chart-2: oklch(0.70 0.20 310);
+  --chart-1: #4A9DDB;
+  --chart-2: #FF9A2B;
   --chart-3: oklch(0.68 0.17 145);
-  --chart-4: oklch(0.70 0.18 200);
-  --chart-5: oklch(0.72 0.15 80);
+  --chart-4: oklch(0.72 0.11 220);
+  --chart-5: var(--brand-gold);
 }
 
 @theme inline {
   --font-sans: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
   --font-mono: "Cascadia Code", "Consolas", monospace;
 
+  /* Three actual type sizes across the product: caption, body, heading. */
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 0.9375rem;
+  --text-lg: 1.0625rem;
+  --text-xl: 1.375rem;
+  --text-2xl: 1.625rem;
+  --text-3xl: 2rem;
+  --text-4xl: 2.5rem;
+
   /* Map all CSS variables to Tailwind */
   --color-background: var(--background);
+  --color-workspace: var(--workspace);
   --color-foreground: var(--foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
@@ -300,6 +332,8 @@
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    font-size: 0.9375rem;
+    line-height: 1.5;
 
     /* CSS Containment for performance optimization - removed 'layout' to fix position:fixed */
     contain: style paint;
@@ -334,7 +368,7 @@
     }
   }
 
-  /* Fluent Focus States */
+  /* Focus is the only persistent outline used as interaction feedback. */
   :focus-visible {
     outline: 2px solid var(--primary);
     outline-offset: 2px;
@@ -347,22 +381,16 @@
   /* Acrylic Material Effects */
   .acrylic {
     background: var(--acrylic-base);
-    backdrop-filter: saturate(180%) blur(var(--blur-sm));
-    -webkit-backdrop-filter: saturate(180%) blur(var(--blur-sm));
     border: 1px solid var(--card-border);
   }
 
   .acrylic-strong {
     background: var(--mica-base);
-    backdrop-filter: saturate(200%) blur(var(--blur-md));
-    -webkit-backdrop-filter: saturate(200%) blur(var(--blur-md));
     border: 1px solid var(--card-border);
   }
 
   .mica {
     background: var(--mica-base);
-    backdrop-filter: blur(var(--blur-lg));
-    -webkit-backdrop-filter: blur(var(--blur-lg));
   }
 
   /* Fluent Shadows */
@@ -378,17 +406,13 @@
     transition: all var(--duration-normal) var(--motion-standard);
   }
 
-  .fluent-hover:hover {
-    transform: translateY(-1px);
-    box-shadow: var(--shadow-md);
-  }
+  .fluent-hover:hover { background: var(--card-hover); }
 
   /* Fluent Card Styles */
   .fluent-card {
     background: var(--card);
     border: 1px solid var(--card-border);
     border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-xs);
     transition:
       background-color var(--duration-normal) var(--motion-standard),
       border-color var(--duration-normal) var(--motion-standard),
@@ -398,7 +422,6 @@
   .fluent-card:hover {
     border-color: var(--border-hover);
     background: var(--card-hover);
-    box-shadow: var(--shadow-sm);
   }
 
   .fluent-card:active {
@@ -436,12 +459,10 @@
     -webkit-backdrop-filter: saturate(180%) blur(var(--blur-sm));
     border: 1px solid var(--card-border);
     border-radius: var(--radius-md);
-    box-shadow: var(--shadow-xs);
     transition: all var(--duration-fast) var(--motion-standard);
   }
 
   .fluent-button:hover {
-    box-shadow: var(--shadow-sm);
     background: var(--primary-hover);
   }
 
@@ -469,9 +490,7 @@
     transition: transform var(--duration-normal) var(--motion-ease-out-back);
   }
 
-  .fluent-scale:hover {
-    transform: scale(1.02);
-  }
+  .fluent-scale:hover { transform: none; }
 
   .fluent-scale:active {
     transform: scale(0.98);
@@ -542,7 +561,7 @@
     content: '';
     position: absolute;
     inset: 0;
-    background: radial-gradient(circle at center, rgba(99, 102, 241, 0.15), transparent 70%);
+    background: radial-gradient(circle at center, color-mix(in srgb, var(--brand-orange) 16%, transparent), transparent 70%);
     opacity: 0;
     transition: opacity 0.3s;
   }
@@ -553,7 +572,7 @@
 
   .magic-hover:hover {
     transform: translateY(-2px);
-    box-shadow: 0 10px 25px -5px rgba(99, 102, 241, 0.3);
+    box-shadow: 0 10px 25px -5px color-mix(in srgb, var(--brand-blue) 24%, transparent);
   }
 
   /* Monaco Editor Diff Decorations */

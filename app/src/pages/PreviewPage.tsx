@@ -11,6 +11,9 @@ import {
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Slider } from '@/components/ui/slider'
+import { PageHeader } from '@/components/layout/PageHeader'
+import { PageScaffold } from '@/components/layout/PageScaffold'
+import { safeDialogOpen } from '@/lib/tauri-utils'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import {
@@ -25,7 +28,9 @@ import {
   ZoomIn,
   ZoomOut,
   FlipHorizontal,
+  FileSearch,
   RotateCcw,
+  ArrowLeft,
 } from 'lucide-react'
 import {
   AlertDialog,
@@ -97,6 +102,9 @@ export default function ModernPreviewPage() {
 
   // Ref for PDF container to calculate optimal size
   const pdfContainerRef = useRef<HTMLDivElement>(null)
+  const [previewPaperWidth, setPreviewPaperWidth] = useState(1)
+  const fileQueueRef = useRef<QueuedFile[]>([])
+  const mountedRef = useRef(true)
   // Track if initial file was already added (prevent React 18 Strict Mode double-mount)
   const initialFileAddedRef = useRef(false)
 
@@ -238,6 +246,23 @@ export default function ModernPreviewPage() {
     }
   }, [settings.paper_size, settings.orientation])
 
+  useEffect(() => {
+    const container = pdfContainerRef.current
+    if (!container || !selectedFile) return
+
+    const updatePaperWidth = () => {
+      const { width, height } = container.getBoundingClientRect()
+      const widthFromContainer = width * 0.82
+      const widthFromHeight = height * paperDimensions.aspectRatio * 0.82
+      setPreviewPaperWidth(Math.max(1, Math.floor(Math.min(widthFromContainer, widthFromHeight))))
+    }
+
+    updatePaperWidth()
+    const observer = new ResizeObserver(updatePaperWidth)
+    observer.observe(container)
+    return () => observer.disconnect()
+  }, [paperDimensions.aspectRatio, selectedFile])
+
   // Calculate optimal page size for n-up grid
   // Uses actual PDF dimensions when available for accurate scaling
   const calculatePageSize = useMemo(() => {
@@ -249,12 +274,9 @@ export default function ModernPreviewPage() {
       ? pdfInfo.page_size[0] / pdfInfo.page_size[1]  // width/height from PDF
       : 210 / 297  // A4 default
 
-    // Base container size (approximate visible area)
-    const containerWidth = 450
-
     // Paper dimensions on screen
-    const paperWidth = containerWidth
-    const paperHeight = containerWidth / paperDimensions.aspectRatio
+    const paperWidth = previewPaperWidth
+    const paperHeight = previewPaperWidth / paperDimensions.aspectRatio
 
     // Each cell size in the grid (with padding)
     const padding = settings.pages_per_sheet === 1 ? 16 : 8
@@ -270,9 +292,9 @@ export default function ModernPreviewPage() {
     const optimalWidth = Math.min(fitByWidth, fitByHeight)
 
     return {
-      width: Math.max(100, Math.round(optimalWidth)),
+      width: Math.max(1, Math.round(optimalWidth)),
     }
-  }, [nupGrid, paperDimensions, selectedFile?.pdfInfo, settings.pages_per_sheet])
+  }, [nupGrid, paperDimensions, previewPaperWidth, selectedFile?.pdfInfo, settings.pages_per_sheet])
 
   // Generate sessionId if not present
   useEffect(() => {
@@ -351,6 +373,13 @@ export default function ModernPreviewPage() {
     setZoomLevel(1.0)
   }, [])
 
+  const updateFileQueue = useCallback((update: (current: QueuedFile[]) => QueuedFile[]) => {
+    const next = update(fileQueueRef.current)
+    fileQueueRef.current = next
+    setFileQueue(next)
+    return next
+  }, [])
+
   // Add file to queue
   const addFileToQueue = async (filePath: string, pdfInfo: PDFInfo | null = null) => {
     const fileName = filePath.split('/').pop() || 'document.pdf'
@@ -366,30 +395,32 @@ export default function ModernPreviewPage() {
       error: null,
     }
 
-    // Use functional update to check for duplicates with current state
-    let isDuplicate = false
-    setFileQueue(prev => {
-      const existing = prev.find(f => f.path === filePath)
-      if (existing) {
-        isDuplicate = true
-        setSelectedFileId(existing.id)
-        return prev // Don't add duplicate
-      }
-      return [...prev, newFile]
-    })
+    const existing = fileQueueRef.current.find(f => f.path === filePath)
+    if (existing) {
+      setSelectedFileId(existing.id)
+      return
+    }
 
-    if (isDuplicate) return
+    updateFileQueue(current => [...current, newFile])
 
     if (!selectedFileId) {
       setSelectedFileId(fileId)
     }
+
+    let objectUrl: string | null = null
 
     // Load PDF
     try {
       const { readFile } = await import('@tauri-apps/plugin-fs')
       const data = await readFile(filePath)
       const blob = new Blob([data], { type: 'application/pdf' })
-      const url = URL.createObjectURL(blob)
+      objectUrl = URL.createObjectURL(blob)
+
+      if (!mountedRef.current || !fileQueueRef.current.some(file => file.id === fileId)) {
+        URL.revokeObjectURL(objectUrl)
+        objectUrl = null
+        return
+      }
 
       // Get PDF info if not provided
       let info = pdfInfo
@@ -400,14 +431,22 @@ export default function ModernPreviewPage() {
         }
       }
 
-      setFileQueue(prev => prev.map(f =>
+      if (!mountedRef.current || !fileQueueRef.current.some(file => file.id === fileId)) {
+        URL.revokeObjectURL(objectUrl)
+        objectUrl = null
+        return
+      }
+
+      updateFileQueue(current => current.map(f =>
         f.id === fileId
-          ? { ...f, pdfUrl: url, pdfInfo: info, loading: false }
+          ? { ...f, pdfUrl: objectUrl, pdfInfo: info, loading: false }
           : f
       ))
     } catch (error) {
       console.error('Error loading PDF:', error)
-      setFileQueue(prev => prev.map(f =>
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+      if (!mountedRef.current) return
+      updateFileQueue(current => current.map(f =>
         f.id === fileId
           ? { ...f, error: 'Failed to load PDF', loading: false }
           : f
@@ -415,17 +454,27 @@ export default function ModernPreviewPage() {
     }
   }
 
+  const handleBrowseFile = async () => {
+    const file = await safeDialogOpen({
+      multiple: false,
+      filters: [{ name: 'PDF', extensions: ['pdf'] }],
+    })
+
+    if (file) {
+      await addFileToQueue(file as string)
+    }
+  }
+
   // Remove file from queue
   const removeFile = (fileId: string) => {
-    const file = fileQueue.find(f => f.id === fileId)
+    const file = fileQueueRef.current.find(f => f.id === fileId)
     if (file?.pdfUrl) {
       URL.revokeObjectURL(file.pdfUrl)
     }
 
-    setFileQueue(prev => prev.filter(f => f.id !== fileId))
+    const remaining = updateFileQueue(current => current.filter(f => f.id !== fileId))
 
     if (selectedFileId === fileId) {
-      const remaining = fileQueue.filter(f => f.id !== fileId)
       setSelectedFileId(remaining.length > 0 ? remaining[0].id : null)
     }
   }
@@ -615,20 +664,47 @@ export default function ModernPreviewPage() {
     }
   }
 
-  // Cleanup URLs on unmount
+  // Cleanup every object URL that is still owned by the queue on unmount.
   useEffect(() => {
+    mountedRef.current = true
+
     return () => {
-      fileQueue.forEach(f => {
+      mountedRef.current = false
+      fileQueueRef.current.forEach(f => {
         if (f.pdfUrl) URL.revokeObjectURL(f.pdfUrl)
       })
     }
   }, [])
 
   return (
-    <div className="h-full flex flex-col">
+    <PageScaffold
+      header={
+        <PageHeader
+          title="Print preview"
+          description={selectedFile ? selectedFile.name : 'Review layout, queue, and output settings'}
+          icon={<FileSearch />}
+          actions={
+            <>
+              <span className="hidden text-xs font-medium text-muted-foreground sm:inline">Step {selectedFile ? 2 : 1} of 3</span>
+              <Button variant="outline" size="sm" onClick={() => navigate('/home')}>
+                <ArrowLeft className="size-4" />
+                Workbench
+              </Button>
+            </>
+          }
+        />
+      }
+      contentClassName={selectedFile ? 'overflow-hidden' : 'overflow-y-auto'}
+      contentInnerClassName={selectedFile ? 'h-full' : undefined}
+      contentWidth={selectedFile ? 'full' : 'wide'}
+    >
+    <div className={cn(
+      'flex min-h-0 flex-col overflow-hidden rounded-md bg-card',
+      selectedFile && 'h-full',
+    )}>
       {/* File queue - horizontal at top (only show if multiple files) */}
       {fileQueue.length > 1 && (
-        <div className="border-b border-border/50 bg-muted/30">
+        <div className="bg-muted/45">
           <div className="flex items-center gap-2 px-4 py-2 overflow-x-auto">
             <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">
               {fileQueue.length} files:
@@ -638,10 +714,10 @@ export default function ModernPreviewPage() {
                 key={file.id}
                 onClick={() => setSelectedFileId(file.id)}
                 className={cn(
-                  'group relative flex items-center gap-2 px-3 py-1.5 rounded-md border cursor-pointer transition-all whitespace-nowrap',
+                  'group relative flex cursor-pointer items-center gap-2 whitespace-nowrap rounded-md px-3 py-1.5 transition-colors',
                   selectedFileId === file.id
-                    ? 'bg-primary/10 border-primary'
-                    : 'border-border hover:bg-accent'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'hover:bg-accent'
                 )}
               >
                 <FileText className="w-3 h-3 flex-shrink-0 text-muted-foreground" />
@@ -660,7 +736,7 @@ export default function ModernPreviewPage() {
                     e.stopPropagation()
                     removeFile(file.id)
                   }}
-                  className="opacity-0 group-hover:opacity-100 h-4 w-4 p-0 ml-1"
+                  className="ml-1 h-5 w-5 p-0 opacity-70 hover:opacity-100 focus-visible:opacity-100"
                 >
                   <X className="w-2.5 h-2.5" />
                 </Button>
@@ -671,10 +747,11 @@ export default function ModernPreviewPage() {
       )}
 
       {/* Main content - 3 column layout */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="grid min-h-0 flex-1 overflow-hidden max-md:overflow-y-auto md:grid-cols-3 xl:grid-cols-7">
         {/* Left sidebar - Sheet Thumbnails */}
-        <div className="w-48 border-r border-border/50 flex flex-col bg-background">
-          <div className="px-4 py-3 border-b border-border/50">
+        {selectedFile && (
+        <div className="hidden min-h-0 flex-col bg-muted/45 xl:col-span-1 xl:flex">
+          <div className="px-4 py-3">
             <h3 className="text-sm font-semibold text-foreground">
               {settings.pages_per_sheet > 1 ? 'SHEETS' : 'PAGES'}
             </h3>
@@ -702,8 +779,8 @@ export default function ModernPreviewPage() {
                       className={cn(
                         'group relative cursor-pointer rounded-lg overflow-hidden transition-all',
                         currentSheet === sheetNum
-                          ? 'ring-2 ring-primary shadow-lg'
-                          : 'ring-1 ring-border hover:ring-primary/50 hover:shadow-md'
+                          ? 'ring-2 ring-primary'
+                          : 'ring-1 ring-border hover:ring-primary/50'
                       )}
                     >
                       {/* Mini n-up grid preview */}
@@ -718,7 +795,7 @@ export default function ModernPreviewPage() {
                         {Array.from({ length: settings.pages_per_sheet }, (_, i) => {
                           const pageNum = sheetPages[i]
                           // Calculate thumbnail page width based on grid
-                          const thumbWidth = Math.max(30, Math.floor(130 / nupGrid.cols))
+                          const thumbWidth = Math.max(1, Math.floor(previewPaperWidth / 4 / nupGrid.cols))
                           return (
                             <div key={i} className="bg-muted rounded-sm overflow-hidden flex items-center justify-center">
                               {pageNum && selectedFile.pdfUrl ? (
@@ -731,7 +808,7 @@ export default function ModernPreviewPage() {
                                   />
                                 </Document>
                               ) : (
-                                <span className="text-[8px] text-muted-foreground/50">-</span>
+                                <span className="text-xs text-muted-foreground/50">-</span>
                               )}
                             </div>
                           )
@@ -739,7 +816,7 @@ export default function ModernPreviewPage() {
                       </div>
                       {/* Sheet number badge */}
                       <div className={cn(
-                        'absolute bottom-2 right-2 min-w-6 h-6 flex items-center justify-center px-1.5 rounded-full text-xs font-semibold shadow-sm',
+                        'absolute bottom-2 right-2 flex h-6 min-w-6 items-center justify-center rounded-md px-1.5 text-xs font-semibold',
                         currentSheet === sheetNum
                           ? 'bg-primary text-primary-foreground'
                           : 'bg-black/70 text-white'
@@ -748,7 +825,7 @@ export default function ModernPreviewPage() {
                       </div>
                       {/* Pages info */}
                       {settings.pages_per_sheet > 1 && (
-                        <div className="absolute top-1 left-1 text-[9px] bg-black/50 text-white px-1 rounded">
+                        <div className="absolute left-1 top-1 rounded bg-black/50 px-1 text-xs text-white">
                           p.{sheetPages[0]}-{sheetPages[sheetPages.length - 1]}
                         </div>
                       )}
@@ -759,22 +836,23 @@ export default function ModernPreviewPage() {
             </div>
           )}
 
-          {!selectedFile && (
-            <div className="flex-1 flex items-center justify-center p-4 text-center">
-              <p className="text-xs text-muted-foreground">
-                Select a file to view
-              </p>
-            </div>
-          )}
         </div>
+        )}
 
         {/* Center - PDF Preview */}
-        <div className="flex-1 flex flex-col overflow-hidden bg-muted/30">
+        <div
+          className={cn(
+            'flex min-h-0 flex-1 flex-col overflow-hidden',
+            selectedFile
+              ? 'bg-muted/55 md:col-span-2 xl:col-span-4'
+              : 'bg-card md:col-span-3 xl:col-span-7',
+          )}
+        >
           {selectedFile ? (
             <>
               {/* Sheet navigation at top */}
-              <div className="px-4 py-3 border-b border-border/50 bg-background">
-                <div className="flex items-center justify-between gap-4">
+              <div className="bg-workspace px-4 py-3">
+                <div className="flex items-center justify-between gap-3 overflow-x-auto">
                   {/* Sheet navigation */}
                   <div className="flex items-center gap-1 bg-muted/50 rounded-lg p-1">
                     <Button
@@ -786,7 +864,7 @@ export default function ModernPreviewPage() {
                     >
                       <ChevronLeft className="w-4 h-4" />
                     </Button>
-                    <span className="text-sm font-medium px-3 min-w-[80px] text-center">
+                    <span className="px-3 text-center text-sm font-medium tabular-nums">
                       {settings.pages_per_sheet > 1 ? (
                         <>Sheet {currentSheet} / {effectiveSheetCount}</>
                       ) : (
@@ -830,7 +908,7 @@ export default function ModernPreviewPage() {
                     >
                       <ZoomOut className="w-4 h-4" />
                     </Button>
-                    <span className="text-sm font-medium px-2 min-w-[50px] text-center">
+                    <span className="px-2 text-center text-sm font-medium tabular-nums">
                       {Math.round(zoomLevel * 100)}%
                     </span>
                     <Button
@@ -842,7 +920,6 @@ export default function ModernPreviewPage() {
                     >
                       <ZoomIn className="w-4 h-4" />
                     </Button>
-                    <div className="w-px h-5 bg-border mx-1" />
                     <Button
                       onClick={handleResetView}
                       variant="ghost"
@@ -855,7 +932,7 @@ export default function ModernPreviewPage() {
                   </div>
 
                   {/* Settings indicator */}
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <div className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
                     <span className="bg-muted px-2 py-1 rounded">{settings.paper_size}</span>
                     <span className="bg-muted px-2 py-1 rounded">{settings.orientation}</span>
                     {settings.pages_per_sheet > 1 && (
@@ -892,8 +969,7 @@ export default function ModernPreviewPage() {
                     style={{
                       transform: `scale(${zoomLevel})`,
                       transformOrigin: 'center center',
-                      // Fixed width that matches calculatePageSize container assumption
-                      width: settings.orientation === 'Landscape' ? '550px' : '450px',
+                      width: `${previewPaperWidth}px`,
                       aspectRatio: `${paperDimensions.width} / ${paperDimensions.height}`,
                     }}
                   >
@@ -954,7 +1030,7 @@ export default function ModernPreviewPage() {
                               )}
                               {/* Page number indicator for n-up */}
                               {settings.pages_per_sheet > 1 && pageNum && (
-                                <div className="absolute bottom-1 right-1 text-[10px] bg-black/60 text-white px-1.5 py-0.5 rounded">
+                                <div className="absolute bottom-1 right-1 rounded bg-black/60 px-1.5 py-0.5 text-xs text-white">
                                   {pageNum}
                                 </div>
                               )}
@@ -989,18 +1065,41 @@ export default function ModernPreviewPage() {
               </div>
             </>
           ) : (
-            <div className="flex-1 flex items-center justify-center">
-              <div className="text-center text-muted-foreground">
-                <Upload className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                <p className="text-lg font-medium">No file selected</p>
-                <p className="text-sm mt-2">Add files to start</p>
+            <div className="grid flex-1 md:grid-cols-3">
+              <div className="flex items-center justify-center bg-[#E4E9EC] p-12 dark:bg-[#171B1E] md:col-span-2">
+                <div className="relative aspect-[1/1.414] w-2/5 bg-white shadow-[0_14px_34px_-22px_rgba(16,36,58,0.45)]">
+                  <div className="absolute inset-x-[12%] top-[12%] h-2 bg-[#0B3556]" />
+                  <div className="absolute inset-x-[12%] top-[19%] h-1.5 bg-slate-300" />
+                  <div className="absolute inset-x-[12%] top-[25%] space-y-2">
+                    <div className="h-1 bg-slate-200" />
+                    <div className="h-1 w-5/6 bg-slate-200" />
+                    <div className="h-1 w-11/12 bg-slate-200" />
+                  </div>
+                  <div className="absolute bottom-[12%] left-[12%] h-1 w-16 bg-[#0B3556]" />
+                  <span className="absolute -right-3 -top-3 rounded-md bg-[#0B3556] px-2 py-1 font-mono text-xs font-semibold text-white">A4</span>
+                </div>
+              </div>
+              <div className="flex flex-col justify-center border-t border-border/60 px-6 py-8 md:border-l md:border-t-0 sm:px-8">
+                <p className="text-xs font-semibold uppercase text-primary">Document required</p>
+                <h2 className="mt-2 text-xl font-semibold text-foreground">Add a PDF to begin</h2>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">The preview workspace will show the physical sheet, page arrangement, and selected queue before printing.</p>
+                <Button onClick={handleBrowseFile} className="mt-6 w-full">
+                  <Upload className="size-4" />
+                  Choose PDF
+                </Button>
+                <div className="mt-5 grid grid-cols-3 gap-2 text-center text-xs text-muted-foreground">
+                  <span className="rounded-md bg-muted px-2 py-2">Layout</span>
+                  <span className="rounded-md bg-muted px-2 py-2">Output</span>
+                  <span className="rounded-md bg-muted px-2 py-2">Queue</span>
+                </div>
               </div>
             </div>
           )}
         </div>
 
         {/* Right sidebar - Print Settings */}
-        <div className="w-72 border-l border-border/50 overflow-y-auto bg-background">
+        {selectedFile && (
+        <aside className="min-h-0 overflow-y-auto bg-card max-md:overflow-visible md:col-span-1 xl:col-span-2">
           <div className="p-4 space-y-4">
             {/* Print options */}
             <div className="space-y-1">
@@ -1009,16 +1108,16 @@ export default function ModernPreviewPage() {
               {/* Copies */}
               <div className="flex justify-between items-center py-2.5 px-3 rounded-lg hover:bg-muted/50 transition-colors">
                 <label className="text-sm text-foreground">Copies</label>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-1 items-center gap-2">
                   <Slider
                     value={[settings.copies]}
                     onValueChange={([val]) => setSettings({ ...settings, copies: val })}
                     min={1}
                     max={10}
                     step={1}
-                    className="w-20"
+                    className="flex-1"
                   />
-                  <span className="text-sm font-semibold w-6 text-right">{settings.copies}</span>
+                  <span className="text-right text-sm font-semibold tabular-nums">{settings.copies}</span>
                 </div>
               </div>
 
@@ -1087,7 +1186,7 @@ export default function ModernPreviewPage() {
               <h3 className="text-sm font-semibold text-foreground px-1">Printer</h3>
 
               {recommendedPrinter && (
-                <div className="p-3 bg-primary/5 border border-primary/20 rounded-lg">
+                <div className="rounded-lg bg-primary/7 p-3">
                   <div className="text-xs text-primary/70 font-medium mb-1">Recommended</div>
                   <div className="text-sm font-semibold text-foreground">{recommendedPrinter.name}</div>
                   <div className="text-xs text-muted-foreground">
@@ -1114,12 +1213,14 @@ export default function ModernPreviewPage() {
             </div>
 
           </div>
-        </div>
+        </aside>
+        )}
       </div>
 
       {/* Bottom action bar */}
-      <div className="border-t border-border/50 bg-background px-4 py-3">
-        <div className="flex items-center justify-end gap-3">
+      {selectedFile && (
+      <div className="bg-workspace px-4 py-3">
+        <div className="flex flex-wrap items-center justify-end gap-2">
           <Button
             variant="ghost"
             onClick={() => navigate('/home')}
@@ -1149,6 +1250,7 @@ export default function ModernPreviewPage() {
           )}
         </div>
       </div>
+      )}
 
       {/* Error Dialog */}
       <AlertDialog
@@ -1166,7 +1268,7 @@ export default function ModernPreviewPage() {
           {errorDialog.technicalDetails && (
             <div className="mt-2">
               <div className="text-sm font-medium mb-2">Technical Details:</div>
-              <div className="bg-muted rounded p-3 max-h-64 overflow-y-auto">
+              <div className="overflow-y-auto rounded bg-muted p-3">
                 <pre className="text-xs font-mono whitespace-pre-wrap break-words">
                   {errorDialog.technicalDetails}
                 </pre>
@@ -1256,5 +1358,6 @@ export default function ModernPreviewPage() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+    </PageScaffold>
   )
 }
