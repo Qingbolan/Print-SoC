@@ -142,10 +142,10 @@ export default function LoginPage() {
                 iconClassName="h-12 w-12"
                 showName={false}
               />
-              <h1 className="text-lg font-semibold tracking-normal text-primary">
+              <h1 className="text-lg font-semibold tracking-normal text-white">
                 Print<span className="text-[var(--brand-orange)]">@</span>SoC
               </h1>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-white/80">
                 NUS School of Computing Printing Service
               </p>
             </motion.div>
