@@ -13,6 +13,7 @@ import { Switch } from '@/components/ui/switch'
 import { Slider } from '@/components/ui/slider'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { PageScaffold } from '@/components/layout/PageScaffold'
+import { FileErrorDialog } from '@/components/common/FileErrorDialog'
 import { safeDialogOpen } from '@/lib/tauri-utils'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -1252,36 +1253,13 @@ export default function ModernPreviewPage() {
       </div>
       )}
 
-      {/* Error Dialog */}
-      <AlertDialog
+      <FileErrorDialog
         open={errorDialog.open}
-        onOpenChange={(open) => setErrorDialog({ ...errorDialog, open })}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <div className="flex items-center gap-2">
-              <AlertCircle className="w-5 h-5 text-destructive" />
-              <AlertDialogTitle>{errorDialog.title}</AlertDialogTitle>
-            </div>
-            <AlertDialogDescription>{errorDialog.message}</AlertDialogDescription>
-          </AlertDialogHeader>
-          {errorDialog.technicalDetails && (
-            <div className="mt-2">
-              <div className="text-sm font-medium mb-2">Technical Details:</div>
-              <div className="overflow-y-auto rounded bg-muted p-3">
-                <pre className="text-xs font-mono whitespace-pre-wrap break-words">
-                  {errorDialog.technicalDetails}
-                </pre>
-              </div>
-            </div>
-          )}
-          <AlertDialogFooter>
-            <AlertDialogAction onClick={() => setErrorDialog({ ...errorDialog, open: false })}>
-              OK
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        onOpenChange={(open) => setErrorDialog((current) => ({ ...current, open }))}
+        title={errorDialog.title}
+        message={errorDialog.message}
+        technicalDetails={errorDialog.technicalDetails}
+      />
 
       {/* Print Status Dialog */}
       <AlertDialog

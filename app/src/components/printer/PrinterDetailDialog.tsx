@@ -145,7 +145,7 @@ export function PrinterDetailDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="h-5/6 w-4/5 overflow-y-auto sm:max-w-none">
+      <DialogContent className="inset-4 h-auto w-auto max-w-none translate-x-0 translate-y-0 overflow-y-auto">
         <DialogHeader>
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-accent">

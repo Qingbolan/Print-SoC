@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "print-soc": {
+      "command": "print-soc",
+      "args": ["mcp"]
+    }
+  }
+}

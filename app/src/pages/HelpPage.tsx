@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { PageScaffold } from '@/components/layout/PageScaffold'
+import { SectionNav } from '@/components/layout/SectionNav'
 import { SegmentedControl } from '@/components/ui/segmented-control'
 import {
   Accordion,
@@ -60,28 +61,21 @@ export default function HelpPage() {
       </div>
 
       <div className="grid items-start gap-5 lg:grid-cols-4">
-        <aside className="sticky top-0 hidden overflow-hidden rounded-md bg-[#0B3556] p-2 text-slate-200 lg:block">
-          <div className="px-3 pb-3 pt-2 text-xs font-semibold uppercase text-slate-400">Documentation</div>
-          {topics.map(({ value, label, icon: Icon }) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => setSelectedTab(value)}
-              className={`relative flex h-10 w-full items-center gap-3 rounded-md px-3 text-sm transition-colors ${selectedTab === value ? 'bg-white/10 text-white' : 'hover:bg-white/7 hover:text-white'}`}
+        <SectionNav
+          label="Documentation"
+          value={selectedTab}
+          items={topics}
+          onValueChange={(value) => setSelectedTab(value as HelpSection)}
+          footer={
+            <a
+              href="mailto:techsvc@comp.nus.edu.sg"
+              className="flex h-10 items-center gap-3 rounded-md px-2.5 text-xs text-muted-foreground transition-colors hover:bg-card/70 hover:text-foreground"
             >
-              <Icon className="size-4" />
-              <span>{label}</span>
-            </button>
-          ))}
-          <div className="mx-3 my-3 h-px bg-white/10" />
-          <a
-            href="mailto:techsvc@comp.nus.edu.sg"
-            className="flex items-center gap-3 rounded-md px-3 py-2 text-xs text-slate-300 hover:bg-white/7 hover:text-white"
-          >
-            <Mail className="size-4" />
-            Technical Services
-          </a>
-        </aside>
+              <Mail className="size-4 shrink-0" />
+              Technical Services
+            </a>
+          }
+        />
 
         <article className="min-w-0 overflow-hidden rounded-md bg-card lg:col-span-3">
           {selectedTab === 'guide' && (
@@ -94,12 +88,12 @@ export default function HelpPage() {
                 </p>
               </div>
 
-              <div className="grid gap-px bg-border/60 sm:grid-cols-2">
-                <div className="bg-card px-5 py-4 sm:px-7">
+              <div className="grid gap-4 bg-workspace/70 px-5 py-5 sm:grid-cols-2 sm:px-7">
+                <div>
                   <div className="flex items-center gap-2 text-sm font-semibold"><Server className="size-4 text-primary" /> Student server</div>
                   <code className="mt-2 block font-mono text-xs text-muted-foreground">stu.comp.nus.edu.sg</code>
                 </div>
-                <div className="bg-card px-5 py-4 sm:px-7">
+                <div>
                   <div className="flex items-center gap-2 text-sm font-semibold"><Server className="size-4 text-primary" /> Staff server</div>
                   <code className="mt-2 block font-mono text-xs text-muted-foreground">stf.comp.nus.edu.sg</code>
                 </div>
@@ -110,7 +104,7 @@ export default function HelpPage() {
                   <Printer className="size-4 text-primary" />
                   <h3 className="text-base font-semibold">Standard workflow</h3>
                 </div>
-                <ol className="divide-y divide-border/60">
+                <ol className="space-y-1">
                   {printSteps.map(([title, description], index) => (
                     <li key={title} className="grid gap-3 py-4 sm:grid-cols-[auto_1fr_2fr] sm:items-start">
                       <span className="flex size-7 items-center justify-center rounded-md bg-primary text-xs font-semibold text-primary-foreground">{index + 1}</span>
@@ -142,7 +136,7 @@ export default function HelpPage() {
                 <h2 className="mt-2 text-xl font-semibold">Linux print commands</h2>
                 <p className="mt-2 text-sm leading-6 text-muted-foreground">The app executes these operations through your active SSH session.</p>
               </div>
-              <div className="divide-y divide-border/60">
+              <div className="space-y-2 px-5 pb-6 sm:px-7">
                 {[
                   ['Submit a document', 'lpr -P [queue-name] filename.pdf'],
                   ['Inspect a queue', 'lpq -P [queue-name]'],
@@ -150,7 +144,7 @@ export default function HelpPage() {
                   ['Create a 2-up layout', 'pdfjam --nup 2x1 input.pdf -o output.pdf'],
                   ['Create a 4-up layout', 'pdfjam --nup 2x2 input.pdf -o output.pdf'],
                 ].map(([label, command]) => (
-                  <section key={label} className="grid gap-3 px-5 py-5 sm:grid-cols-[1fr_2fr] sm:px-7">
+                  <section key={label} className="grid gap-3 py-2 sm:grid-cols-[1fr_2fr] sm:items-center">
                     <h3 className="text-sm font-semibold text-foreground">{label}</h3>
                     <code className="overflow-x-auto rounded-md bg-[#102A40] px-4 py-3 font-mono text-xs text-slate-100">{command}</code>
                   </section>
@@ -166,7 +160,7 @@ export default function HelpPage() {
                 <h2 className="mt-2 text-xl font-semibold">Common printing issues</h2>
               </div>
               <div className="px-5 pb-6 sm:px-7">
-                <Accordion type="single" collapsible className="w-full divide-y divide-border/60">
+                <Accordion type="single" collapsible className="w-full space-y-1">
                   <AccordionItem value="rejected" className="border-0">
                     <AccordionTrigger className="text-left hover:no-underline">Why was my print job rejected?</AccordionTrigger>
                     <AccordionContent className="text-sm leading-6 text-muted-foreground">

@@ -1,18 +1,17 @@
 import { Link, useLocation } from "react-router-dom"
 import { GlobeIcon } from "@/components/common/icons"
 import { BrandLogo } from "@/components/common/brand"
-import { Home, Printer, History, HelpCircle, Settings as SettingsIcon, PanelLeftIcon } from "lucide-react"
+import { Home, Printer, History, HelpCircle, Settings as SettingsIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useI18n } from "@/lib/i18n"
 import { ThemeToggle } from "@/components/common/theme-toggle"
 import { ConnectionStatusBadge } from '@/components/common/ConnectionStatusBadge'
-import { useRBSidebar } from "@/components/reactbits/sidebar"
 
-export function AppSidebar() {
+export function AppSidebar({ mode = 'rail' }: { mode?: 'rail' | 'drawer' }) {
   const location = useLocation()
   const pathname = location.pathname
   const { locale, setLocale } = useI18n()
-  const { collapsed, toggle } = useRBSidebar()
+  const rail = mode === 'rail'
 
   // Static navigation items - always show all items to prevent layout shift
   const navigation = [
@@ -48,38 +47,22 @@ export function AppSidebar() {
   }
 
   return (
-    <div className="app-sidebar flex h-full w-full flex-col overflow-hidden bg-sidebar px-3 pb-3 pt-2 text-sidebar-foreground">
-      <div
-        className={cn(
-          "flex shrink-0 items-center justify-between transition-[padding]",
-          collapsed
-            ? "cursor-pointer px-1 py-4 hover:bg-sidebar-accent/50"
-            : "px-2 pb-4 pt-8"
-        )}
-        onClick={collapsed ? toggle : undefined}
-      >
-        <div className={cn(
-          "flex items-center gap-3 flex-1 min-w-0",
-          collapsed && "justify-center"
-        )}>
-          {collapsed ? (
-            <img src="/logo-mark-white.png" alt="Print@SoC" className="size-10 shrink-0 object-contain" />
-          ) : (
-            <BrandLogo className="min-w-0 gap-2" iconClassName="size-8" subtitle="NUS SoC Utility" inverse />
-          )}
-        </div>
-        {!collapsed && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              toggle()
-            }}
-            className="rounded-md p-2 text-slate-300 transition-colors hover:bg-sidebar-accent hover:text-white"
-            title="Collapse sidebar"
-            aria-label="Collapse sidebar"
-          >
-            <PanelLeftIcon className="h-4 w-4" />
-          </button>
+    <div className={cn(
+      "app-sidebar flex h-full w-full flex-col overflow-hidden bg-sidebar pb-3 text-sidebar-foreground",
+      rail ? "px-2 pt-12" : "px-3 pt-2",
+    )}>
+      <div className={cn(
+        "flex shrink-0",
+        rail ? "flex-col items-center gap-1 pb-4 text-center" : "items-center px-2 pb-4 pt-8",
+      )}>
+        {rail ? (
+          <>
+            <img src="/logo-mark-white.png" alt="" className="size-9 shrink-0 object-contain" />
+            <span className="text-xs font-semibold leading-4 text-white">Print@SoC</span>
+            <span className="text-xs uppercase leading-4 text-sidebar-foreground/65">NUS SoC</span>
+          </>
+        ) : (
+          <BrandLogo className="min-w-0 gap-2" iconClassName="size-8" subtitle="NUS SoC Utility" inverse />
         )}
       </div>
 
@@ -100,49 +83,46 @@ export function AppSidebar() {
             <Link
               key={item.name}
               to={item.href}
-              title={collapsed ? item.name : undefined}
               className={cn(
-                "group relative flex h-11 items-center overflow-hidden rounded-md text-sm font-medium transition-colors md:h-10",
-                collapsed ? "justify-center px-2" : "gap-3 px-3",
+                "group relative flex items-center overflow-hidden rounded-md font-medium transition-colors",
+                rail
+                  ? "min-h-14 flex-col justify-center gap-1 px-1 py-2 text-center text-xs leading-4"
+                  : "h-11 gap-3 px-3 text-sm",
                 isActive
                   ? "bg-white/12 text-white"
                   : "text-sidebar-foreground hover:bg-sidebar-accent/90 hover:text-white",
               )}
               aria-current={isActive ? 'page' : undefined}
             >
-              <item.icon className="size-4 shrink-0" />
-              {!collapsed && (
-                <span className="font-medium">{item.name}</span>
-              )}
+              <item.icon className={cn("shrink-0", rail ? "size-5" : "size-4")} />
+              <span>{item.name}</span>
             </Link>
             )
           })
         })()}
       </nav>
 
-      <div className="shrink-0 space-y-1 rounded-md bg-black/10 p-1.5 text-sidebar-foreground">
-        <div className={cn('flex h-9 items-center px-2', collapsed ? 'justify-center' : 'justify-start')}>
-          <ConnectionStatusBadge compact={collapsed} />
+      <div className="shrink-0 space-y-1 pt-2 text-sidebar-foreground">
+        <div
+          className={cn("flex h-9 items-center", rail ? "justify-center" : "px-3")}
+          title={rail ? "Connection status" : undefined}
+        >
+          <ConnectionStatusBadge compact={rail} appearance="sidebar" />
         </div>
-        <div>
-            <ThemeToggle collapsed={collapsed} />
-        </div>
+        <ThemeToggle collapsed={rail} />
 
-        <div>
-          <button
-            onClick={toggleLocale}
-            title={collapsed ? (locale === "en" ? "中文" : "English") : undefined}
-            className={cn(
-              "flex h-9 w-full items-center gap-2.5 rounded-md px-3 text-sm text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-white",
-              collapsed ? "justify-center" : "justify-start"
-            )}
-          >
-            <GlobeIcon className="h-4 w-4 flex-shrink-0" />
-            {!collapsed && (
-              <span className="font-medium text-sm">{locale === "en" ? "中文" : "English"}</span>
-            )}
-          </button>
-        </div>
+        <button
+          onClick={toggleLocale}
+          title={rail ? (locale === "en" ? "中文" : "English") : undefined}
+          aria-label={locale === "en" ? "Switch language to Chinese" : "Switch language to English"}
+          className={cn(
+            "flex h-9 w-full items-center rounded-md text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-white",
+            rail ? "justify-center" : "gap-2.5 px-3",
+          )}
+        >
+          <GlobeIcon className="size-4 shrink-0" />
+          {!rail && <span className="text-sm font-medium">{locale === "en" ? "中文" : "English"}</span>}
+        </button>
       </div>
     </div>
   )

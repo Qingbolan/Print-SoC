@@ -42,7 +42,7 @@ export function SegmentedControl<T extends string>({
           : undefined
       }
       className={cn(
-        'inline-flex min-h-11 max-w-full items-center gap-1 overflow-x-auto rounded-md border border-border/80 bg-muted/70 p-1 sm:min-h-9',
+        'inline-flex min-h-11 max-w-full items-center gap-1 overflow-x-auto rounded-md bg-muted/70 p-1 sm:min-h-9',
         equalOnMobile && 'grid w-full overflow-visible sm:inline-flex sm:w-auto',
         className,
       )}

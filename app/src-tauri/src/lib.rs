@@ -1,4 +1,5 @@
 // Module declarations
+mod integration_service;
 mod mcp_server;
 mod pdf_service;
 mod print_service;
@@ -7,6 +8,7 @@ mod storage_service;
 mod types;
 
 // Import commands
+use integration_service::{app_open_devtools, integration_get_status, integration_test_mcp};
 use pdf_service::{pdf_create_booklet, pdf_create_nup, pdf_generate_booklet_layout, pdf_get_info};
 use print_service::{
     print_cancel_job, print_check_active_jobs, print_check_printer_status, print_cleanup_history,
@@ -46,6 +48,7 @@ pub fn run() {
             // App control
             exit_app,
             check_network_connectivity,
+            app_open_devtools,
             // SSH operations
             ssh_connect,
             ssh_disconnect,
@@ -76,6 +79,8 @@ pub fn run() {
             print_get_backup_path,
             print_cleanup_history,
             print_get_storage_info,
+            integration_get_status,
+            integration_test_mcp,
         ])
         .setup(|app| {
             // Initialize storage directories
@@ -85,16 +90,6 @@ pub fn run() {
                     e
                 );
             }
-
-            // Get the main window
-            let _window = app.get_webview_window("main").unwrap();
-
-            // Open DevTools on startup (you can remove this line if you only want keyboard shortcut)
-            #[cfg(debug_assertions)]
-            _window.open_devtools();
-
-            // Note: In production builds, users can press F12 or use the menu to open DevTools
-            // The window.open_devtools() method is available in both dev and production
 
             // Save history on window close
             let window = app.get_webview_window("main").unwrap();

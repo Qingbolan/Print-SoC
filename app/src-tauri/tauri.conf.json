@@ -17,11 +17,15 @@
         "title": "Print@SoC - Smart Printing for NUS SoC",
         "width": 1400,
         "height": 900,
-        "minWidth": 1200,
-        "minHeight": 700,
         "resizable": true,
         "fullscreen": false,
         "decorations": true,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "trafficLightPosition": {
+          "x": 18,
+          "y": 18
+        },
         "transparent": false
       }
     ],

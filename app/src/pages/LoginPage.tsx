@@ -117,7 +117,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="relative grid min-h-dvh grid-cols-12 items-center overflow-y-auto p-6">
+    <div className="relative grid min-h-full grid-cols-12 items-center p-4 sm:p-6">
       {/* Optimized animated background - Removed, using App.tsx background */}
 
       <AnimatePresence mode="wait">
@@ -178,23 +178,23 @@ export default function LoginPage() {
             className="relative z-10 col-span-12 md:col-span-8 md:col-start-3 xl:col-span-6 xl:col-start-4"
             role="main"
           >
-            <Surface className="p-8">
-              <div className="text-center mb-8">
+            <Surface className="p-5 sm:p-8">
+              <div className="mb-5 text-center sm:mb-8">
                 <h2 className="mb-2 text-lg font-semibold text-foreground">Choose your server</h2>
                 <p className="text-muted-foreground">Select your NUS SoC account type</p>
               </div>
 
-              <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2" role="group" aria-label="Server selection">
+              <div className="mb-4 grid grid-cols-1 gap-3 sm:mb-8 sm:grid-cols-2 sm:gap-4" role="group" aria-label="Server selection">
                 <motion.button
                   whileTap={{ scale: 0.98 }}
                   onClick={() => {
                     setServerType('stu')
                     setStep('credentials')
                   }}
-                  className="group rounded-lg bg-muted/55 p-6 transition-colors duration-150 hover:bg-primary/7"
+                  className="group rounded-lg bg-muted/55 p-4 transition-colors duration-150 hover:bg-primary/7 sm:p-6"
                   aria-label="Select student server: stu.comp.nus.edu.sg"
                 >
-                  <GraduationCap className="mx-auto mb-4 h-9 w-9 text-primary" aria-hidden="true" />
+                  <GraduationCap className="mx-auto mb-3 h-9 w-9 text-primary sm:mb-4" aria-hidden="true" />
                   <div className="mb-1 text-lg font-semibold text-foreground">Student</div>
                   <div className="text-sm text-muted-foreground">stu.comp.nus.edu.sg</div>
                 </motion.button>
@@ -205,10 +205,10 @@ export default function LoginPage() {
                     setServerType('stf')
                     setStep('credentials')
                   }}
-                  className="group rounded-lg bg-muted/55 p-6 transition-colors duration-150 hover:bg-[var(--brand-orange-subtle)]"
+                  className="group rounded-lg bg-muted/55 p-4 transition-colors duration-150 hover:bg-primary/7 sm:p-6"
                   aria-label="Select staff server: stf.comp.nus.edu.sg"
                 >
-                  <Briefcase className="mx-auto mb-4 h-9 w-9 text-[var(--brand-orange)]" aria-hidden="true" />
+                  <Briefcase className="mx-auto mb-3 h-9 w-9 text-primary sm:mb-4" aria-hidden="true" />
                   <div className="mb-1 text-lg font-semibold text-foreground">Staff</div>
                   <div className="text-sm text-muted-foreground">stf.comp.nus.edu.sg</div>
                 </motion.button>
@@ -236,8 +236,8 @@ export default function LoginPage() {
             className="relative z-10 col-span-12 sm:col-span-8 sm:col-start-3 lg:col-span-4 lg:col-start-5"
             role="main"
           >
-            <Surface className="p-8">
-              <div className="text-center mb-8">
+            <Surface className="p-5 sm:p-8">
+              <div className="mb-5 text-center sm:mb-8">
                 <h2 className="mb-2 text-lg font-semibold text-foreground">
                   Sign in to {serverType.toUpperCase()}
                 </h2>
@@ -251,7 +251,7 @@ export default function LoginPage() {
                   e.preventDefault()
                   handleConnect()
                 }}
-                className="space-y-6"
+                className="space-y-4 sm:space-y-6"
                 aria-label="SSH connection form"
               >
                 <div className="space-y-2">

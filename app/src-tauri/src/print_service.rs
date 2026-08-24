@@ -78,11 +78,15 @@ pub fn print_create_job(
         eprintln!("[Print] Warning: Failed to backup PDF: {}", e);
         // Continue anyway, the original file will be used
     }
+    let durable_file_path = backup_result
+        .as_ref()
+        .map(|path| path.to_string_lossy().to_string())
+        .unwrap_or(file_path);
 
     let job = PrintJob {
         id: job_id.clone(),
         name,
-        file_path,
+        file_path: durable_file_path,
         printer,
         settings,
         status: PrintJobStatus::Pending,

@@ -116,7 +116,7 @@ export function JobDetailDialog({ job, open, onOpenChange }: JobDetailDialogProp
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-5/6 w-4/5 flex-col overflow-hidden p-0 sm:max-w-none">
+      <DialogContent className="inset-4 flex h-auto w-auto max-w-none translate-x-0 translate-y-0 flex-col overflow-hidden p-0 sm:max-w-none">
         <DialogHeader className="px-6 pt-6 pb-4 border-b border-border/50 flex-shrink-0">
           <div className="flex items-start justify-between gap-4 pr-8">
             <div className="flex-1 min-w-0">

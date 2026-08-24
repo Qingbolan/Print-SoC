@@ -3,6 +3,7 @@
  */
 
 import { PRINTERS } from '@/data/printers'
+import type { IntegrationStatus } from '@/types/integrations'
 import type {
   ApiResponse,
   BookletLayout,
@@ -41,6 +42,9 @@ type TauriCommandResponses = {
   print_get_backup_path: string
   print_cleanup_history: string[]
   print_get_storage_info: StorageInfo
+  app_open_devtools: string
+  integration_get_status: IntegrationStatus
+  integration_test_mcp: string
 }
 
 /**
@@ -260,6 +264,41 @@ function getMockResponse(command: string, args?: Record<string, unknown>): ApiRe
         backup_count: 0,
       } satisfies StorageInfo)
 
+    case 'app_open_devtools':
+      return success('Developer console opened (mock)')
+
+    case 'integration_get_status':
+      return success({
+        platform: 'browser',
+        cli: {
+          available: false,
+          command: null,
+          detail: 'The browser preview cannot inspect the local Print@SoC CLI.',
+        },
+        virtual_printer: {
+          supported: true,
+          registered: false,
+          backend_installed: false,
+          configured: false,
+          backend_path: null,
+          detail: 'Open the desktop app to inspect the system virtual printer.',
+        },
+        mcp_server: {
+          available: true,
+          command: '/Applications/Print@SoC.app/Contents/MacOS/print_at_soc',
+          protocol_version: '2025-06-18',
+          detail: 'The bundled stdio server starts when an MCP client connects.',
+        },
+        runtime: {
+          debug_build: true,
+          devtools_available: false,
+          plugins: ['Dialog', 'Filesystem', 'Geolocation', 'Process', 'Shell'],
+        },
+      } satisfies IntegrationStatus)
+
+    case 'integration_test_mcp':
+      return success('MCP handshake succeeded with protocol 2025-06-18')
+
     default:
       return success(null)
   }
@@ -294,47 +333,17 @@ export async function safeDialogOpen(options: {
 }
 
 /**
- * Safe wrapper for getCurrentWebviewWindow
- */
-export function safeGetCurrentWebviewWindow() {
-  if (!isTauriAvailable()) {
-    console.warn('Tauri webview API not available')
-    return null
-  }
-
-  try {
-    const { getCurrentWebviewWindow } = require('@tauri-apps/api/webviewWindow')
-    return getCurrentWebviewWindow()
-  } catch (error) {
-    console.error('Error getting webview window:', error)
-    return null
-  }
-}
-
-/**
  * Safe wrapper for opening DevTools
  */
 export async function safeOpenDevTools(): Promise<boolean> {
-  const window = safeGetCurrentWebviewWindow()
-
-  if (!window) {
-    // If running in browser, try browser's native console
-    if (typeof console !== 'undefined') {
-      console.log('[Debug Mode] DevTools not available in browser mode. Use browser DevTools instead.')
-    }
+  if (!isTauriAvailable()) {
+    console.log('[Debug Mode] Use the browser shortcut to open DevTools.')
     return false
   }
 
-  try {
-    // @ts-ignore - openDevtools exists but may not be in types
-    if (window.openDevtools) {
-      // @ts-ignore
-      await window.openDevtools()
-      return true
-    }
-    return false
-  } catch (error) {
-    console.error('Failed to open DevTools:', error)
-    return false
+  const result = await safeInvoke('app_open_devtools')
+  if (!result.success) {
+    console.error('Failed to open DevTools:', result.error)
   }
+  return result.success
 }

@@ -227,7 +227,7 @@ export default function JobsPage() {
           </div>
         ) : (
           <div className="overflow-hidden rounded-md bg-card">
-            <div className="hidden grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)_auto] items-center gap-4 bg-[#0B3556] px-5 py-2.5 text-xs font-semibold uppercase text-slate-200 md:grid">
+            <div className="hidden grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)_auto] items-center gap-4 bg-muted/70 px-5 py-2.5 text-xs font-semibold uppercase text-muted-foreground md:grid">
               <span>Document</span>
               <span>Status</span>
               <span>Options</span>

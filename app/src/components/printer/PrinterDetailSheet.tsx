@@ -13,7 +13,6 @@ import {
 } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Separator } from '@/components/ui/separator'
 import {
   Printer as PrinterIcon,
   MapPin,
@@ -97,7 +96,7 @@ export function PrinterDetailSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="overflow-y-auto sm:max-w-none sm:w-2/5">
+      <SheetContent side="right" className="w-full overflow-y-auto border-0 sm:w-2/5 sm:max-w-none">
         <SheetHeader className="pb-4">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-accent">
@@ -112,7 +111,7 @@ export function PrinterDetailSheet({
           </div>
         </SheetHeader>
 
-        <div className="space-y-6 py-4">
+        <div className="space-y-6 px-4 pb-4">
           {/* Status & Queue */}
           <div className="flex items-center justify-between">
             <Badge
@@ -125,22 +124,11 @@ export function PrinterDetailSheet({
 
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground">Queue:</span>
-              <span
-                className={cn(
-                  'px-3 py-1 rounded-md font-bold text-white',
-                  printer.status === 'Online' && (printer.queue_count || 0) === 0
-                    ? 'bg-success'
-                    : printer.status !== 'Online'
-                    ? 'bg-destructive'
-                    : 'bg-warning text-warning-foreground'
-                )}
-              >
+              <span className="font-semibold tabular-nums text-foreground">
                 {printer.queue_count || 0}
               </span>
             </div>
           </div>
-
-          <Separator />
 
           {/* Location */}
           <div className="space-y-3">
@@ -170,8 +158,6 @@ export function PrinterDetailSheet({
             )}
           </div>
 
-          <Separator />
-
           {/* Features */}
           <div className="space-y-3">
             <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
@@ -179,20 +165,20 @@ export function PrinterDetailSheet({
             </h3>
             <div className="flex flex-wrap gap-2">
               {printer.supports_duplex && (
-                <Badge variant="outline">Duplex</Badge>
+                <Badge variant="secondary">Duplex</Badge>
               )}
               {printer.supports_color && (
-                <Badge variant="outline" className="border-primary text-primary">
+                <Badge variant="secondary">
                   Color
                 </Badge>
               )}
               {printer.supported_paper_sizes.map((size) => (
-                <Badge key={size} variant="outline">
+                <Badge key={size} variant="secondary">
                   {size}
                 </Badge>
               ))}
               {printer.has_banner && (
-                <Badge variant="outline">Banner Page</Badge>
+                <Badge variant="secondary">Banner Page</Badge>
               )}
             </div>
           </div>
@@ -200,7 +186,6 @@ export function PrinterDetailSheet({
           {/* Variants */}
           {variants.length > 1 && (
             <>
-              <Separator />
               <div className="space-y-3">
                 <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
                   Available Queues
@@ -210,10 +195,10 @@ export function PrinterDetailSheet({
                     <button
                       key={variant.id}
                       className={cn(
-                        'p-3 rounded-md border text-left transition-colors',
+                        'rounded-md p-3 text-left transition-colors',
                         variant.id === printer.id
-                          ? 'border-primary bg-primary/5'
-                          : 'border-border hover:border-primary/50 hover:bg-accent/50'
+                          ? 'bg-primary/8'
+                          : 'bg-muted/55 hover:bg-accent/70'
                       )}
                       onClick={() => {
                         // Could trigger opening this variant in the sheet
@@ -239,7 +224,6 @@ export function PrinterDetailSheet({
           {/* Model Info */}
           {printer.model && (
             <>
-              <Separator />
               <div className="space-y-2">
                 <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
                   Model
@@ -250,7 +234,7 @@ export function PrinterDetailSheet({
           )}
         </div>
 
-        <SheetFooter className="flex-col gap-2 pt-4 border-t">
+        <SheetFooter className="flex-col gap-2 pt-2">
           <Button
             variant={isDefault ? 'secondary' : 'outline'}
             className="w-full gap-2"

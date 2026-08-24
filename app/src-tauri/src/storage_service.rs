@@ -1,7 +1,7 @@
 use crate::types::*;
 use std::collections::HashMap;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 const APP_NAME: &str = "tech.silan.PrintAtSoC";
 const HISTORY_FILE: &str = "print_jobs.json";
@@ -65,11 +65,30 @@ pub fn load_print_history() -> Result<HashMap<String, PrintJob>, String> {
         .map_err(|e| format!("Failed to parse history JSON: {}", e))?;
 
     let mut map = HashMap::new();
-    for job in jobs {
+    let mut recovered = 0;
+    for mut job in jobs {
+        if !Path::new(&job.file_path).exists() {
+            if let Some(backup_path) = get_backup_file_path(&job.id) {
+                job.file_path = backup_path.to_string_lossy().to_string();
+                recovered += 1;
+            }
+        }
         map.insert(job.id.clone(), job);
     }
 
     eprintln!("[Storage] Loaded {} print jobs from history", map.len());
+    if recovered > 0 {
+        eprintln!(
+            "[Storage] Recovered {} missing source files from local backups",
+            recovered
+        );
+        if let Err(error) = save_print_history(&map) {
+            eprintln!(
+                "[Storage] Warning: Failed to persist recovered paths: {}",
+                error
+            );
+        }
+    }
     Ok(map)
 }
 

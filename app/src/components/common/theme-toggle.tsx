@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils"
 import { Monitor, Moon, Sun } from "lucide-react"
 
 export function ThemeToggle({ collapsed = false }: { collapsed?: boolean }) {
-  const { theme, setTheme } = useTheme()
+  const { theme, setTheme, resolvedTheme } = useTheme()
   const [mounted, setMounted] = React.useState(false)
 
   React.useEffect(() => {
@@ -25,19 +25,19 @@ export function ThemeToggle({ collapsed = false }: { collapsed?: boolean }) {
   // If collapsed, only show a toggle button
   if (collapsed) {
     const toggleTheme = () => {
-      setTheme(theme === "light" ? "dark" : "light")
+      setTheme(resolvedTheme === "light" ? "dark" : "light")
     }
 
     return (
       <button
         onClick={toggleTheme}
-        title={theme === "light" ? "Switch to Dark" : "Switch to Light"}
+        title={resolvedTheme === "light" ? "Switch to Dark" : "Switch to Light"}
         className={cn(
-          "flex w-full items-center justify-center rounded-md px-2 py-2 text-sm transition-colors duration-167",
-          "bg-primary/10 text-primary"
+          "flex h-9 w-full items-center justify-center rounded-md text-sidebar-foreground/80 transition-colors duration-167",
+          "hover:bg-sidebar-accent hover:text-white"
         )}
       >
-        {theme === "light" ? (
+        {resolvedTheme === "light" ? (
           <Sun className="h-4 w-4" />
         ) : (
           <Moon className="h-4 w-4" />
@@ -46,52 +46,34 @@ export function ThemeToggle({ collapsed = false }: { collapsed?: boolean }) {
     )
   }
 
-  // Expanded state shows two buttons
-  return (
-    <div className="space-y-2">
-      <div className="flex gap-2">
-        <button
-          onClick={() => setTheme("light")}
-          aria-pressed={theme === "light"}
-          className={cn(
-            "flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm transition-colors duration-167",
-            theme === "light"
-              ? "bg-card text-primary"
-              : "text-muted-foreground hover:bg-sidebar-accent"
-          )}
-        >
-          <Sun className="h-4 w-4 flex-shrink-0" />
-          <span>Light</span>
-        </button>
+  const options = [
+    { value: "light" as const, label: "Light", icon: Sun },
+    { value: "dark" as const, label: "Dark", icon: Moon },
+    { value: "system" as const, label: "Auto", icon: Monitor },
+  ]
 
+  return (
+    <div
+      className="grid grid-cols-3 gap-1 rounded-md bg-black/10 p-1"
+      role="group"
+      aria-label="Theme"
+    >
+      {options.map(({ value, label, icon: Icon }) => (
         <button
-          onClick={() => setTheme("dark")}
-          aria-pressed={theme === "dark"}
+          key={value}
+          onClick={() => setTheme(value)}
+          aria-pressed={theme === value}
           className={cn(
-            "flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm transition-colors duration-167",
-            theme === "dark"
-              ? "bg-card text-primary"
-              : "text-muted-foreground hover:bg-sidebar-accent"
+            "flex h-8 min-w-0 items-center justify-center gap-1.5 rounded-md px-1 text-xs transition-colors duration-167",
+            theme === value
+              ? "bg-white/12 text-white"
+              : "text-sidebar-foreground/65 hover:bg-sidebar-accent/80 hover:text-white"
           )}
         >
-          <Moon className="h-4 w-4 flex-shrink-0" />
-          <span>Dark</span>
+          <Icon className="size-3.5 shrink-0" />
+          <span>{label}</span>
         </button>
-{/*
-        <button
-          onClick={() => setTheme("system")}
-          className={cn(
-            "flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm",
-            "transition-all duration-167 fluent-transition",
-            theme === "system"
-              ? "bg-primary/10 text-primary"
-              : "bg-muted hover:bg-muted-hover text-muted-foreground"
-          )}
-        >
-          <Monitor className="h-4 w-4" />
-          <span className="hidden sm:inline">Auto</span>
-        </button> */}
-      </div>
+      ))}
     </div>
   )
 }

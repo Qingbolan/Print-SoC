@@ -284,7 +284,16 @@ Print Support App/MSIX virtual printer architecture rather than CUPS backends.
 
 ### MCP Server
 
-After installing the desktop binary, start the stdio MCP server with either CLI alias:
+The desktop binary includes a stdio MCP server. Open **Settings → Advanced** to
+run a handshake test and copy a client configuration that points to the exact
+installed executable. The same page reports the CLI, CUPS queue, backend,
+configuration file, and loaded Tauri plugins without assuming they are present.
+
+<p align="center">
+  <img src="app/screenshots/readme/integrations-mobile.png" alt="Print@SoC integration manager" width="320">
+</p>
+
+After installing the Python CLI, the server is also available through either CLI alias:
 
 ```bash
 print-soc mcp
@@ -292,6 +301,11 @@ psoc mcp
 ```
 
 The MCP server exposes SSH connection, printer queue, quota, and PDF print submission tools. `submit_pdf_print_job` requires `confirm=true` because it sends a real print job.
+
+An installable Codex plugin scaffold is included at `plugins/print-soc`. It
+registers `print-soc mcp` and provides guarded printing instructions. Validate it
+from the Codex plugin-creator skill before distribution; the target machine must
+have the `print-soc` CLI on `PATH`.
 
 ### First-Time Setup
 
@@ -307,31 +321,35 @@ The MCP server exposes SSH connection, printer queue, quota, and PDF print submi
 ### Project Structure
 
 ```
-nus-llama-printer/
-├── app/                  # Electron application
-│   ├── src/             # Source code
-│   ├── public/          # Static assets
-│   └── package.json     # Dependencies
-├── build.sh             # Build script
-└── release/             # Compiled binaries
+Print-SoC/
+├── app/                  # Tauri desktop application
+│   ├── src/              # React frontend
+│   ├── src-tauri/        # Rust backend and bundled MCP server
+│   ├── public/           # Static assets
+│   └── package.json      # Frontend scripts and dependencies
+├── plugins/print-soc/    # Codex plugin and MCP registration
+└── release/              # CLI packages and release assets
 ```
 
 ### Building from Source
 
 ```bash
 # Clone repository
-git clone https://github.com/yourusername/nus-llama-printer.git
-cd nus-llama-printer
+git clone https://github.com/Qingbolan/Print-SoC.git
+cd Print-SoC
 
 # Install dependencies
 cd app
 npm install
 
-# Run development server
-npm start
+# Run the desktop app in development
+npm run tauri:dev
 
-# Build for production
-npm run build
+# Run frontend and design checks
+npm run check
+
+# Build desktop packages
+npm run tauri:build
 ```
 
 ---

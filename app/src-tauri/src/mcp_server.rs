@@ -8,7 +8,7 @@ use std::env;
 use std::io::{self, BufRead, Write};
 use std::path::Path;
 
-const MCP_PROTOCOL_VERSION: &str = "2025-06-18";
+pub const MCP_PROTOCOL_VERSION: &str = "2025-06-18";
 
 pub fn is_mcp_command(args: &[String]) -> bool {
     args.iter().any(|arg| {

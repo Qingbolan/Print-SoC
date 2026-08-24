@@ -9,7 +9,7 @@ interface SurfaceProps extends React.ComponentProps<'div'> {
 }
 
 const toneClasses: Record<SurfaceTone, string> = {
-  default: 'border border-[var(--card-border)] bg-card text-card-foreground',
+  default: 'bg-card text-card-foreground',
   muted: 'bg-muted/70 text-foreground',
   brand: 'border border-primary/10 bg-primary/6 text-foreground',
   warning:
@@ -29,7 +29,7 @@ export function Surface({
         'transition-colors duration-150',
         toneClasses[tone],
         interactive &&
-          'cursor-pointer hover:border-[var(--border-hover)] hover:bg-[var(--card-hover)]',
+          'cursor-pointer hover:bg-[var(--card-hover)]',
         className,
       )}
       {...props}

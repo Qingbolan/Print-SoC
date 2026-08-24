@@ -29,7 +29,7 @@ export function PageHeader({
             {icon}
           </span>
         )}
-        <h1 className="min-w-0 truncate text-xl font-semibold leading-7 text-foreground">
+        <h1 className="min-w-0 break-words text-xl font-semibold leading-7 text-foreground">
           {title}
         </h1>
         {description && (

@@ -15,7 +15,7 @@ import { PageScaffold } from '@/components/layout/PageScaffold'
 import { SegmentedControl } from '@/components/ui/segmented-control'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PrinterFilter } from '@/components/printer/PrinterFilter'
-import { PrinterDetailDialog } from '@/components/printer/PrinterDetailDialog'
+import { PrinterDetailSheet } from '@/components/printer/PrinterDetailSheet'
 import { PrinterMap } from '@/components/printer/PrinterMap'
 
 const statusConfig: Record<
@@ -253,7 +253,7 @@ export default function PrintQueuePage() {
         </div>
       ) : (
         <div className="overflow-hidden rounded-md bg-card">
-            <div className="hidden grid-cols-[minmax(0,2fr)_minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,.7fr)_auto] items-center gap-4 bg-[#0B3556] px-5 py-2.5 text-xs font-semibold uppercase text-slate-200 md:grid">
+            <div className="hidden grid-cols-[minmax(0,2fr)_minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,.7fr)_auto] items-center gap-4 bg-muted/70 px-5 py-2.5 text-xs font-semibold uppercase text-muted-foreground md:grid">
               <span>Printer / queue</span>
               <span>Location</span>
               <span>Capabilities</span>
@@ -337,8 +337,7 @@ export default function PrintQueuePage() {
         </div>
       )}
 
-      {/* Printer Detail Dialog */}
-      <PrinterDetailDialog
+      <PrinterDetailSheet
         printer={selectedPrinter}
         open={sheetOpen}
         onOpenChange={setSheetOpen}

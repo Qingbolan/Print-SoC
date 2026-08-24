@@ -224,6 +224,9 @@
   --accent-hover: #333B42;
   --accent-foreground: #EEF6FF;
 
+  /* Status text must remain legible on dark translucent surfaces. */
+  --warning-foreground: #FFB15C;
+
   /* Card surfaces */
   --card: #202428;
   --card-hover: #252A2F;

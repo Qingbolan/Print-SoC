@@ -1,22 +1,14 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { usePrinterStore } from '@/store/printer-store'
-import { getAllPrintJobs, getPDFInfo } from '@/lib/printer-api'
+import { getAllPrintJobs, getBackupPath, getPDFInfo } from '@/lib/printer-api'
 import { isTauriAvailable, safeDialogOpen } from '@/lib/tauri-utils'
 import { toast } from 'sonner'
-import { FileText, AlertCircle, Printer, Edit3, X, Loader2, UploadCloud, ArrowRight } from 'lucide-react'
+import { FileText, Printer, Edit3, X, Loader2, UploadCloud, ArrowRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { PageScaffold } from '@/components/layout/PageScaffold'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
+import { FileErrorDialog } from '@/components/common/FileErrorDialog'
 import type { PrintJobStatus, PrintJob, DraftPrintJob } from '@/types/printer'
 
 const statusColors: Record<PrintJobStatus, string> = {
@@ -55,28 +47,38 @@ export default function ModernHomePageV2() {
     }
   }
 
-  const handleFileSelect = useCallback(async (filePath: string) => {
+  const handleFileSelect = useCallback(async (filePath: string, jobId?: string) => {
     setLoading(true)
     try {
-      const info = await getPDFInfo(filePath)
-      if (info.success && info.data) {
-        setCurrentFile(null, filePath)
-        const sessionId = Math.random().toString(36).substring(2, 10)
-        navigate(`/preview/${sessionId}`, { state: { filePath, pdfInfo: info.data } })
-      } else {
-        // Show detailed error message from backend
-        const errorMsg = info.error || 'Unknown error occurred'
+      let resolvedPath = filePath
+      let info = await getPDFInfo(resolvedPath)
 
-        // Show detailed error dialog
+      if (!info.success && jobId && info.error?.includes('PDF file not found')) {
+        const backup = await getBackupPath(jobId)
+        if (backup.success && backup.data) {
+          resolvedPath = backup.data
+          info = await getPDFInfo(resolvedPath)
+        }
+      }
+
+      if (info.success && info.data) {
+        setCurrentFile(null, resolvedPath)
+        const sessionId = Math.random().toString(36).substring(2, 10)
+        navigate(`/preview/${sessionId}`, { state: { filePath: resolvedPath, pdfInfo: info.data } })
+      } else {
+        const errorMsg = info.error || 'Unknown error occurred'
+        const missingFile = errorMsg.includes('PDF file not found')
+
         setErrorDialog({
           open: true,
-          title: 'Failed to Load PDF',
-          message: 'The PDF file could not be loaded. Please check the error details below.',
+          title: missingFile ? 'Source file unavailable' : 'Failed to load PDF',
+          message: missingFile
+            ? 'The original PDF and its local backup are no longer available. Choose the document again to continue.'
+            : 'The PDF could not be opened. Review the technical details or choose another document.',
           technicalDetails: errorMsg,
         })
 
-        // Also show toast for quick notification
-        toast.error('Failed to load PDF')
+        toast.error(missingFile ? 'Source file unavailable' : 'Failed to load PDF')
         console.error('PDF load error:', errorMsg)
       }
     } catch (error) {
@@ -187,11 +189,11 @@ export default function ModernHomePageV2() {
         />
       }
       contentClassName="overflow-y-auto"
-      contentInnerClassName="xl:h-full"
+      contentInnerClassName="lg:h-full"
       contentWidth="full"
     >
-      <div className="grid items-stretch gap-4 xl:h-full xl:min-h-0 xl:grid-cols-3">
-        <section className="flex min-h-0 flex-col overflow-hidden rounded-md bg-card xl:col-span-2">
+      <div className="grid items-stretch gap-4 lg:h-full lg:min-h-0 lg:grid-cols-3">
+        <section className="flex min-h-0 flex-col overflow-hidden rounded-md bg-card lg:col-span-2">
           <div className="flex items-start justify-between gap-4 px-5 pb-4 pt-5 sm:px-6">
             <div>
               <p className="text-xs font-semibold uppercase text-primary">New job</p>
@@ -335,40 +337,13 @@ export default function ModernHomePageV2() {
         </section>
       )}
 
-      {/* Error Dialog */}
-      <AlertDialog
+      <FileErrorDialog
         open={errorDialog.open}
-        onOpenChange={(open) => setErrorDialog({ ...errorDialog, open })}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <div className="flex items-center gap-2">
-              <AlertCircle className="w-5 h-5 text-destructive" />
-              <AlertDialogTitle>{errorDialog.title}</AlertDialogTitle>
-            </div>
-            <AlertDialogDescription className="text-left">
-              {errorDialog.message}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-
-          {errorDialog.technicalDetails && (
-            <div className="mt-2">
-              <div className="text-sm font-medium text-foreground mb-2">Technical Details:</div>
-              <div className="overflow-y-auto rounded-lg bg-muted p-3">
-                <pre className="text-xs font-mono text-muted-foreground whitespace-pre-wrap break-words">
-                  {errorDialog.technicalDetails}
-                </pre>
-              </div>
-            </div>
-          )}
-
-          <AlertDialogFooter>
-            <AlertDialogAction onClick={() => setErrorDialog({ ...errorDialog, open: false })}>
-              OK
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        onOpenChange={(open) => setErrorDialog((current) => ({ ...current, open }))}
+        title={errorDialog.title}
+        message={errorDialog.message}
+        technicalDetails={errorDialog.technicalDetails}
+      />
     </PageScaffold>
   )
 }

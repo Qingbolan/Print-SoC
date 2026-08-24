@@ -1,8 +1,27 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Settings, LogOut, Printer, FolderOpen, Trash2, Terminal, Wifi, User, Shield, Info } from "lucide-react"
+import {
+  Check,
+  CircleAlert,
+  Copy,
+  FolderOpen,
+  Info,
+  LoaderCircle,
+  LogOut,
+  Plug,
+  Printer,
+  RefreshCw,
+  ServerCog,
+  Settings,
+  Shield,
+  Terminal,
+  Trash2,
+  User,
+  Wifi,
+} from 'lucide-react'
 import { PageHeader } from "@/components/layout/PageHeader"
 import { PageScaffold } from '@/components/layout/PageScaffold'
+import { SectionNav } from '@/components/layout/SectionNav'
 import { SegmentedControl } from '@/components/ui/segmented-control'
 import { usePrinterStore } from "@/store/printer-store"
 import { Badge } from "@/components/ui/badge"
@@ -11,10 +30,11 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { SimpleCard, SimpleCardHeader, SimpleCardTitle, SimpleCardContent } from '@/components/ui/simple-card'
-import { safeOpenDevTools } from '@/lib/tauri-utils'
+import { safeInvoke, safeOpenDevTools } from '@/lib/tauri-utils'
 import { useSSHConnection } from '@/hooks/useSSHConnection'
 import { toast } from 'sonner'
 import type { SSHConfig } from '@/types/printer'
+import type { IntegrationStatus } from '@/types/integrations'
 import {
   Select,
   SelectContent,
@@ -35,6 +55,37 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 
+type SettingsSection = 'account' | 'print' | 'connection' | 'advanced'
+
+const settingsSections = [
+  { value: 'account', label: 'Account', icon: User },
+  { value: 'print', label: 'Print defaults', mobileLabel: 'Print', icon: Printer },
+  { value: 'connection', label: 'Connection', icon: Wifi },
+  { value: 'advanced', label: 'Advanced', icon: Terminal },
+] as const
+
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, "'\\''")}'`
+}
+
+async function writeClipboard(value: string): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(value)
+    return
+  } catch {
+    const input = document.createElement('textarea')
+    input.value = value
+    input.setAttribute('readonly', '')
+    input.style.position = 'fixed'
+    input.style.opacity = '0'
+    document.body.appendChild(input)
+    input.select()
+    const copied = document.execCommand('copy')
+    input.remove()
+    if (!copied) throw new Error('Clipboard access denied')
+  }
+}
+
 export default function SettingsPage() {
   const navigate = useNavigate()
   const {
@@ -52,7 +103,7 @@ export default function SettingsPage() {
 
   const { connect, disconnect, isConnecting } = useSSHConnection()
 
-  const [selectedTab, setSelectedTab] = useState<'account' | 'print' | 'connection' | 'advanced'>('account')
+  const [selectedTab, setSelectedTab] = useState<SettingsSection>('account')
   const [formData, setFormData] = useState<SSHConfig>(
     sshConfig || {
       host: 'sunfire.comp.nus.edu.sg',
@@ -64,6 +115,35 @@ export default function SettingsPage() {
 
   const [showLogoutDialog, setShowLogoutDialog] = useState(false)
   const [showClearHistoryDialog, setShowClearHistoryDialog] = useState(false)
+  const [integrationStatus, setIntegrationStatus] = useState<IntegrationStatus | null>(null)
+  const [integrationLoading, setIntegrationLoading] = useState(false)
+  const [integrationChecked, setIntegrationChecked] = useState(false)
+  const [integrationError, setIntegrationError] = useState<string | null>(null)
+  const [mcpTesting, setMcpTesting] = useState(false)
+
+  const loadIntegrationStatus = useCallback(async (announce = false) => {
+    setIntegrationLoading(true)
+    setIntegrationError(null)
+    const result = await safeInvoke('integration_get_status')
+    setIntegrationLoading(false)
+    setIntegrationChecked(true)
+
+    if (result.success && result.data) {
+      setIntegrationStatus(result.data)
+      if (announce) toast.success('Integration status refreshed')
+      return
+    }
+
+    const error = result.error || 'Unable to inspect system integrations'
+    setIntegrationError(error)
+    toast.error(error)
+  }, [])
+
+  useEffect(() => {
+    if (selectedTab === 'advanced' && !integrationChecked && !integrationLoading) {
+      void loadIntegrationStatus()
+    }
+  }, [integrationChecked, integrationLoading, loadIntegrationStatus, selectedTab])
 
   // Get all printers from groups
   const allPrinters = printerGroups.flatMap(g => g.printers)
@@ -74,6 +154,27 @@ export default function SettingsPage() {
       toast.success('Developer Tools opened')
     } else {
       toast.info('Developer Tools not available. Use browser DevTools (F12) instead.')
+    }
+  }
+
+  const handleTestMcp = async () => {
+    setMcpTesting(true)
+    const result = await safeInvoke('integration_test_mcp')
+    setMcpTesting(false)
+
+    if (result.success) {
+      toast.success(result.data || 'MCP handshake succeeded')
+    } else {
+      toast.error(result.error || 'MCP health check failed')
+    }
+  }
+
+  const copyIntegrationText = async (value: string, label: string) => {
+    try {
+      await writeClipboard(value)
+      toast.success(`${label} copied`)
+    } catch {
+      toast.error(`Unable to copy ${label.toLowerCase()}`)
     }
   }
 
@@ -141,6 +242,34 @@ export default function SettingsPage() {
     }
   }
 
+  const virtualPrinterReady = Boolean(
+    integrationStatus?.virtual_printer.registered
+      && integrationStatus.virtual_printer.backend_installed
+      && integrationStatus.virtual_printer.configured
+  )
+  const serverType = savedCredentials?.serverType || (formData.host.includes('stf') ? 'stf' : 'stu')
+  const integrationUsername = savedCredentials?.username || formData.username
+  const cliCommand = integrationStatus?.cli.command || 'print-soc'
+  const setupCommand = [
+    shellQuote(cliCommand),
+    '--install-virtual-printer',
+    '--server',
+    serverType,
+    ...(integrationUsername ? ['--username', shellQuote(integrationUsername)] : []),
+    '--ask-password',
+    '--printer',
+    shellQuote(settings.defaultPrinter || 'psts-dx'),
+  ].join(' ')
+  const removeCommand = `${shellQuote(cliCommand)} --uninstall-virtual-printer`
+  const mcpClientConfig = JSON.stringify({
+    mcpServers: {
+      'print-soc': {
+        command: integrationStatus?.mcp_server.command || 'print-soc',
+        args: ['mcp'],
+      },
+    },
+  }, null, 2)
+
   return (
     <PageScaffold
       header={
@@ -158,34 +287,19 @@ export default function SettingsPage() {
           value={selectedTab}
           onValueChange={setSelectedTab}
           mobileLayout="equal"
-          items={[
-            { value: 'account', label: 'Account', icon: User },
-            { value: 'print', label: 'Print', icon: Printer },
-            { value: 'connection', label: 'Connection', icon: Wifi },
-            { value: 'advanced', label: 'Advanced', icon: Terminal },
-          ]}
+          items={settingsSections.map((item) => ({
+            ...item,
+            label: 'mobileLabel' in item ? item.mobileLabel : item.label,
+          }))}
         />
       </div>
       <div className="grid items-start gap-5 lg:grid-cols-4">
-        <aside className="sticky top-0 hidden overflow-hidden rounded-md bg-[#0B3556] p-2 text-slate-200 lg:block">
-          <div className="px-3 pb-3 pt-2 text-xs font-semibold uppercase text-slate-400">Preferences</div>
-          {([
-            { value: 'account', label: 'Account', icon: User },
-            { value: 'print', label: 'Print defaults', icon: Printer },
-            { value: 'connection', label: 'Connection', icon: Wifi },
-            { value: 'advanced', label: 'Advanced', icon: Terminal },
-          ] as const).map(({ value, label, icon: Icon }) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => setSelectedTab(value)}
-              className={`relative flex h-10 w-full items-center gap-3 rounded-md px-3 text-sm transition-colors ${selectedTab === value ? 'bg-white/10 text-white' : 'hover:bg-white/7 hover:text-white'}`}
-            >
-              <Icon className="size-4" />
-              <span>{label}</span>
-            </button>
-          ))}
-        </aside>
+        <SectionNav
+          label="Preferences"
+          value={selectedTab}
+          items={settingsSections}
+          onValueChange={(value) => setSelectedTab(value as SettingsSection)}
+        />
         <div className="min-w-0 space-y-4 lg:col-span-3">
           {selectedTab === 'account' && (
             <>
@@ -314,7 +428,7 @@ export default function SettingsPage() {
                     value={settings.defaultPrinter || undefined}
                     onValueChange={handleDefaultPrinterChange}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="w-full sm:w-auto">
                       <SelectValue placeholder="No default printer set" />
                     </SelectTrigger>
                     <SelectContent>
@@ -331,7 +445,7 @@ export default function SettingsPage() {
                     </SelectContent>
                   </Select>
                   {settings.defaultPrinter && (
-                    <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-center justify-between gap-3 pt-2">
                       <span className="text-sm text-muted-foreground">
                         Current: {allPrinters.find(p => p.queue_name === settings.defaultPrinter)?.name || 'Unknown'}
                       </span>
@@ -359,7 +473,7 @@ export default function SettingsPage() {
                   </SimpleCardTitle>
                 </SimpleCardHeader>
                 <SimpleCardContent className="space-y-4">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center justify-between gap-3">
                     <div>
                       <div className="font-medium">Auto-clear Cache</div>
                       <div className="text-sm text-muted-foreground">
@@ -383,7 +497,7 @@ export default function SettingsPage() {
                   </SimpleCardTitle>
                 </SimpleCardHeader>
                 <SimpleCardContent>
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center justify-between gap-3">
                     <div>
                       <div className="font-medium">{printJobs.length} job{printJobs.length !== 1 ? 's' : ''}</div>
                       <div className="text-sm text-muted-foreground">
@@ -513,33 +627,222 @@ export default function SettingsPage() {
 
           {selectedTab === 'advanced' && (
             <>
-              {/* Developer Tools */}
-              <SimpleCard variant="default">
-                <SimpleCardHeader>
-                  <SimpleCardTitle className="flex items-center gap-2">
-                    <Terminal className="w-5 h-5 text-primary" />
-                    Developer Tools
-                  </SimpleCardTitle>
-                </SimpleCardHeader>
-                <SimpleCardContent className="space-y-4">
-                  <p className="text-sm text-muted-foreground">
-                    Open the developer console to view logs, errors, and debug information
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Keyboard shortcut: <kbd className="px-2 py-1 bg-muted border border-border rounded">Cmd/Ctrl+Shift+I</kbd> or <kbd className="px-2 py-1 bg-muted border border-border rounded">F12</kbd>
-                  </p>
+              <SimpleCard variant="ghost">
+                <SimpleCardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
+                  <div className="min-w-0">
+                    <SimpleCardTitle className="flex items-center gap-2">
+                      <ServerCog className="size-5 text-primary" />
+                      System integrations
+                    </SimpleCardTitle>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Inspect the local print bridge and service registration.
+                    </p>
+                  </div>
                   <Button
-                    onClick={handleOpenDevTools}
-                    variant="outline"
-                    className="w-full"
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    title="Refresh integration status"
+                    aria-label="Refresh integration status"
+                    disabled={integrationLoading}
+                    onClick={() => void loadIntegrationStatus(true)}
                   >
-                    <Terminal className="w-4 h-4 mr-2" />
-                    Open Console
+                    <RefreshCw className={integrationLoading ? 'animate-spin' : ''} />
                   </Button>
+                </SimpleCardHeader>
+                <SimpleCardContent className="space-y-3" aria-live="polite">
+                  {integrationError && (
+                    <div className="flex items-start gap-2 rounded-md bg-warning/10 p-3 text-sm text-warning-foreground">
+                      <CircleAlert className="mt-0.5 size-4 shrink-0" />
+                      <p>{integrationError}</p>
+                    </div>
+                  )}
+                  <section className="rounded-md bg-muted/55 p-4">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0 space-y-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Printer className="size-4 text-muted-foreground" />
+                          <h4 className="font-medium">System virtual printer</h4>
+                          {!integrationStatus ? (
+                            <Badge variant="secondary">Inspecting</Badge>
+                          ) : !integrationStatus.virtual_printer.supported ? (
+                            <Badge variant="warning">Unsupported</Badge>
+                          ) : virtualPrinterReady ? (
+                            <Badge variant="success"><Check /> Ready</Badge>
+                          ) : (
+                            <Badge variant="warning"><CircleAlert /> Action needed</Badge>
+                          )}
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          {integrationStatus?.virtual_printer.detail || 'Checking the CUPS queue, backend, and forwarding configuration.'}
+                        </p>
+                        {integrationStatus && (
+                          <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-muted-foreground">
+                            <span className="inline-flex items-center gap-1.5">
+                              {integrationStatus.virtual_printer.registered ? <Check className="text-success" /> : <CircleAlert />}
+                              Queue
+                            </span>
+                            <span className="inline-flex items-center gap-1.5">
+                              {integrationStatus.virtual_printer.backend_installed ? <Check className="text-success" /> : <CircleAlert />}
+                              Backend
+                            </span>
+                            <span className="inline-flex items-center gap-1.5">
+                              {integrationStatus.virtual_printer.configured ? <Check className="text-success" /> : <CircleAlert />}
+                              Config
+                            </span>
+                            <span>CLI: {integrationStatus.cli.available ? 'Detected' : 'Not installed'}</span>
+                          </div>
+                        )}
+                      </div>
+                      {integrationStatus?.virtual_printer.supported && (
+                        <div className="flex shrink-0 flex-col gap-2 sm:items-end">
+                          {!integrationStatus.cli.available ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => void copyIntegrationText('python3 -m pip install --user --upgrade print-at-soc', 'CLI install command')}
+                            >
+                              <Copy />
+                              Copy CLI install
+                            </Button>
+                          ) : !integrationUsername ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => setSelectedTab('connection')}
+                            >
+                              <User />
+                              Add account details
+                            </Button>
+                          ) : (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => void copyIntegrationText(setupCommand, virtualPrinterReady ? 'Repair command' : 'Setup command')}
+                            >
+                              <Copy />
+                              {virtualPrinterReady ? 'Copy repair command' : 'Copy setup command'}
+                            </Button>
+                          )}
+                          {virtualPrinterReady && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => void copyIntegrationText(removeCommand, 'Remove command')}
+                            >
+                              <Copy />
+                              Copy remove command
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </section>
+
+                  <section className="rounded-md bg-muted/55 p-4">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0 space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Plug className="size-4 text-muted-foreground" />
+                          <h4 className="font-medium">MCP server and client plugin</h4>
+                          {integrationStatus?.mcp_server.available && (
+                            <Badge variant="success"><Check /> Bundled</Badge>
+                          )}
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          {integrationStatus?.mcp_server.detail || 'Checking the bundled stdio service.'}
+                        </p>
+                        {integrationStatus && (
+                          <p className="font-mono text-xs text-muted-foreground">
+                            Protocol {integrationStatus.mcp_server.protocol_version} · stdio transport
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          disabled={!integrationStatus?.mcp_server.available || mcpTesting}
+                          onClick={() => void handleTestMcp()}
+                        >
+                          {mcpTesting ? <LoaderCircle className="animate-spin" /> : <Plug />}
+                          {mcpTesting ? 'Testing' : 'Test server'}
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          disabled={!integrationStatus?.mcp_server.available}
+                          onClick={() => void copyIntegrationText(mcpClientConfig, 'MCP client config')}
+                        >
+                          <Copy />
+                          Copy config
+                        </Button>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section className="rounded-md bg-muted/55 p-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <ServerCog className="size-4 text-muted-foreground" />
+                          <h4 className="font-medium">Application plugins</h4>
+                        </div>
+                        <p className="mt-2 text-sm text-muted-foreground">
+                          Runtime capabilities loaded by the desktop application.
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5 sm:justify-end">
+                        {integrationStatus?.runtime.plugins.map((plugin) => (
+                          <Badge key={plugin} variant="outline">{plugin}</Badge>
+                        )) || <Badge variant="secondary">Inspecting</Badge>}
+                      </div>
+                    </div>
+                  </section>
                 </SimpleCardContent>
               </SimpleCard>
 
-              {/* About */}
+              <SimpleCard variant="default">
+                <SimpleCardContent>
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Terminal className="size-5 text-primary" />
+                        <h3 className="text-lg font-semibold leading-6">Developer tools</h3>
+                        {integrationStatus && (
+                          <Badge variant="secondary">
+                            {integrationStatus.runtime.debug_build ? 'Debug build' : 'Release build'}
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        Inspect logs and runtime errors in debug builds.
+                      </p>
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        Shortcut: <kbd className="rounded bg-muted px-2 py-1">Cmd/Ctrl+Shift+I</kbd> or <kbd className="rounded bg-muted px-2 py-1">F12</kbd>
+                      </p>
+                    </div>
+                  <Button
+                    onClick={handleOpenDevTools}
+                      variant="secondary"
+                      size="sm"
+                      disabled={Boolean(integrationStatus && !integrationStatus.runtime.devtools_available)}
+                  >
+                      <Terminal />
+                      {integrationStatus && !integrationStatus.runtime.devtools_available
+                        ? integrationStatus.runtime.debug_build ? 'Desktop app required' : 'Unavailable in release'
+                        : 'Open console'}
+                  </Button>
+                  </div>
+                </SimpleCardContent>
+              </SimpleCard>
+
               <SimpleCard variant="default">
                 <SimpleCardHeader>
                   <SimpleCardTitle className="flex items-center gap-2">

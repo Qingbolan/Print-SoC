@@ -2,9 +2,9 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { useLocation } from 'react-router-dom'
 import { AppSidebar } from '@/components/layout/app-sidebar'
 import { AppBackground } from '@/components/layout/AppBackground'
-import { RBSidebar, RBSidebarProvider } from '@/components/reactbits/sidebar'
+import { RBSidebar } from '@/components/reactbits/sidebar'
 import { useBackgroundMonitor } from '@/hooks/useBackgroundMonitor'
-import { safeOpenDevTools } from '@/lib/tauri-utils'
+import { isTauriAvailable, safeOpenDevTools } from '@/lib/tauri-utils'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
@@ -12,10 +12,22 @@ import { Menu } from 'lucide-react'
 import { BrandLogo } from '@/components/common/brand'
 import { ConnectionStatusBadge } from '@/components/common/ConnectionStatusBadge'
 
+const pageTitles: Record<string, string> = {
+  '/home': 'Print workbench',
+  '/printer': 'Printer directory',
+  '/jobs': 'Print queue',
+  '/help': 'Help centre',
+  '/settings': 'Settings',
+}
+
 export function AppShell({ children }: { children: ReactNode }) {
   const location = useLocation()
   const isAuthRoute = location.pathname === '/login'
   const isMobile = useIsMobile()
+  const showWindowBar = !isMobile || isTauriAvailable()
+  const windowTitle = location.pathname.startsWith('/preview')
+    ? 'Print preview'
+    : pageTitles[location.pathname] ?? 'Print@SoC'
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false)
 
   useBackgroundMonitor()
@@ -50,40 +62,60 @@ export function AppShell({ children }: { children: ReactNode }) {
           ? 'minmax(0, 1fr)'
           : isMobile
             ? 'minmax(0, 1fr)'
-          : 'var(--rb-sidebar-width) minmax(0, 1fr)',
+            : 'clamp(5.25rem, 6vw, 6rem) minmax(0, 1fr)',
         transition: 'grid-template-columns 167ms var(--motion-standard)',
       }}
     >
-      <RBSidebarProvider>
-        {!isAuthRoute && !isMobile && (
-          <RBSidebar>
-            <AppSidebar />
-          </RBSidebar>
-        )}
+      {!isAuthRoute && !isMobile && (
+        <RBSidebar>
+          <AppSidebar />
+        </RBSidebar>
+      )}
 
-        {!isAuthRoute && isMobile && (
-          <Sheet open={mobileNavigationOpen} onOpenChange={setMobileNavigationOpen}>
-            <SheetContent side="left" className="w-[248px] border-0 p-0">
-              <SheetTitle className="sr-only">Navigation</SheetTitle>
-              <AppSidebar />
-            </SheetContent>
-          </Sheet>
-        )}
-
-        <main className="relative h-dvh min-w-0 overflow-hidden">
-          <div
-            className="pointer-events-none absolute inset-0 overflow-hidden"
+      {!isAuthRoute && isMobile && (
+        <Sheet open={mobileNavigationOpen} onOpenChange={setMobileNavigationOpen}>
+          <SheetContent
+            side="left"
+            className="w-4/5 border-0 p-0 text-white sm:w-72 [&_[data-slot=sheet-close]]:hover:bg-white/10"
           >
-            <AppBackground identity={isAuthRoute} />
-          </div>
+            <SheetTitle className="sr-only">Navigation</SheetTitle>
+            <AppSidebar mode="drawer" />
+          </SheetContent>
+        </Sheet>
+      )}
 
-          {isAuthRoute ? (
-            <div className="relative z-10 h-dvh">{children}</div>
-          ) : (
-            <div className="relative z-10 flex h-dvh p-2">
+      <main className="relative flex h-dvh min-w-0 flex-col overflow-hidden">
+        <div
+          className="pointer-events-none absolute inset-0 overflow-hidden"
+        >
+          <AppBackground identity={isAuthRoute} />
+        </div>
+
+        {isAuthRoute ? (
+          <>
+            {isTauriAvailable() && (
+              <div
+                data-tauri-drag-region
+                className="absolute inset-x-0 top-0 z-20 h-11 select-none"
+                aria-hidden="true"
+              />
+            )}
+            <div className="relative z-10 h-dvh overflow-y-auto">{children}</div>
+          </>
+        ) : (
+          <>
+            {showWindowBar && (
+              <div
+                data-tauri-drag-region
+                className="relative z-20 flex h-11 shrink-0 select-none items-center justify-center px-4 text-xs font-medium text-sidebar-foreground/80"
+              >
+                <span data-tauri-drag-region>{windowTitle}</span>
+              </div>
+            )}
+            <div className="relative z-10 flex min-h-0 flex-1 px-2 pb-2">
               <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg bg-workspace">
                 {isMobile && (
-                  <div className="flex h-14 shrink-0 items-center gap-3 border-b border-border/70 bg-card px-3">
+                  <div className="flex h-14 shrink-0 items-center gap-3 bg-card px-3">
                     <Button
                       variant="secondary"
                       size="icon"
@@ -97,15 +129,15 @@ export function AppShell({ children }: { children: ReactNode }) {
                       iconClassName="size-7"
                       subtitle="NUS SoC"
                     />
-                    <ConnectionStatusBadge />
+                    <ConnectionStatusBadge compact />
                   </div>
                 )}
                 <div className="min-h-0 flex-1 overflow-hidden">{children}</div>
               </section>
             </div>
-          )}
-        </main>
-      </RBSidebarProvider>
+          </>
+        )}
+      </main>
     </div>
   )
 }
