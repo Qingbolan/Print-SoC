@@ -13,18 +13,6 @@ activity share the available desktop workspace, while mobile views stack tasks i
 their natural order. Connection details remain in Settings and print options are
 confirmed in Preview, keeping Home focused on the next print job.
 
-<p align="center">
-  <img src="app/screenshots/readme/home-mobile.png" alt="Print@SoC mobile workbench" width="320">
-</p>
-
-![Print@SoC sign-in with the NUS Computing campus](app/screenshots/readme/login-desktop.jpg)
-
-The sign-in background is an official NUS photograph of Sea Building (COM3) and
-Sea Connect at the NUS School of Computing. Source:
-[NUS News, “Official opening of Sea Building and Sea Connect”](https://news.nus.edu.sg/nus-official-opening-of-sea-building-and-sea-connect/).
-The photograph remains © National University of Singapore and is not presented as
-an open-source project asset independent of its original rights holder.
-
 ---
 
 ## Problem Statement
