@@ -272,11 +272,6 @@ The desktop binary includes a stdio MCP server. Open **Settings → Advanced** t
 run a handshake test and copy a client configuration that points to the exact
 installed executable. The same page reports the CLI, CUPS queue, backend,
 configuration file, and loaded Tauri plugins without assuming they are present.
-
-<p align="center">
-  <img src="app/screenshots/readme/integrations-mobile.png" alt="Print@SoC integration manager" width="320">
-</p>
-
 After installing the Python CLI, the server is also available through either CLI alias:
 
 ```bash
