@@ -25,10 +25,6 @@ Sea Connect at the NUS School of Computing. Source:
 The photograph remains © National University of Singapore and is not presented as
 an open-source project asset independent of its original rights holder.
 
-<p align="center">
-  <img src="app/screenshots/readme/login-mobile.jpg" alt="Print@SoC mobile sign-in" width="320">
-</p>
-
 ---
 
 ## Problem Statement
