@@ -1,0 +1,52 @@
+*PPD-Adobe: "4.3"
+*FormatVersion: "4.3"
+*FileVersion: "1.0"
+*LanguageVersion: English
+*LanguageEncoding: ISOLatin1
+*PCFileName: "PSOCPDF.PPD"
+*Manufacturer: "Print@SoC"
+*Product: "(Print@SoC PDF)"
+*ModelName: "Print at SoC PDF"
+*ShortNickName: "Print@SoC PDF"
+*NickName: "Print@SoC PDF Virtual Printer"
+*PSVersion: "(3010.000) 0"
+*LanguageLevel: "3"
+*ColorDevice: True
+*DefaultColorSpace: RGB
+*FileSystem: False
+*Throughput: "1"
+*LandscapeOrientation: Plus90
+*TTRasterizer: Type42
+*cupsVersion: 1.5
+*cupsManualCopies: False
+*cupsFilter2: "application/vnd.cups-pdf application/pdf 0 -"
+
+*OpenUI *PageSize/Paper Size: PickOne
+*OrderDependency: 10 AnySetup *PageSize
+*DefaultPageSize: A4
+*PageSize A4/A4: "<</PageSize [595 842]>>setpagedevice"
+*PageSize A3/A3: "<</PageSize [842 1191]>>setpagedevice"
+*CloseUI: *PageSize
+*OpenUI *PageRegion/Paper Region: PickOne
+*OrderDependency: 10 AnySetup *PageRegion
+*DefaultPageRegion: A4
+*PageRegion A4/A4: "<</PageSize [595 842]>>setpagedevice"
+*PageRegion A3/A3: "<</PageSize [842 1191]>>setpagedevice"
+*CloseUI: *PageRegion
+*DefaultImageableArea: A4
+*ImageableArea A4/A4: "18 18 577 824"
+*ImageableArea A3/A3: "18 18 824 1173"
+*DefaultPaperDimension: A4
+*PaperDimension A4/A4: "595 842"
+*PaperDimension A3/A3: "842 1191"
+
+*OpenUI *Duplex/Two-Sided: PickOne
+*OrderDependency: 10 AnySetup *Duplex
+*DefaultDuplex: DuplexNoTumble
+*Duplex None/Off: "<</Duplex false>>setpagedevice"
+*Duplex DuplexNoTumble/Long Edge: "<</Duplex true /Tumble false>>setpagedevice"
+*Duplex DuplexTumble/Short Edge: "<</Duplex true /Tumble true>>setpagedevice"
+*CloseUI: *Duplex
+
+*DefaultFont: Courier
+*Font Courier: Standard "(001.007)" Standard ROM

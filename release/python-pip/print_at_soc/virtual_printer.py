@@ -36,6 +36,7 @@ APP_DIR_NAME = ".PrintAtSoC"
 CONFIG_FILE_NAME = "virtual-printer.json"
 SYSTEM_CONFIG_DIR = Path("/etc/print-at-soc")
 SYSTEM_CONFIG_PATH = SYSTEM_CONFIG_DIR / CONFIG_FILE_NAME
+PDF_DRIVER_PATH = Path(__file__).resolve().parent / "resources" / "printatsoc.ppd"
 
 DEFAULT_CONFIG: Dict[str, Any] = {
     "ssh": {
@@ -194,10 +195,12 @@ def _normalize_duplex(value: str) -> str:
         "long-edge": "duplex-long-edge",
         "two-sided-long-edge": "duplex-long-edge",
         "duplex-long-edge": "duplex-long-edge",
+        "duplexnotumble": "duplex-long-edge",
         "short": "duplex-short-edge",
         "short-edge": "duplex-short-edge",
         "two-sided-short-edge": "duplex-short-edge",
         "duplex-short-edge": "duplex-short-edge",
+        "duplextumble": "duplex-short-edge",
     }
     return aliases.get(normalized, "duplex-long-edge")
 
@@ -401,9 +404,9 @@ def submit_file_print_job(
     options = parse_cups_options(cups_options)
 
     base_queue = printer or print_cfg.get("printer") or "psts-dx"
-    duplex = options.get("sides") or print_cfg.get("duplex") or "duplex-long-edge"
+    duplex = options.get("sides") or options.get("Duplex") or print_cfg.get("duplex") or "duplex-long-edge"
     actual_queue = adjusted_queue_for_duplex(str(base_queue), duplex)
-    paper_size = str(options.get("media") or print_cfg.get("paper_size") or "A4").upper()
+    paper_size = str(options.get("media") or options.get("PageSize") or options.get("PageRegion") or print_cfg.get("paper_size") or "A4").upper()
     copies = _coerce_copies(copies)
     title = title or source.name
 
@@ -689,6 +692,9 @@ def install_virtual_printer(argv: List[str]) -> int:
         print("lpadmin was not found. Install/enable CUPS first.", file=sys.stderr)
         return 2
 
+    if not PDF_DRIVER_PATH.is_file():
+        raise RuntimeError("Packaged Print@SoC PDF driver is missing; reinstall print-at-soc")
+
     backend_dir = find_cups_backend_dir()
     destination = backend_dir / BACKEND_NAME
     if args.dry_run:
@@ -731,8 +737,8 @@ def install_virtual_printer(argv: List[str]) -> int:
         "-E",
         "-v",
         BACKEND_URI,
-        "-m",
-        "raw",
+        "-P",
+        str(PDF_DRIVER_PATH),
         "-D",
         args.display_name,
         "-L",

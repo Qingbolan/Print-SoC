@@ -3,3 +3,5 @@ include LICENSE
 include pyproject.toml
 recursive-include print_at_soc *.py
 recursive-include print_at_soc py.typed
+
+recursive-include print_at_soc/resources *.ppd

@@ -1,6 +1,6 @@
 {
   "name": "print-soc",
-  "version": "0.328.6",
+  "version": "0.328.7",
   "description": "Connect Codex to NUS School of Computing print queues through Print@SoC.",
   "author": {
     "name": "Silan Hu"

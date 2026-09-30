@@ -51,6 +51,7 @@ tables/key-value output; pass `--json` for scripts.
 
 macOS and Linux can install a CUPS virtual printer queue named `PrintAtSoC`.
 After installation, normal apps can print to `Print@SoC Virtual Printer`; the CUPS
+queue uses the bundled PDF driver (not a raw queue), and the CUPS
 backend forwards the spool file to the configured SoC SSH server and submits it
 with remote `lpr`. The default remote queue is `psts-dx`; use `--printer` to
 choose another SOCprint queue such as `psc008-dx` or `psts-sx`.
@@ -147,3 +148,17 @@ PSOC_SSH_KEY_PASSPHRASE=optional-passphrase
 
 The desktop application is downloaded separately from GitHub Releases. This
 Python package update does not replace the desktop release.
+
+### macOS raw-queue installation error
+
+If an older installation reports `Raw queues are no longer supported on macOS`,
+upgrade the Python package and reinstall the queue:
+
+```bash
+python -m pip install --upgrade print-at-soc
+sudo "$(command -v python)" -m print_at_soc virtual-printer install
+```
+
+The installer now registers the packaged PDF PPD on both macOS and Linux. A4/A3
+and duplex choices from the print dialog are forwarded to the SoC submission.
+No real print job is sent while installing the queue.

@@ -47,7 +47,7 @@ packages = ["print_at_soc"]
 include-package-data = true
 
 [tool.setuptools.package-data]
-print_at_soc = ["py.typed"]
+print_at_soc = ["py.typed", "resources/*.ppd"]
 
 [tool.setuptools.data-files]
 "." = ["print_at_soc.pth"]
