@@ -188,7 +188,12 @@ jobs:
             exit 1
           fi
 
-          echo "Found app bundle: $APP_BUNDLE"
+          EXPECTED_VERSION="${{ steps.get_version_build.outputs.VERSION }}"
+          BUNDLE_VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_BUNDLE/Contents/Info.plist")
+          test "$BUNDLE_VERSION" = "${EXPECTED_VERSION#v}"
+          BUNDLE_EXECUTABLE=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP_BUNDLE/Contents/Info.plist")
+          test -x "$APP_BUNDLE/Contents/MacOS/$BUNDLE_EXECUTABLE"
+          echo "Found app bundle: $APP_BUNDLE ($BUNDLE_VERSION)"
           tar -czf "${{ matrix.asset_name }}" "$APP_BUNDLE"
           mv "${{ matrix.asset_name }}" "${{ github.workspace }}/"
           echo "Packaged: ${{ matrix.asset_name }}"

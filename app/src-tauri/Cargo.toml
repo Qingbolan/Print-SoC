@@ -1,6 +1,6 @@
 [package]
 name = "print_at_soc"
-version = "0.1.0"
+version = "0.1.1"
 description = "Print_at_SoC - Smart Printing for NUS SoC"
 authors = ["Silan Hu(silan.hu@u.nus.edu)"]
 license = "MIT"
