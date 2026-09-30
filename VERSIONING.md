@@ -24,8 +24,9 @@ python3 scripts/version.py check
 The shared projection updates the desktop package and lockfile, Tauri metadata,
 Cargo manifest and lockfile, Python package version, npm package version, and Codex plugin manifest.
 The settings page and CLI/MCP version reports read those generated values.
-Desktop builds, Python source builds, and npm packing run the projection
-automatically. Published wheels, source distributions, and npm packages retain
+Desktop builds, Python source builds, and `npm run package` run the projection
+automatically. Direct `npm pack` checks the stamp and rejects stale metadata
+because npm reads its package version before running lifecycle hooks. Published wheels, source distributions, and npm packages retain
 their stamped version and do not require Git or Tide to install.
 
 ## Release

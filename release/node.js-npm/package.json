@@ -1,6 +1,6 @@
 {
   "name": "print-at-soc",
-  "version": "0.328.5",
+  "version": "0.328.6",
   "description": "Print@SoC - Smart Printing for NUS SoC - Node.js CLI wrapper for desktop application",
   "main": "lib/cli.js",
   "bin": {
@@ -12,7 +12,8 @@
   "scripts": {
     "test": "node test/test.js",
     "prepublishOnly": "node lib/cli.js --version",
-    "prepack": "node lib/stamp-version.js"
+    "prepack": "node lib/stamp-version.js check",
+    "package": "node lib/stamp-version.js pack"
   },
   "keywords": [
     "nus",
