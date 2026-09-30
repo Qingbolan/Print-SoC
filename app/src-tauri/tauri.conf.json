@@ -137,8 +137,7 @@
       "entitlements": "entitlements.plist",
       "minimumSystemVersion": "11.0",
       "frameworks": [],
-      "signingIdentity": null,
-      "infoPlist": "Info.plist"
+      "signingIdentity": null
     },
     "windows": {
       "certificateThumbprint": null,
