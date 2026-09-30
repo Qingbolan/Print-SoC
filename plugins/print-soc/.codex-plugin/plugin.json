@@ -1,6 +1,6 @@
 {
   "name": "print-soc",
-  "version": "0.1.0",
+  "version": "0.328.5",
   "description": "Connect Codex to NUS School of Computing print queues through Print@SoC.",
   "author": {
     "name": "Silan Hu"
@@ -12,7 +12,11 @@
     "longDescription": "Connect to the Print@SoC MCP server to inspect queues and quota, then submit confirmed PDF print jobs through NUS SoC SSH.",
     "developerName": "Silan Hu",
     "category": "Productivity",
-    "capabilities": ["MCP server", "Print queue management", "PDF printing"],
+    "capabilities": [
+      "MCP server",
+      "Print queue management",
+      "PDF printing"
+    ],
     "defaultPrompt": "Help me inspect NUS SoC printers or prepare a confirmed PDF print job with Print@SoC."
   },
   "mcpServers": "./.mcp.json"

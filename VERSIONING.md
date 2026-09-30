@@ -22,7 +22,7 @@ python3 scripts/version.py check
 ```
 
 The shared projection updates the desktop package and lockfile, Tauri metadata,
-Cargo manifest and lockfile, Python package version, and npm package version.
+Cargo manifest and lockfile, Python package version, npm package version, and Codex plugin manifest.
 The settings page and CLI/MCP version reports read those generated values.
 Desktop builds, Python source builds, and npm packing run the projection
 automatically. Published wheels, source distributions, and npm packages retain

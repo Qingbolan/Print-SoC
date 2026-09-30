@@ -1,6 +1,6 @@
 {
   "name": "print-at-soc",
-  "version": "0.328.4",
+  "version": "0.328.5",
   "description": "Print@SoC - Smart Printing for NUS SoC - Node.js CLI wrapper for desktop application",
   "main": "lib/cli.js",
   "bin": {

@@ -55,7 +55,7 @@ class VersionManager:
 
     def rendered_files(self, build: BuildVersion) -> dict[Path, str]:
         result = {}
-        for relative in ('app/package.json', 'app/package-lock.json', 'release/node.js-npm/package.json'):
+        for relative in ('app/package.json', 'app/package-lock.json', 'release/node.js-npm/package.json', 'plugins/print-soc/.codex-plugin/plugin.json'):
             path = self.root / relative
             data = json.loads(path.read_text(encoding='utf-8'))
             data['version'] = build.version

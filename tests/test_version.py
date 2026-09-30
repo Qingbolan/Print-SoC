@@ -49,6 +49,7 @@ class VersionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
             files = {
+                'plugins/print-soc/.codex-plugin/plugin.json': '{"version":"0.1.0"}',
                 'app/package.json': '{"version":"0.1.0"}',
                 'app/package-lock.json': '{"version":"0.1.0","packages":{"":{"version":"0.1.0"}}}',
                 'release/node.js-npm/package.json': '{"version":"0.1.0"}',
