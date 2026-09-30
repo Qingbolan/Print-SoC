@@ -1,0 +1,31 @@
+name: Resolve Tide version
+description: Resolve one deterministic version receipt from complete Git history
+outputs:
+  version:
+    description: Tide coordinate
+    value: ${{ steps.resolve.outputs.version }}
+runs:
+  using: composite
+  steps:
+    - uses: dtolnay/rust-toolchain@stable
+    - uses: actions/cache@v4
+      id: tide-cache
+      with:
+        path: ~/.cargo/bin/tide
+        key: tide-${{ runner.os }}-d0fadb4db3f15e329e9cce2d99a6c629560d045c
+    - name: Install pinned Tide
+      if: steps.tide-cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: cargo install --git https://github.com/Qingbolan/TideMark --rev d0fadb4db3f15e329e9cce2d99a6c629560d045c --locked --bin tide --force
+    - name: Resolve and synchronize
+      id: resolve
+      shell: bash
+      run: |
+        VERSION=$(python3 scripts/version.py sync --write-receipt .release-version.json)
+        echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+        python3 scripts/version.py check --receipt .release-version.json
+    - uses: actions/upload-artifact@v4
+      with:
+        name: tide-version
+        path: .release-version.json
+        include-hidden-files: true

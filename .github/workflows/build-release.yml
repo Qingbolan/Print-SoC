@@ -1,25 +1,41 @@
 name: Build and Release
 
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
     inputs:
-      version:
-        description: 'Version tag (e.g., v0.1.0)'
-        required: true
-      publish_packages:
-        description: 'Publish Python and npm packages after the desktop release'
+      publish_pypi:
+        description: 'Publish the Python package after desktop assets are ready'
         type: boolean
         default: true
+      publish_npm:
+        description: 'Publish the npm package after desktop assets are ready'
+        type: boolean
+        default: false
 
 env:
   CARGO_TERM_COLOR: always
   APP_NAME: Print_at_SoC
+  TIDE_VERSION_RECEIPT: .release-version.json
 
 jobs:
+  resolve-version:
+    name: Resolve Tide version
+    runs-on: ubuntu-latest
+    env:
+      TIDE_VERSION_RECEIPT: ''
+    outputs:
+      version: ${{ steps.tide.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/resolve-version
+        id: tide
+      - name: Test version projections
+        run: python3 -m unittest discover -s tests -v
+
   build:
+    needs: resolve-version
     name: Build ${{ matrix.platform }} (${{ matrix.arch }})
     runs-on: ${{ matrix.os }}
     permissions:
@@ -67,51 +83,18 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: tide-version
+      - name: Apply shared Tide version
+        run: python3 scripts/version.py sync --receipt .release-version.json
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-
-      - name: Get version (for build)
-        id: get_version_build
-        shell: bash
-        run: |
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
-          else
-            echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Sync Tauri app version from tag
-        shell: bash
-        env:
-          VERSION_TAG: ${{ steps.get_version_build.outputs.VERSION }}
-        run: |
-          cat > sync-version.js <<'JS'
-          const fs = require('fs');
-          const path = require('path');
-          const versionTag = process.env.VERSION_TAG || '';
-          const version = versionTag.startsWith('v') ? versionTag.slice(1) : versionTag;
-          if (!version) { console.error('Empty version'); process.exit(1); }
-          // Update app/package.json
-          const pkgPath = path.join('app', 'package.json');
-          const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-          pkg.version = version;
-          fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
-          // Update app/src-tauri/tauri.conf.json
-          const tauriPath = path.join('app', 'src-tauri', 'tauri.conf.json');
-          const tauri = JSON.parse(fs.readFileSync(tauriPath, 'utf8'));
-          tauri.version = version;
-          fs.writeFileSync(tauriPath, JSON.stringify(tauri, null, 2) + '\n');
-          // Update app/src-tauri/Cargo.toml
-          const cargoPath = path.join('app', 'src-tauri', 'Cargo.toml');
-          let cargo = fs.readFileSync(cargoPath, 'utf8');
-          cargo = cargo.replace(/^version\s*=\s*\"[^\"]+\"/m, `version = \"${version}\"`);
-          fs.writeFileSync(cargoPath, cargo);
-          console.log('Synced app versions to', version);
-          JS
-          node sync-version.js
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -188,7 +171,7 @@ jobs:
             exit 1
           fi
 
-          EXPECTED_VERSION="${{ steps.get_version_build.outputs.VERSION }}"
+          EXPECTED_VERSION="v${{ needs.resolve-version.outputs.version }}"
           BUNDLE_VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_BUNDLE/Contents/Info.plist")
           test "$BUNDLE_VERSION" = "${EXPECTED_VERSION#v}"
           BUNDLE_EXECUTABLE=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP_BUNDLE/Contents/Info.plist")
@@ -281,7 +264,7 @@ jobs:
 
   create-release:
     name: Create GitHub Release
-    needs: build
+    needs: [resolve-version, build, test-python, test-npm]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -289,6 +272,13 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: tide-version
+      - name: Apply shared Tide version
+        run: python3 scripts/version.py sync --receipt .release-version.json
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -298,24 +288,26 @@ jobs:
       - name: Display structure of downloaded files
         run: ls -R ./artifacts
 
-      - name: Get version
-        id: get_version
+      - name: Create immutable coordinate tag
+        env:
+          RELEASE_VERSION: ${{ needs.resolve-version.outputs.version }}
         run: |
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          if git show-ref --verify --quiet "refs/tags/v$RELEASE_VERSION"; then
+            test "$(git rev-parse "v$RELEASE_VERSION^{commit}")" = "$GITHUB_SHA"
           else
-            echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+            git tag "v$RELEASE_VERSION" "$GITHUB_SHA"
+            git push origin "refs/tags/v$RELEASE_VERSION"
           fi
 
       - name: Create Release
         id: create_release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ steps.get_version.outputs.VERSION }}
+          tag_name: v${{ needs.resolve-version.outputs.version }}
           target_commitish: ${{ github.sha }}
-          name: Print@SoC ${{ steps.get_version.outputs.VERSION }}
+          name: Print@SoC v${{ needs.resolve-version.outputs.version }}
           draft: false
           prerelease: false
           generate_release_notes: true
@@ -343,12 +335,20 @@ jobs:
             ./artifacts/*/*.AppImage
 
   test-python:
+    needs: resolve-version
     name: Test Python Package
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: tide-version
+      - name: Apply shared Tide version
+        run: python3 scripts/version.py sync --receipt .release-version.json
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -375,12 +375,20 @@ jobs:
         run: twine check dist/*
 
   test-npm:
+    needs: resolve-version
     name: Test npm Package
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: tide-version
+      - name: Apply shared Tide version
+        run: python3 scripts/version.py sync --receipt .release-version.json
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -400,37 +408,27 @@ jobs:
         run: npm pack --dry-run
 
   publish-pypi:
-    if: github.event_name != 'workflow_dispatch' || inputs.publish_packages
+    if: inputs.publish_pypi
     name: Publish to PyPI
-    needs: [create-release, test-python]
+    needs: [resolve-version, create-release, test-python]
     runs-on: ubuntu-latest
     environment: pypi
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: tide-version
+      - name: Apply shared Tide version
+        run: python3 scripts/version.py sync --receipt .release-version.json
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-
-      - name: Get version
-        id: get_version
-        run: |
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            VERSION="${{ github.event.inputs.version }}"
-          else
-            VERSION="${GITHUB_REF#refs/tags/}"
-          fi
-          VERSION="${VERSION#v}"
-          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-
-      - name: Update package version
-        working-directory: ./release/python-pip
-        run: |
-          sed -i "s/^__version__ = .*/__version__ = \"${{ steps.get_version.outputs.VERSION }}\"/" print_at_soc/__init__.py
-          cat print_at_soc/__init__.py
 
       - name: Install build tools
         run: |
@@ -449,37 +447,28 @@ jobs:
         run: twine upload dist/*
 
   publish-npm:
-    if: github.event_name != 'workflow_dispatch' || inputs.publish_packages
+    if: inputs.publish_npm
     name: Publish to npm
-    needs: [create-release, test-npm]
+    needs: [resolve-version, create-release, test-npm]
     runs-on: ubuntu-latest
     environment: npm
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: tide-version
+      - name: Apply shared Tide version
+        run: python3 scripts/version.py sync --receipt .release-version.json
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
-
-      - name: Get version
-        id: get_version
-        run: |
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            VERSION="${{ github.event.inputs.version }}"
-          else
-            VERSION="${GITHUB_REF#refs/tags/}"
-          fi
-          VERSION="${VERSION#v}"
-          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-
-      - name: Update package version
-        working-directory: ./release/node.js-npm
-        run: |
-          npm version ${{ steps.get_version.outputs.VERSION }} --no-git-tag-version --allow-same-version
 
       - name: Install dependencies
         working-directory: ./release/node.js-npm

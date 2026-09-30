@@ -62,3 +62,8 @@ Desktop.ini
 # package-lock.json
 # yarn.lock
 # pnpm-lock.yaml
+
+# Generated Tide receipt for a build
+.release-version.json
+__pycache__/
+.pytest_cache/

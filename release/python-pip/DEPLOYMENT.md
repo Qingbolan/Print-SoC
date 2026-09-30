@@ -1,37 +1,22 @@
-# Publishing Print@SoC to PyPI
+# Publishing Print@SoC
 
-The Python distribution and desktop binaries have separate versions. The Python
-version is defined once in `print_at_soc/__init__.py`; setuptools and the CLI use
-that value. Increase it before publishing: PyPI versions cannot be overwritten.
-The wrapper downloads desktop assets from the latest GitHub release of
-[Qingbolan/Print-SoC](https://github.com/Qingbolan/Print-SoC/releases).
+Versioning and release procedures are defined in [VERSIONING.md](../../VERSIONING.md).
+Tide is the only version authority. The Python source build stamps its version
+from Tide; source distributions and wheels carry that stamp without requiring
+Tide on the installing machine.
 
-From `release/python-pip`, using a fresh virtual environment:
-
-```bash
-python -m pip install build twine pytest
-python -m pip install -e .
-python -m pytest tests -q
-python -m build
-python -m twine check dist/*
-```
-
-Use a clean output directory so an upload includes only the intended version.
-Install the wheel into a separate environment and check all console entry points,
-`--help`, `--version`, `--doctor`, and `config show --json` before publishing.
-
-Upload with Twine, supplying `__token__` as the username and a PyPI API token at
-the password prompt (or through a secret-managed `TWINE_PASSWORD` environment
-variable):
+From a full repository checkout:
 
 ```bash
-python -m twine upload --username __token__ dist/*
+python3 scripts/version.py sync
+python3 -m pip install build twine pytest
+python3 -m pip install -e release/python-pip
+python3 -m pytest release/python-pip/tests -q
+python3 -m build --outdir dist/python release/python-pip
+python3 -m twine check dist/python/*
 ```
 
-Never store tokens in source files or commit them. After uploading, install the
-exact version from PyPI into a fresh environment and run the CLI smoke checks.
-
-The GitHub release workflow builds desktop binaries and publishes the Python
-package using the repository's `PYPI_API_TOKEN` secret. It synchronizes the Python
-version from the requested release tag before building. Python-only releases can
-use the manual process above without rebuilding the desktop assets.
+Use the release workflow for publication so the corresponding desktop assets
+exist first. Supply `PYPI_API_TOKEN` through repository secrets; never store it
+in source files. Verify installation from PyPI and run `print-soc --install`
+to update the separate desktop application.

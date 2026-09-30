@@ -105,7 +105,7 @@ async function callConnectedTool(binaryPath, connectArgs, toolName, toolArgs = {
     await client.request('initialize', {
       protocolVersion: '2025-06-18',
       capabilities: {},
-      clientInfo: { name: 'print-soc-cli', version: '0.1.0' }
+      clientInfo: { name: 'print-soc-cli', version: require('./config').VERSION }
     });
     client.notify('notifications/initialized');
 

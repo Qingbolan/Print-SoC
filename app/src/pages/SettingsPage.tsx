@@ -1,3 +1,4 @@
+import { version as appVersion } from '../../package.json'
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -853,7 +854,7 @@ export default function SettingsPage() {
                 <SimpleCardContent className="space-y-2">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <span className="font-medium">Print@SoC</span>
-                    <Badge variant="secondary">v0.1.0</Badge>
+                    <Badge variant="secondary">v{appVersion}</Badge>
                   </div>
                   <p className="text-sm text-muted-foreground">
                     Smart printing solution for NUS School of Computing

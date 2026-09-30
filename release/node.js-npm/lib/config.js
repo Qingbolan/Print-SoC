@@ -6,10 +6,7 @@ const path = require('path');
 const os = require('os');
 
 // Version (read from package.json to avoid drift)
-let VERSION = '0.0.0';
-try {
-  VERSION = require('../package.json').version || VERSION;
-} catch (_) {}
+const { version: VERSION } = require('../package.json');
 
 // GitHub repository
 const GITHUB_REPO = 'Qingbolan/Print-SoC';

@@ -1,0 +1,19 @@
+# Version policy shared by local builds and CI.
+[release]
+tag_prefix = "v"
+require_annotated_tags = true
+
+[time]
+timezone = "+08:00"
+
+[remote]
+strategy = "local-only"
+name = "origin"
+fallback_to_local = false
+
+[cache]
+enabled = true
+
+[output]
+metadata_suffix = ""
+follow_renames = true
