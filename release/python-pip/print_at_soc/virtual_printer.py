@@ -261,7 +261,7 @@ def _coerce_copies(value: Any) -> int:
 
 
 def _needs_paramiko(ssh_cfg: Dict[str, Any]) -> bool:
-    return bool(ssh_cfg.get("password"))
+    return bool(ssh_cfg.get("password") or ssh_cfg.get("key_passphrase"))
 
 
 def _load_paramiko():
@@ -449,12 +449,12 @@ def submit_file_print_job(
             if scale_command:
                 _paramiko_exec(client, scale_command)
             output = _paramiko_exec(client, lpr_command)
+            return output.strip() or f"Submitted to {actual_queue}"
+        finally:
             try:
                 _paramiko_exec(client, cleanup_command)
             except Exception:
                 pass
-            return output.strip() or f"Submitted to {actual_queue}"
-        finally:
             client.close()
 
     _system_upload(ssh_cfg, str(source), remote_path)

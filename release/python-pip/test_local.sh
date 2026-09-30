@@ -41,7 +41,8 @@ echo
 # Step 3: Install package in editable mode
 echo -e "${YELLOW}[3/6] Installing package in editable mode...${NC}"
 pip install --upgrade pip
-pip install -e .
+pip install -e . pytest
+python -m pytest tests -q
 echo -e "${GREEN}✓ Package installed${NC}"
 echo
 

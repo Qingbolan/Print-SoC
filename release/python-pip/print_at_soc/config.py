@@ -3,7 +3,9 @@
 from pathlib import Path
 
 # Version
-VERSION = "0.1.0"
+from . import __version__
+
+VERSION = __version__
 
 # GitHub repository
 GITHUB_REPO = "Qingbolan/Print-SoC"

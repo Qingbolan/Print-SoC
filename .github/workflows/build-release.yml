@@ -350,6 +350,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install build twine
 
+      - name: Run Python regression tests
+        working-directory: ./release/python-pip
+        run: |
+          pip install -e . pytest
+          python -m pytest tests -q
+
       - name: Build Python package
         working-directory: ./release/python-pip
         run: python -m build
@@ -412,8 +418,8 @@ jobs:
       - name: Update package version
         working-directory: ./release/python-pip
         run: |
-          sed -i "s/^version = .*/version = \"${{ steps.get_version.outputs.VERSION }}\"/" pyproject.toml
-          cat pyproject.toml | grep version
+          sed -i "s/^__version__ = .*/__version__ = \"${{ steps.get_version.outputs.VERSION }}\"/" print_at_soc/__init__.py
+          cat print_at_soc/__init__.py
 
       - name: Install build tools
         run: |

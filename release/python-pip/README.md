@@ -137,3 +137,13 @@ PSOC_SSH_KEY_PASSPHRASE=optional-passphrase
 - Python 3.8+
 - macOS, Linux, or Windows x64/arm64 as supported by the released desktop binaries
 - NUS SoC network access or VPN for SSH printing
+
+## 0.1.1
+
+- Fix Windows installer execution and MSI asset selection; report unsuccessful installations.
+- Run `--doctor` without downloading or launching the desktop app.
+- Support passphrase-protected SSH keys through Paramiko.
+- Clean up uploaded print files when a remote print command fails.
+
+The desktop application is downloaded separately from GitHub Releases. This
+Python package update does not replace the desktop release.

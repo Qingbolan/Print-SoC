@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "print-at-soc"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Print@SoC - Smart Printing for NUS SoC - Python CLI wrapper for desktop application"
 authors = [
     {name = "Silan Hu", email = "silan.hu@u.nus.edu"}
@@ -51,3 +51,6 @@ print_at_soc = ["py.typed"]
 
 [tool.setuptools.data-files]
 "." = ["print_at_soc.pth"]
+
+[tool.setuptools.dynamic]
+version = {attr = "print_at_soc.__version__"}

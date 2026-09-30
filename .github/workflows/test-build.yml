@@ -220,6 +220,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install build twine
 
+      - name: Run Python regression tests
+        working-directory: ./release/python-pip
+        run: |
+          pip install -e . pytest
+          python -m pytest tests -q
+
       - name: Build Python package
         working-directory: ./release/python-pip
         run: python -m build

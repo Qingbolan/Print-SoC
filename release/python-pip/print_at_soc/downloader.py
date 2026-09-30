@@ -8,6 +8,8 @@ import json
 import tarfile
 import zipfile
 import shutil
+import subprocess
+from urllib.parse import urlparse, unquote
 from pathlib import Path
 from typing import Optional, Tuple
 
@@ -160,12 +162,8 @@ def _run_nsis_installer(installer_path: Path) -> None:
     print("\nPlease follow the installer prompts.")
     print("="*60 + "\n")
 
-    try:
-        os.system(f'"{installer_path}"')
-        print("\nInstaller completed.")
-    except Exception as e:
-        print(f"Warning: Installer execution encountered an issue: {e}")
-        print(f"You can run the installer manually at: {installer_path}")
+    subprocess.run([str(installer_path)], check=True)
+    print("\nInstaller completed.")
 
 
 def extract_archive(archive_path: Path, extract_dir: Path):
@@ -287,25 +285,9 @@ def _install_msi(msi_path: Path) -> None:
     """Install an MSI package using msiexec."""
     if platform.system() != "Windows":
         return
-    try:
-        msiexec = "msiexec"
-        log_path = BINARY_DIR / "msi-install.log"
-        cmds = [
-            [msiexec, "/i", str(msi_path), "/qn", "/norestart", f"/L*V\"{log_path}\"", "ALLUSERS=2", "MSIINSTALLPERUSER=1"],
-            [msiexec, "/i", str(msi_path), "/passive", "/norestart", f"/L*V\"{log_path}\"", "ALLUSERS=2", "MSIINSTALLPERUSER=1"],
-            [msiexec, "/i", str(msi_path)],
-        ]
-        for cmd in cmds:
-            try:
-                print(f"Running: {' '.join(cmd)}")
-                rc = os.system(" ".join(cmd))
-                if rc == 0:
-                    return
-            except Exception:
-                continue
-        print("Warning: MSI installation did not complete successfully. You may need to install manually.")
-    except Exception as e:
-        print(f"Warning: Failed to run msiexec: {e}")
+    result = subprocess.run(["msiexec", "/i", str(msi_path)], check=False)
+    if result.returncode not in (0, 1641, 3010):
+        raise RuntimeError(f"MSI installation failed with exit code {result.returncode}")
 
 
 def get_download_url() -> Tuple[str, str]:
@@ -371,7 +353,9 @@ def download_and_install():
     download_url, version = get_download_url()
 
     platform_key = get_platform_key()
-    asset_name = PLATFORM_BINARIES[platform_key]["asset_name"]
+    asset_name = Path(unquote(urlparse(download_url).path)).name
+    if not asset_name:
+        raise RuntimeError("Release asset URL has no filename")
     download_path = BINARY_DIR / asset_name
 
     download_with_progress(download_url, download_path)
@@ -379,11 +363,8 @@ def download_and_install():
     if PLATFORM_BINARIES[platform_key]["is_bundle"] or download_path.suffix in (".gz", ".zip"):
         extract_archive(download_path, BINARY_DIR)
         download_path.unlink()
-    elif download_path.suffix == ".msi":
-        try:
-            _install_msi(download_path)
-        finally:
-            pass
+    elif download_path.suffix in (".msi", ".exe"):
+        extract_archive(download_path, BINARY_DIR)
     elif download_path.suffix == ".AppImage":
         target_path = BINARY_DIR / PLATFORM_BINARIES[platform_key]["executable_path"]
         try:
@@ -415,6 +396,9 @@ def download_and_install():
         except Exception as e:
             print(f"Note: Could not remove quarantine attribute: {e}")
             print("You may need to allow the app in System Preferences > Security & Privacy")
+
+    if not is_installed():
+        raise RuntimeError("Installation did not produce a usable desktop executable")
 
     VERSION_FILE.write_text(version)
 
