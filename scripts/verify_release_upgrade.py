@@ -5,7 +5,9 @@ The production updater verifies real GitHub downloads. Only its process guard is
 scoped to this script's temporary directory, so an unrelated installed desktop
 can remain open. HOME is never replaced. macOS MCP initialization runs with
 filesystem writes confined to the temporary directory; no print/login tools run.
-Windows installers are deliberately skipped because they modify the host system.
+Windows installers are skipped unless --disposable-ci explicitly permits native
+system changes on a GitHub-hosted Actions runner. That flag also enables Linux
+AppImage MCP execution after extraction, without requiring FUSE.
 """
 from __future__ import annotations
 
@@ -63,7 +65,13 @@ def fetch_bytes(url, *, api=False):
         return response.read()
 
 
-def select_release(tag, platform_key, config, release_type):
+def require_disposable_ci():
+    require(os.environ.get('GITHUB_ACTIONS') == 'true'
+            and os.environ.get('RUNNER_ENVIRONMENT') == 'github-hosted',
+            '--disposable-ci is restricted to disposable GitHub-hosted Actions runners')
+
+
+def select_release(tag, platform_key, config, release_type, asset_name=None):
     repository = config.GITHUB_REPO
     metadata = json.loads(fetch_bytes(
         f'https://api.github.com/repos/{repository}/releases/tags/{quote(tag, safe="")}', api=True))
@@ -71,7 +79,8 @@ def select_release(tag, platform_key, config, release_type):
     require(not metadata.get('draft'), 'Release is still a draft')
     assets = {asset['name']: asset for asset in metadata.get('assets', [])}
     platform = config.PLATFORM_BINARIES[platform_key]
-    name = next((name for name in (platform['asset_name'], platform.get('asset_name_fallback'))
+    candidates = (asset_name,) if asset_name else (platform['asset_name'], platform.get('asset_name_fallback'))
+    name = next((name for name in candidates
                  if name in assets), None)
     require(name is not None, f'{tag} has no asset for {platform_key}')
 
@@ -108,7 +117,7 @@ def select_release(tag, platform_key, config, release_type):
     }
 
 
-def isolated_service(service_type, temporary_root, platform_key, downloads):
+def isolated_service(service_type, temporary_root, platform_key, downloads, disposable_ci=False):
     """Retain all production transaction behavior; narrow only process ownership."""
     base = temporary_root.resolve(strict=True)
     require(base.parent == Path(tempfile.gettempdir()).resolve()
@@ -123,6 +132,10 @@ def isolated_service(service_type, temporary_root, platform_key, downloads):
             require(self.root == base / 'install' and self.root.resolve() == base / 'install'
                     and self.binary == self.root / 'bin' and not self.binary.is_symlink(),
                     'Refusing a process-guard override outside the isolated installation')
+            if self.platform_key.startswith('windows'):
+                require(disposable_ci, 'Native Windows operations need --disposable-ci')
+                require_disposable_ci()
+                return super()._ensure_stopped()
             result = subprocess.run(['ps', '-ww', '-axo', 'pid=,comm='], capture_output=True,
                                     text=True, check=True, timeout=10)
             for line in result.stdout.splitlines():
@@ -147,14 +160,34 @@ def isolated_service(service_type, temporary_root, platform_key, downloads):
                               'bytes': destination.stat().st_size,
                               'verified_sha256': digest_file(destination)})
 
+        def _run_windows_installer(self, path):
+            require(disposable_ci and sys.platform == 'win32', 'Silent native installers are CI-only')
+            require_disposable_ci()
+            require(path.resolve().is_relative_to(base), 'Installer is outside the verification root')
+            if path.suffix.lower() == '.msi':
+                log = base / f'msi-{len(list(base.glob("msi-*.log")))}.log'
+                command = ['msiexec', '/i', str(path), '/qn', '/norestart', '/L*V', str(log)]
+                allowed = (0, 1641, 3010)
+            else:
+                require(path.suffix.lower() == '.exe', 'Unknown Windows installer format')
+                command, allowed = [str(path), '/S'], (0,)
+            result = subprocess.run(command, capture_output=True, text=True, timeout=300)
+            require(result.returncode in allowed,
+                    f'Silent {path.suffix} installer failed with code {result.returncode}; inspect retained CI installer logs')
+
     return IsolatedUpdateService()
 
 
 def verify_install(service, release, config, sentinels):
     require(service.installed_version() == release.version, 'Installed version receipt is incorrect')
     require(json.loads(service.receipt_file.read_text()) == asdict(release), 'Installed asset receipt is incorrect')
-    executable = service.binary / config.PLATFORM_BINARIES[service.platform_key]['executable_path']
-    require(executable.is_file(), 'Installed desktop executable is missing')
+    if service.platform_key.startswith('windows'):
+        from print_at_soc.downloader import _find_windows_installed_exe
+        executable = _find_windows_installed_exe()
+        service._verify_file(service.binary / release.name, release)
+    else:
+        executable = service.binary / config.PLATFORM_BINARIES[service.platform_key]['executable_path']
+    require(executable is not None and executable.is_file(), 'Installed desktop executable is missing')
     details = {'version': release.version, 'executable': str(executable),
                'executable_sha256': digest_file(executable), 'asset_receipt': asdict(release)}
     if service.platform_key.startswith('darwin'):
@@ -167,28 +200,46 @@ def verify_install(service, release, config, sentinels):
         details['bundle_build'] = plist.get('CFBundleVersion')
     for path, expected in sentinels.items():
         require(path.read_bytes() == expected, f'Update changed sentinel data: {path}')
-    details['preserved_sentinels'] = {str(path.relative_to(service.root)): digest_file(path)
+    details['preserved_sentinels'] = {str(path.relative_to(service.root) if path.is_relative_to(service.root) else path): digest_file(path)
                                      for path in sentinels}
     require(not service.journal.exists() and not service.backup.exists()
             and not list(service.root.glob('.update-stage-*')), 'Update left an incomplete transaction')
     return details
 
 
-def mcp_initialize(executable, version, temporary_root):
-    if sys.platform != 'darwin':
+def mcp_initialize(executable, version, temporary_root, disposable_ci=False):
+    if sys.platform != 'darwin' and not disposable_ci:
         return {'status': 'skipped', 'reason': 'Native MCP runtime smoke is scoped to macOS; Linux AppImage host requirements are not evaluated'}
-    sandbox = Path('/usr/bin/sandbox-exec')
-    require(sandbox.is_file(), 'macOS sandbox-exec is required to confine MCP filesystem writes')
-    profile = ('(version 1)(allow default)(deny file-write*)'
-               f'(allow file-write* (subpath {json.dumps(str(temporary_root.resolve()))}))')
+    if sys.platform == 'darwin':
+        sandbox = Path('/usr/bin/sandbox-exec')
+        require(sandbox.is_file(), 'macOS sandbox-exec is required to confine MCP filesystem writes')
+        profile = ('(version 1)(allow default)(deny file-write*)'
+                   f'(allow file-write* (subpath {json.dumps(str(temporary_root.resolve()))}))')
+        command = [str(sandbox), '-p', profile, str(executable), 'mcp']
+        confinement = 'sandbox-exec denies writes outside verification root; HOME unchanged'
+    else:
+        require_disposable_ci()
+        confinement = 'Explicit disposable GitHub-hosted runner; HOME unchanged'
+        if sys.platform.startswith('linux'):
+            extraction = Path(tempfile.mkdtemp(prefix='mcp-appimage-', dir=temporary_root))
+            result = subprocess.run([str(executable), '--appimage-extract'], cwd=extraction,
+                                    capture_output=True, text=True, timeout=90)
+            require(result.returncode == 0, f'AppImage extraction failed: {result.stderr[-4000:]}')
+            app_run = extraction / 'squashfs-root' / 'AppRun'
+            require(app_run.is_file(), 'Extracted AppImage is missing AppRun')
+            command = [str(app_run), 'mcp']
+        else:
+            require(sys.platform == 'win32', 'Unsupported native MCP verification platform')
+            command = [str(executable), 'mcp']
     request = {'jsonrpc': '2.0', 'id': 1, 'method': 'initialize', 'params': {
         'protocolVersion': '2025-06-18', 'capabilities': {},
         'clientInfo': {'name': 'print-soc-release-verification', 'version': version},
     }}
-    result = subprocess.run([str(sandbox), '-p', profile, str(executable), 'mcp'],
+    result = subprocess.run(command,
                             input=json.dumps(request) + '\n', capture_output=True, text=True,
                             timeout=20, cwd=temporary_root)
-    require(result.returncode == 0, f'MCP initialize exited with code {result.returncode}; stderr was captured but is not recorded to avoid exposing user data')
+    diagnostic = result.stderr[-6000:] if disposable_ci else 'stderr is not recorded to avoid exposing user data'
+    require(result.returncode == 0, f'MCP initialize exited with code {result.returncode}; {diagnostic}')
     responses = [json.loads(line) for line in result.stdout.splitlines() if line.strip()]
     response = next((item for item in responses if item.get('id') == 1), None)
     require(response is not None and response.get('jsonrpc') == '2.0'
@@ -201,7 +252,7 @@ def mcp_initialize(executable, version, temporary_root):
         require(info['version'] == version, 'MCP server version differs from the release coordinate')
     return {'status': 'passed', 'protocol_version': initialized['protocolVersion'],
             'server_info': info, 'timeout_seconds': 20,
-            'confinement': 'sandbox-exec denies writes outside verification root; HOME unchanged'}
+            'confinement': confinement}
 
 
 def run(args):
@@ -221,14 +272,22 @@ def run(args):
     try:
         platform_key = get_platform_key()
         report['platform'] = platform_key
-        if platform_key.startswith('windows'):
+        if args.disposable_ci:
+            require_disposable_ci()
+            report['disposable_ci'] = True
+        if platform_key.startswith('windows') and not args.disposable_ci:
             report.update(status='skipped', reason='Windows MSI/NSIS installers change native host state and cannot be exercised inside a temporary directory; use a disposable Windows VM')
             return 0
+        if platform_key.startswith('windows'):
+            from print_at_soc.downloader import _find_windows_installed_exe
+            require(_find_windows_installed_exe() is None,
+                    'Windows CI must start without an existing Print@SoC native installation')
+            report['process_guard'] = 'Production Windows process guard; native installer system changes explicitly permitted only on a disposable GitHub-hosted runner'
         require(tuple(map(int, args.new_tag[1:].split('.'))) > tuple(map(int, args.old_tag[1:].split('.'))),
                 '--new-tag must be newer than --old-tag')
-        old, report['old_release'] = select_release(args.old_tag, platform_key, config, update_service.Release)
-        new, report['new_release'] = select_release(args.new_tag, platform_key, config, update_service.Release)
-        service = isolated_service(update_service.UpdateService, temporary_root, platform_key, report['downloads'])
+        old, report['old_release'] = select_release(args.old_tag, platform_key, config, update_service.Release, args.asset_name)
+        new, report['new_release'] = select_release(args.new_tag, platform_key, config, update_service.Release, args.asset_name)
+        service = isolated_service(update_service.UpdateService, temporary_root, platform_key, report['downloads'], args.disposable_ci)
         report['install_root'] = str(service.root)
         sentinels = {}
 
@@ -244,6 +303,10 @@ def run(args):
             report['steps'].append({'name': name, 'status': 'passed', **details})
             return details
 
+        def record_mcp(name, details, release):
+            report['steps'].append({'name': name, **mcp_initialize(
+                Path(details['executable']), release.version, temporary_root, args.disposable_ci)})
+
         print(f'Installing published baseline {args.old_tag}', flush=True)
         service.update(old, progress)
         for relative, content in {
@@ -254,14 +317,22 @@ def run(args):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(content)
             sentinels[path] = content
+        if platform_key.startswith('windows'):
+            # Exercise native installer data retention in addition to the managed
+            # updater directory; this only runs on the explicitly disposable VM.
+            path = Path(os.environ['APPDATA']) / 'tech.silan.PrintAtSoC' / 'release-verification.json'
+            require(not path.exists(), 'Windows CI data sentinel unexpectedly exists')
+            path.parent.mkdir(parents=True, exist_ok=True)
+            sentinels[path] = b'{"verification":"preserve native application data"}\n'
+            path.write_bytes(sentinels[path])
         baseline = record_step('install_old_release_and_create_sentinels', old)
         old_metadata = {path.name: path.read_bytes() for path in (service.version_file, service.receipt_file)}
+        record_mcp('old_desktop_mcp_initialize', baseline, old)
 
         print(f'Upgrading to published {args.new_tag}', flush=True)
         service.update(new, progress)
         upgraded = record_step('upgrade_to_new_release', new)
-        report['steps'].append({'name': 'new_desktop_mcp_initialize',
-                                **mcp_initialize(Path(upgraded['executable']), new.version, temporary_root)})
+        record_mcp('new_desktop_mcp_initialize', upgraded, new)
 
         print('Rolling back to the published baseline', flush=True)
         service.rollback(progress)
@@ -270,13 +341,13 @@ def run(args):
         require(all((service.root / name).read_bytes() == content for name, content in old_metadata.items()),
                 'Rollback did not restore exact original metadata bytes')
         report['steps'][-1]['exact_metadata_restored'] = True
+        record_mcp('rolled_back_desktop_mcp_initialize', restored, old)
 
         print(f'Reapplying published {args.new_tag}', flush=True)
         service.update(new, progress)
         reapplied = record_step('reupgrade_to_new_release', new)
         require(reapplied['executable_sha256'] == upgraded['executable_sha256'], 'Reupgrade executable differs from verified new binary')
-        report['steps'].append({'name': 'reupgraded_desktop_mcp_initialize',
-                                **mcp_initialize(Path(reapplied['executable']), new.version, temporary_root)})
+        record_mcp('reupgraded_desktop_mcp_initialize', reapplied, new)
         report['status'] = 'passed'
         return 0
     except Exception as error:
@@ -297,11 +368,17 @@ def main():
     parser.add_argument('--new-tag', required=True, type=release_tag, help='Exact published upgrade tag')
     parser.add_argument('--report', type=Path, help='JSON report destination (default: retained temporary root/report.json)')
     parser.add_argument('--python', help='Python interpreter to run the checkout maintenance engine (must have its dependencies installed)')
+    parser.add_argument('--asset-name', help='Exact release asset name (for each Ubuntu image or Windows installer format)')
+    parser.add_argument('--disposable-ci', action='store_true', help='Permit native Windows installation and Linux MCP execution only on disposable GitHub-hosted runners')
     args = parser.parse_args()
     if args.python:
         command = [args.python, str(Path(__file__).resolve()), '--old-tag', args.old_tag, '--new-tag', args.new_tag]
         if args.report:
             command.extend(['--report', str(args.report)])
+        if args.asset_name:
+            command.extend(['--asset-name', args.asset_name])
+        if args.disposable_ci:
+            command.append('--disposable-ci')
         return subprocess.call(command)
     return run(args)
 

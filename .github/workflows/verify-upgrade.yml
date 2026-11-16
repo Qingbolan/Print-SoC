@@ -1,0 +1,101 @@
+name: Verify Published Upgrade
+
+on:
+  workflow_dispatch:
+    inputs:
+      old_tag:
+        description: 'Exact published baseline Tide tag (v<epoch>.<days>.<index>)'
+        type: string
+        required: true
+      new_tag:
+        description: 'Exact published upgrade Tide tag (v<epoch>.<days>.<index>)'
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Upgrade and rollback (${{ matrix.id }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: ubuntu-22
+            os: ubuntu-22.04
+            asset: Print_at_SoC_linux_x86_64.AppImage
+          - id: ubuntu-24
+            os: ubuntu-24.04
+            asset: Print_at_SoC_linux_x86_64_ubuntu24.04.AppImage
+          - id: windows-nsis
+            os: windows-latest
+            asset: Print_at_SoC_windows_x86_64_setup.exe
+          - id: windows-msi
+            os: windows-latest
+            asset: Print_at_SoC_windows_x86_64.msi
+    defaults:
+      run:
+        shell: bash
+    env:
+      OLD_TAG: ${{ inputs.old_tag }}
+      NEW_TAG: ${{ inputs.new_tag }}
+      RELEASE_ASSET: ${{ matrix.asset }}
+      REPORT_PATH: upgrade-report-${{ matrix.id }}.json
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate exact release tags
+        run: |
+          python - <<'PY'
+          import os
+          import sys
+          sys.path.insert(0, 'scripts')
+          from verify_release_upgrade import release_tag
+          for key in ('OLD_TAG', 'NEW_TAG'):
+              release_tag(os.environ[key])
+          PY
+      - name: Install maintenance engine dependency
+        run: python -m pip install packaging
+      - name: Install Linux desktop runtime dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev
+      - name: Verify real release install, upgrade, rollback and reupgrade
+        run: |
+          python scripts/verify_release_upgrade.py \
+            --old-tag "$OLD_TAG" --new-tag "$NEW_TAG" \
+            --asset-name "$RELEASE_ASSET" --disposable-ci \
+            --report "$REPORT_PATH"
+      - name: Collect retained receipts and installer logs
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          import shutil
+          report = Path(os.environ['REPORT_PATH'])
+          if report.is_file():
+              data = json.loads(report.read_text())
+              root = Path(data['verification_root'])
+              output = Path(os.environ['RUNNER_TEMP']) / 'upgrade-evidence'
+              output.mkdir(exist_ok=True)
+              shutil.copy2(report, output / report.name)
+              for source in list(root.glob('msi-*.log')) + list(root.glob('install/**/receipt.json')) + list(root.glob('install/**/version.txt')):
+                  target = output / source.relative_to(root)
+                  target.parent.mkdir(parents=True, exist_ok=True)
+                  shutil.copy2(source, target)
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: upgrade-verification-${{ matrix.id }}
+          path: ${{ runner.temp }}/upgrade-evidence/
+          if-no-files-found: warn

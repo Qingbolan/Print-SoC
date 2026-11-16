@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit",
     "design:check": "node ./scripts/check-design-system.mjs",
     "lint": "npm run typecheck && npm run design:check",
-    "test": "node --test tests/*.test.mjs",
+    "test": "node scripts/run-tests.mjs",
     "check": "npm run lint && npm test && npm run build",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
