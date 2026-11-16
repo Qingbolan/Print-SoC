@@ -116,19 +116,36 @@ mod tests {
     #[test]
     fn cancellation_terminates_descendants_too() {
         let dir = tempfile::tempdir().unwrap();
-        let marker = dir.path().join("orphan-output");
+        let ready = dir.path().join("descendant-pid");
+        // Cancel after the descendant exists, independent of runner scheduling.
         let script = format!(
-            "(sleep 0.5; echo orphan > {}) & wait",
-            crate::ssh_service::shell_quote(marker.to_str().unwrap())
+            "sleep 30 & child=$!; echo $child > {}; wait",
+            crate::ssh_service::shell_quote(ready.to_str().unwrap())
         );
-        assert!(run(
+        let error = run(
             Command::new("sh").args(["-c", &script]),
-            Duration::from_millis(100),
-            || false
-        )
-        .is_err());
-        std::thread::sleep(Duration::from_millis(600));
-        assert!(!marker.exists());
+            Duration::from_secs(10),
+            || std::fs::read_to_string(&ready)
+                .ok().and_then(|value| value.trim().parse::<u32>().ok()).is_some(),
+        ).err().expect("ready descendant must trigger cancellation");
+        assert!(error.contains("cancelled"), "{error}");
+        let pid = std::fs::read_to_string(&ready).unwrap().trim().parse::<i32>().unwrap();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            let output = Command::new("ps").args(["-o", "stat=", "-p", &pid.to_string()])
+                .output().unwrap();
+            let state = String::from_utf8_lossy(&output.stdout);
+            // A zombie is terminated and awaits the OS reaper.
+            if state.trim().is_empty() || state.trim().starts_with('Z') {
+                break;
+            }
+            if Instant::now() >= deadline {
+                // Clean up the fixture even when group termination regresses.
+                unsafe { libc::kill(pid, libc::SIGKILL); }
+                panic!("descendant {pid} survived cancellation: {state}");
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
     }
 
     #[test]
