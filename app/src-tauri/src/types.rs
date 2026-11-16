@@ -13,6 +13,7 @@ pub struct SSHConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum SSHAuthType {
+    StoredPassword,
     Password {
         password: String,
     },
@@ -20,6 +21,24 @@ pub enum SSHAuthType {
         key_path: String,
         passphrase: Option<String>,
     },
+}
+
+/// Non-secret ownership of a remote submission. Never persist SSH credentials.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SSHIdentity {
+    pub host: String,
+    pub port: u16,
+    pub username: String,
+}
+impl From<&SSHConfig> for SSHIdentity {
+    fn from(config: &SSHConfig) -> Self {
+        Self { host: config.host.to_lowercase(), port: config.port, username: config.username.clone() }
+    }
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SubmissionAttempt {
+    pub id: String,
+    pub account: SSHIdentity,
 }
 
 // ========== Print Job ==========
@@ -36,6 +55,10 @@ pub struct PrintJob {
     pub error: Option<String>,
     /// The job ID assigned by lpq (e.g., "psts-123")
     pub lpq_job_id: Option<String>,
+    #[serde(default)]
+    pub progress: Option<PrintProgress>,
+    #[serde(default)]
+    pub submission: Option<SubmissionAttempt>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -104,6 +127,32 @@ pub struct PrintQuota {
     pub balance: Option<String>,
     pub used: Option<String>,
     pub limit: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QueueSnapshot {
+    pub status: String,
+    pub jobs: Vec<PrintQueueJob>,
+    pub diagnostics: Vec<String>,
+    pub raw_output: String,
+    pub checked_at: DateTime<Utc>,
+    pub jobs_complete: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum PrintStage { Preparing, Uploading, Formatting, Submitting, Accepted, SubmissionUnknown, LeftQueue }
+
+impl PrintStage {
+    pub fn cancellable(&self) -> bool {
+        matches!(self, Self::Preparing | Self::Uploading | Self::Formatting)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PrintProgress {
+    pub stage: PrintStage,
+    pub bytes_sent: u64,
+    pub total_bytes: u64,
 }
 
 // ========== API Responses ==========

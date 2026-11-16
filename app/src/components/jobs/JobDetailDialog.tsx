@@ -1,3 +1,7 @@
+import { useI18n } from '@/lib/i18n'
+import { JobProgress } from './JobProgress'
+import { jobStatusLabel } from '@/lib/job-progress'
+import { DUPLEX_LABELS } from '@/lib/print-settings'
 import { useState, useEffect, useRef } from 'react'
 import { Document, Page, pdfjs } from 'react-pdf'
 import {
@@ -42,12 +46,13 @@ const statusConfig: Record<
   Uploading: { color: 'bg-accent', label: 'Uploading' },
   Queued: { color: 'bg-warning text-warning-foreground', label: 'Queued' },
   Printing: { color: 'bg-primary', label: 'Printing' },
-  Completed: { color: 'bg-success', label: 'Completed' },
+  Completed: { color: 'bg-success', label: 'Left queue' },
   Failed: { color: 'bg-destructive', label: 'Failed' },
   Cancelled: { color: 'bg-muted-foreground', label: 'Cancelled' },
 }
 
 export function JobDetailDialog({ job, open, onOpenChange }: JobDetailDialogProps) {
+  const { locale } = useI18n()
   const [pdfUrl, setPdfUrl] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -139,7 +144,7 @@ export function JobDetailDialog({ job, open, onOpenChange }: JobDetailDialogProp
               variant="secondary"
               className={`${statusConfig[job.status].color} text-white flex-shrink-0`}
             >
-              {statusConfig[job.status].label}
+              {jobStatusLabel(job, locale)}
             </Badge>
           </div>
         </DialogHeader>
@@ -217,6 +222,7 @@ export function JobDetailDialog({ job, open, onOpenChange }: JobDetailDialogProp
           {/* Settings panel */}
           <div className="overflow-y-auto bg-background">
             <div className="p-4 space-y-4">
+              <JobProgress jobId={job.id} initialJob={job} />
               <h3 className="text-sm font-semibold text-foreground">Print Settings</h3>
 
               {/* Settings list */}
@@ -230,7 +236,7 @@ export function JobDetailDialog({ job, open, onOpenChange }: JobDetailDialogProp
                 <SettingItem
                   icon={<Layers className="w-4 h-4" />}
                   label="Double-Sided"
-                  value={settings.duplex === 'Simplex' ? 'Off' : 'On'}
+                  value={DUPLEX_LABELS[settings.duplex]}
                   highlight={settings.duplex !== 'Simplex'}
                 />
 

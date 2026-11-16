@@ -61,6 +61,7 @@ struct SSHConnectionManager {
     session: Option<Session>,
     config: Option<SSHConfig>,
     last_activity: Instant,
+    generation: u64,
 }
 
 impl SSHConnectionManager {
@@ -69,6 +70,7 @@ impl SSHConnectionManager {
             session: None,
             config: None,
             last_activity: Instant::now(),
+            generation: 0,
         }
     }
 
@@ -78,6 +80,27 @@ impl SSHConnectionManager {
 
     fn update_activity(&mut self) {
         self.last_activity = Instant::now();
+    }
+
+    fn begin_connection(&mut self) -> u64 {
+        self.generation = self.generation.wrapping_add(1);
+        self.generation
+    }
+
+    fn finish_connection(&mut self, generation: u64, session: Session, config: SSHConfig) -> Result<(), String> {
+        if self.generation != generation {
+            return Err("Connection request was superseded by a newer connection or disconnect".into());
+        }
+        self.session = Some(session);
+        self.config = Some(config);
+        self.update_activity();
+        Ok(())
+    }
+
+    fn disconnect(&mut self) {
+        self.begin_connection();
+        self.session = None;
+        self.config = None;
     }
 
     #[allow(dead_code)]
@@ -152,8 +175,8 @@ pub fn ssh_test_connection(config: SSHConfig) -> ApiResponse<String> {
 
 /// Execute a command via SSH (uses persistent connection)
 #[tauri::command]
-pub fn ssh_execute_command(_config: SSHConfig, command: String) -> ApiResponse<String> {
-    match execute_with_persistent_session(&command) {
+pub fn ssh_execute_command(config: SSHConfig, command: String) -> ApiResponse<String> {
+    match execute_for_account(&SSHIdentity::from(&config), &command) {
         Ok(output) => ApiResponse::success(output),
         Err(e) => ApiResponse::error(format!("SSH command failed: {}. Please reconnect.", e)),
     }
@@ -162,22 +185,22 @@ pub fn ssh_execute_command(_config: SSHConfig, command: String) -> ApiResponse<S
 /// Upload a file via SSH/SCP (uses persistent connection)
 #[tauri::command]
 pub fn ssh_upload_file(
-    _config: SSHConfig,
+    config: SSHConfig,
     local_path: String,
     remote_path: String,
 ) -> ApiResponse<String> {
-    match upload_with_persistent_session(&local_path, &remote_path) {
+    match upload_with_progress(&SSHIdentity::from(&config), &local_path, &remote_path, &mut |_, _| Ok(())) {
         Ok(_) => ApiResponse::success(format!("File uploaded to {}", remote_path)),
-        Err(e) => ApiResponse::error(format!("File upload failed: {}. Please reconnect.", e)),
+        Err(e) => ApiResponse::error(format!("File upload failed; print command was not sent: {}", e)),
     }
 }
 
 /// List print queues from /etc/printcap via SSH (uses persistent connection).
-pub(crate) fn ssh_list_print_queues(_config: SSHConfig) -> ApiResponse<Vec<String>> {
+pub(crate) fn ssh_list_print_queues(config: SSHConfig) -> ApiResponse<Vec<String>> {
     // Mirrors SOCprint's /etc/printcap discovery while stripping optional aliases.
     let command = "awk -F'[:|]' '/^p/ { print $1 }' /etc/printcap | sort -u";
 
-    let output = match execute_with_persistent_session(command) {
+    let output = match execute_command_for(Some(&SSHIdentity::from(&config)), command, false, COMMAND_TIMEOUT_MS) {
         Ok(output) => output,
         Err(e) => {
             return ApiResponse::error(format!(
@@ -198,11 +221,11 @@ pub(crate) fn ssh_list_print_queues(_config: SSHConfig) -> ApiResponse<Vec<Strin
 }
 
 /// Check print quota via pusage. pusage requires a PTY on SoC Unix servers.
-pub(crate) fn ssh_get_print_quota(_config: SSHConfig) -> ApiResponse<PrintQuota> {
+pub(crate) fn ssh_get_print_quota(config: SSHConfig) -> ApiResponse<PrintQuota> {
     let command =
         "if command -v pusage >/dev/null 2>&1; then pusage; else /usr/local/bin/pusage; fi";
 
-    match execute_with_persistent_session_pty(command) {
+    match execute_command_for(Some(&SSHIdentity::from(&config)), command, true, COMMAND_TIMEOUT_MS) {
         Ok(output) => ApiResponse::success(parse_print_quota_output(&output)),
         Err(e) => ApiResponse::error(format!(
             "Failed to check print quota: {}. Please reconnect.",
@@ -222,31 +245,69 @@ pub fn ssh_debug_command(command: String) -> ApiResponse<String> {
 
 /// Check printer queue status via SSH (uses persistent connection).
 pub(crate) fn ssh_check_printer_queue(
-    _config: SSHConfig,
+    config: SSHConfig,
     printer: String,
 ) -> ApiResponse<Vec<PrintQueueJob>> {
-    if let Err(e) = validate_print_queue_name(&printer) {
-        return ApiResponse::error(e);
+    match queue_snapshot_for(&SSHIdentity::from(&config), &printer) {
+        Ok(snapshot) => ApiResponse::success(snapshot.jobs),
+        Err(error) => ApiResponse::error(error),
     }
+}
 
-    let command = format!("lpq -P {}", printer);
-
-    let output = match execute_with_persistent_session(&command) {
-        Ok(output) => output,
-        Err(e) => {
-            return ApiResponse::error(format!(
-                "Failed to check printer queue: {}. Please reconnect.",
-                e
-            ))
-        }
-    };
-
-    ApiResponse::success(parse_lpq_jobs(&output))
+pub(crate) fn queue_snapshot(printer: &str) -> Result<QueueSnapshot, String> {
+    validate_print_queue_name(printer)?;
+    let output = execute_with_persistent_session(&format!("lpq -P {}", printer))
+        .map_err(|error| format!("Failed to query queue: {}", error))?;
+    Ok(crate::queue_status::parse(&output))
 }
 
 // ========== Internal Implementation ==========
 
-const CONNECTION_TIMEOUT_SECS: u64 = 3; // 3 seconds max per attempt
+const CONNECTION_TIMEOUT_SECS: u64 = 3;
+const AUTH_TIMEOUT_MS: u32 = 30_000;
+const COMMAND_TIMEOUT_MS: u32 = 30_000;
+const PRINT_TIMEOUT_MS: u32 = 180_000;
+const UPLOAD_TIMEOUT_MS: u32 = 120_000;
+
+struct SessionTimeout<'a> { session: &'a Session, previous: u32 }
+impl<'a> SessionTimeout<'a> {
+    fn new(session: &'a Session, timeout: u32) -> Self {
+        let previous = session.timeout();
+        session.set_timeout(timeout);
+        Self { session, previous }
+    }
+}
+impl Drop for SessionTimeout<'_> {
+    fn drop(&mut self) { self.session.set_timeout(self.previous); }
+}
+
+#[derive(Debug)]
+pub(crate) struct RemoteExit { pub code: i32, pub output: String }
+impl std::fmt::Display for RemoteExit {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Remote command exited with {}: {}", self.code, self.output.trim())
+    }
+}
+impl std::error::Error for RemoteExit {}
+
+#[derive(Debug)]
+pub struct PrintSubmissionError { pub uncertain: bool, message: String }
+impl std::fmt::Display for PrintSubmissionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { f.write_str(&self.message) }
+}
+impl std::error::Error for PrintSubmissionError {}
+impl PrintSubmissionError {
+    fn preparation(error: impl std::fmt::Display) -> Self {
+        Self { uncertain: false, message: format!("Remote PDF preparation failed; print command was not sent: {}", error) }
+    }
+    fn submission(error: Box<dyn std::error::Error>) -> Self {
+        let uncertain = error.downcast_ref::<RemoteExit>().is_none();
+        let message = if uncertain {
+            format!("Submission not confirmed: {}. The printer may have accepted the job. Check the printer queue before printing again; no automatic retry was made.", error)
+        } else { format!("Printer rejected the submission: {}", error) };
+        Self { uncertain, message }
+    }
+}
 
 fn create_ssh_session(config: &SSHConfig) -> Result<Session, Box<dyn std::error::Error>> {
     // Single attempt, no retries - fail fast with 3s timeout
@@ -298,22 +359,18 @@ fn try_create_ssh_session(config: &SSHConfig) -> Result<Session, Box<dyn std::er
         .recv_timeout(Duration::from_secs(CONNECTION_TIMEOUT_SECS))
         .map_err(|_| "Connection timeout - no server reachable")?;
 
-    // Set read/write timeouts
-    tcp.set_read_timeout(Some(Duration::from_secs(CONNECTION_TIMEOUT_SECS)))?;
-    tcp.set_write_timeout(Some(Duration::from_secs(CONNECTION_TIMEOUT_SECS)))?;
-
     let mut sess = Session::new()?;
     sess.set_tcp_stream(tcp);
-    sess.set_timeout(CONNECTION_TIMEOUT_SECS as u32 * 1000); // milliseconds
+    sess.set_timeout(AUTH_TIMEOUT_MS);
     sess.handshake()?;
     eprintln!("[SSH] Handshake completed");
 
     match &config.auth_type {
+        SSHAuthType::StoredPassword => {
+            let password = crate::credential_service::load_password(config)?;
+            sess.userauth_password(&config.username, &password)?;
+        }
         SSHAuthType::Password { password } => {
-            eprintln!(
-                "[SSH] Authenticating with password (length: {})",
-                password.len()
-            );
             sess.userauth_password(&config.username, password)?;
         }
         SSHAuthType::PrivateKey {
@@ -352,35 +409,24 @@ fn test_ssh_connection_internal(config: &SSHConfig) -> Result<String, Box<dyn st
 /// Submit a print job via SSH lpr command (uses persistent connection)
 /// Scales PDF on server-side using gs before printing
 pub fn submit_print_job_ssh(
-    _config: &SSHConfig,
+    attempt: &SubmissionAttempt,
     printer: &str,
     remote_file_path: &str,
     settings: &PrintSettings,
-) -> Result<String, Box<dyn std::error::Error>> {
+    before_submit: impl FnOnce() -> Result<(), String>,
+) -> Result<String, PrintSubmissionError> {
     // NUS SoC public queues use explicit suffixes documented by SOCprint:
     // - -dx: double-sided
     // - -sx: single-sided
     // - -nb: no banner
     // Older app versions used base queues like psts/pstsb/pstsc, so keep those
     // as aliases while preferring explicit public queue names.
-    let actual_printer = match settings.duplex {
-        DuplexMode::Simplex => queue_for_duplex_mode(printer, true),
-        DuplexMode::DuplexLongEdge | DuplexMode::DuplexShortEdge => {
-            queue_for_duplex_mode(printer, false)
-        }
-    };
-
-    validate_print_queue_name(&actual_printer)
-        .map_err(|e| -> Box<dyn std::error::Error> { e.into() })?;
-
-    // Paper size dimensions in points
-    let (width_pts, height_pts) = match settings.paper_size {
-        PaperSize::A4 => (595, 842),
-        PaperSize::A3 => (842, 1191),
-    };
+    // Validate the complete submission before doing any remote work.
+    let scaled_path = format!("{}.scaled.pdf", remote_file_path);
+    let lpr_command = build_lpr_command(printer, &scaled_path, settings).map_err(PrintSubmissionError::preparation)?;
+    let (width_pts, height_pts) = print_page_dimensions(settings);
 
     // Create scaled PDF path
-    let scaled_path = remote_file_path.replace(".pdf", "_scaled.pdf");
     let scaled_path_arg = shell_quote(&scaled_path);
     let remote_file_arg = shell_quote(remote_file_path);
 
@@ -388,42 +434,70 @@ pub fn submit_print_job_ssh(
     // -dPDFFitPage: scale content to fit page
     // -dFIXEDMEDIA: force output page size
     let scale_command = format!(
-        "gs -sDEVICE=pdfwrite -dPDFFitPage -dFIXEDMEDIA \
+        "umask 077; gs -sDEVICE=pdfwrite -dPDFFitPage -dFIXEDMEDIA -dAutoRotatePages=/None \
          -dDEVICEWIDTHPOINTS={} -dDEVICEHEIGHTPOINTS={} \
          -dCompatibilityLevel=1.4 -dNOPAUSE -dBATCH -dQUIET \
-         -sOutputFile={} {} 2>/dev/null || cp {} {}",
-        width_pts, height_pts, scaled_path_arg, remote_file_arg, remote_file_arg, scaled_path_arg
+         -sOutputFile={} {}",
+        width_pts, height_pts, scaled_path_arg, remote_file_arg
     );
 
     eprintln!(
         "[SSH] Scaling PDF on server: {} -> {}",
         remote_file_path, scaled_path
     );
-    let scale_result = execute_with_persistent_session(&scale_command);
-    if let Err(e) = &scale_result {
-        eprintln!("[SSH] PDF scaling warning: {}", e);
-        // Continue with original file if scaling fails
-    }
-
-    // Step 2: Build lpr command
-    let print_file = &scaled_path;
-    let mut lpr_command = format!("lpr -P {}", actual_printer);
-
-    // Add copies (using -# notation as per SoC docs)
-    if settings.copies > 1 {
-        lpr_command.push_str(&format!(" '-#' {}", settings.copies));
-    }
-
-    // Add the file
-    lpr_command.push_str(&format!(" {}", shell_quote(print_file)));
-
-    eprintln!("[SSH] Submitting print job: {}", lpr_command);
-    let result = execute_with_persistent_session(&lpr_command);
+    // Do not submit an unscaled or partially written document after conversion failure.
+    let started = Instant::now();
+    let prepared = execute_command_for(Some(&attempt.account), &scale_command, false, PRINT_TIMEOUT_MS);
+    eprintln!("[SSH] PDF preparation finished in {:?}: {}", started.elapsed(),
+        if prepared.is_ok() { "success" } else { "failed" });
+    let result = prepared.map_err(PrintSubmissionError::preparation).and_then(|_| {
+        before_submit().map_err(PrintSubmissionError::preparation)?;
+        eprintln!("[SSH] Submitting print job: {}", lpr_command);
+        let started = Instant::now();
+        let submitted = crate::submission_receipt::submit(attempt, &lpr_command);
+        eprintln!("[SSH] Print submission finished in {:?}: {}", started.elapsed(),
+            if submitted.is_ok() { "acknowledged" } else { "error" });
+        submitted.map_err(PrintSubmissionError::submission)
+    });
 
     // Step 3: Cleanup scaled file
-    let _ = execute_with_persistent_session(&format!("rm -f {}", shell_quote(&scaled_path)));
+    if result.is_ok() || result.as_ref().is_err_and(|error| !error.uncertain) {
+        let _ = execute_for_account(&attempt.account, &format!("rm -f {}", shell_quote(&scaled_path)));
+    }
 
     result
+}
+
+/// Binding is a physical paper edge; orientation must not silently change it.
+fn build_lpr_command(
+    printer: &str,
+    file_path: &str,
+    settings: &PrintSettings,
+) -> Result<String, String> {
+    let queue = queue_for_duplex_mode(printer, matches!(settings.duplex, DuplexMode::Simplex));
+    validate_print_queue_name(&queue)?;
+    let sides = match settings.duplex {
+        DuplexMode::Simplex => "one-sided",
+        DuplexMode::DuplexLongEdge => "two-sided-long-edge",
+        DuplexMode::DuplexShortEdge => "two-sided-short-edge",
+    };
+    let mut command = format!("lpr -P {} -o sides={}", queue, sides);
+    if settings.copies > 1 {
+        command.push_str(&format!(" '-#' {}", settings.copies));
+    }
+    command.push_str(&format!(" {}", shell_quote(file_path)));
+    Ok(command)
+}
+
+fn print_page_dimensions(settings: &PrintSettings) -> (u32, u32) {
+    let (width, height) = match settings.paper_size {
+        PaperSize::A4 => (595, 842),
+        PaperSize::A3 => (842, 1191),
+    };
+    match settings.orientation {
+        Orientation::Portrait => (width, height),
+        Orientation::Landscape => (height, width),
+    }
 }
 
 // ========== Persistent Connection Implementation ==========
@@ -432,7 +506,22 @@ const KEEPALIVE_INTERVAL_SECS: u32 = 30;
 
 /// Connect and store a persistent SSH session
 fn connect_persistent(config: &SSHConfig) -> Result<String, Box<dyn std::error::Error>> {
-    let session = create_ssh_session(config)?;
+    let (generation, active) = {
+        let mut manager = SSH_MANAGER.lock().map_err(|_| "Connection state unavailable")?;
+        (manager.begin_connection(), manager.get_config())
+    };
+    // Resolve saved credentials once per connection lifecycle. Reconnects use only
+    // the in-memory session secret, which disconnect_persistent clears.
+    let mut resolved = config.clone();
+    if matches!(resolved.auth_type, SSHAuthType::StoredPassword) {
+        let password = match active {
+            Some(SSHConfig { host, port, username, auth_type: SSHAuthType::Password { password } })
+                if host == config.host && port == config.port && username == config.username => password,
+            _ => crate::credential_service::load_password(config)?,
+        };
+        resolved.auth_type = SSHAuthType::Password { password };
+    }
+    let session = create_ssh_session(&resolved)?;
 
     // Enable keepalive to prevent connection timeout
     session.set_keepalive(true, KEEPALIVE_INTERVAL_SECS);
@@ -440,9 +529,7 @@ fn connect_persistent(config: &SSHConfig) -> Result<String, Box<dyn std::error::
     let mut manager = SSH_MANAGER
         .lock()
         .map_err(|e| format!("Failed to acquire lock: {}", e))?;
-    manager.session = Some(session);
-    manager.config = Some(config.clone());
-    manager.update_activity();
+    manager.finish_connection(generation, session, resolved)?;
 
     Ok(format!(
         "Connected to {}@{}:{}",
@@ -456,19 +543,15 @@ fn disconnect_persistent() -> Result<String, Box<dyn std::error::Error>> {
         .lock()
         .map_err(|e| format!("Failed to acquire lock: {}", e))?;
 
-    if manager.session.is_none() {
-        return Err("No active SSH connection".into());
-    }
-
-    manager.session = None;
-    manager.config = None;
+    // Disconnect is idempotent, including after a failed reconnect.
+    manager.disconnect();
 
     Ok("Disconnected from SSH server".to_string())
 }
 
 /// Check if session needs reconnection and attempt to reconnect if necessary
 /// Returns the config needed for reconnection, or None if session is healthy
-fn check_session_health() -> Result<Option<SSHConfig>, Box<dyn std::error::Error>> {
+fn check_session_health() -> Result<Option<(SSHConfig, u64)>, Box<dyn std::error::Error>> {
     let mut manager = SSH_MANAGER
         .lock()
         .map_err(|e| format!("Failed to acquire lock: {}", e))?;
@@ -489,7 +572,7 @@ fn check_session_health() -> Result<Option<SSHConfig>, Box<dyn std::error::Error
                     let config_clone = config.clone();
                     // Clear the dead session
                     manager.session = None;
-                    return Ok(Some(config_clone));
+                    return Ok(Some((config_clone, manager.generation)));
                 } else {
                     return Err("Connection lost and no config available for reconnection".into());
                 }
@@ -506,7 +589,7 @@ fn ensure_session_valid() -> Result<(), Box<dyn std::error::Error>> {
     let reconnect_config = check_session_health()?;
 
     // If we need to reconnect, do it outside the lock
-    if let Some(config) = reconnect_config {
+    if let Some((config, generation)) = reconnect_config {
         let new_session = create_ssh_session(&config)?;
         new_session.set_keepalive(true, KEEPALIVE_INTERVAL_SECS);
 
@@ -514,9 +597,7 @@ fn ensure_session_valid() -> Result<(), Box<dyn std::error::Error>> {
         let mut manager = SSH_MANAGER
             .lock()
             .map_err(|e| format!("Failed to acquire lock: {}", e))?;
-        manager.session = Some(new_session);
-        manager.config = Some(config);
-        manager.update_activity();
+        manager.finish_connection(generation, new_session, config)?;
     }
 
     Ok(())
@@ -524,108 +605,80 @@ fn ensure_session_valid() -> Result<(), Box<dyn std::error::Error>> {
 
 /// Execute a function with a valid session
 /// This is the core abstraction that handles session management
-fn with_session<T, F>(operation: F) -> Result<T, Box<dyn std::error::Error>>
-where
-    F: FnOnce(&Session) -> Result<T, Box<dyn std::error::Error>>,
-{
+fn with_session_for<T, F>(account: Option<&SSHIdentity>, operation: F) -> Result<T, Box<dyn std::error::Error>>
+where F: FnOnce(&Session) -> Result<T, Box<dyn std::error::Error>> {
     ensure_session_valid()?;
-
-    let manager = SSH_MANAGER
-        .lock()
-        .map_err(|e| format!("Failed to acquire lock: {}", e))?;
-
+    let manager = SSH_MANAGER.lock().map_err(|e| format!("Failed to acquire lock: {}", e))?;
+    if let Some(expected) = account {
+        if manager.config.as_ref().map(SSHIdentity::from).as_ref() != Some(expected) {
+            return Err("The connected account changed. Reconnect to the account that submitted this job.".into());
+        }
+    }
     let session = manager.session.as_ref().ok_or("No active SSH session")?;
-
     operation(session)
 }
 
-/// Execute command using persistent session
-fn execute_with_persistent_session(command: &str) -> Result<String, Box<dyn std::error::Error>> {
-    with_session(|session| {
-        let mut channel = session.channel_session()?;
-        channel.exec(command)?;
+pub(crate) fn execute_for_account(account: &SSHIdentity, command: &str) -> Result<String, Box<dyn std::error::Error>> {
+    execute_command_for(Some(account), command, false, PRINT_TIMEOUT_MS)
+}
 
+pub(crate) fn queue_snapshot_for(account: &SSHIdentity, printer: &str) -> Result<QueueSnapshot, String> {
+    validate_print_queue_name(printer)?;
+    let output = execute_for_account(account, &format!("lpq -P {}", printer)).map_err(|e| e.to_string())?;
+    Ok(crate::queue_status::parse(&output))
+}
+
+/// All command channels drain merged stdout/stderr to avoid stream backpressure deadlocks.
+fn execute_command(command: &str, pty: bool, timeout_ms: u32) -> Result<String, Box<dyn std::error::Error>> {
+    execute_command_for(None, command, pty, timeout_ms)
+}
+
+fn execute_command_for(account: Option<&SSHIdentity>, command: &str, pty: bool, timeout_ms: u32) -> Result<String, Box<dyn std::error::Error>> {
+    with_session_for(account, |session| {
+        let _timeout = SessionTimeout::new(session, timeout_ms);
+        let mut channel = session.channel_session()?;
+        if pty { channel.request_pty("xterm", None, Some((80, 24, 0, 0)))?; }
+        channel.handle_extended_data(ssh2::ExtendedData::Merge)?;
+        channel.exec(command)?;
         let mut output = String::new();
         channel.read_to_string(&mut output)?;
-
-        let mut stderr = String::new();
-        channel.stderr().read_to_string(&mut stderr)?;
-
         channel.wait_close()?;
-        let exit_status = channel.exit_status()?;
-
-        if exit_status != 0 {
-            // Include both stdout and stderr in error for debugging
-            let error_details = if !stderr.trim().is_empty() {
-                stderr.trim().to_string()
-            } else if !output.trim().is_empty() {
-                output.trim().to_string()
-            } else {
-                format!("No error message (command: {})", command)
-            };
-            return Err(format!("Command failed (exit {}): {}", exit_status, error_details).into());
-        }
-
+        let code = channel.exit_status()?;
+        if code != 0 { return Err(Box::new(RemoteExit { code, output })); }
         Ok(output)
     })
 }
 
-/// Execute a command using a PTY. Required by tools such as /usr/local/bin/pusage.
-fn execute_with_persistent_session_pty(
-    command: &str,
-) -> Result<String, Box<dyn std::error::Error>> {
-    with_session(|session| {
-        let mut channel = session.channel_session()?;
-        channel.request_pty("xterm", None, Some((80, 24, 0, 0)))?;
-        channel.exec(command)?;
-
-        let mut output = String::new();
-        channel.read_to_string(&mut output)?;
-
-        let mut stderr = String::new();
-        channel.stderr().read_to_string(&mut stderr)?;
-
-        channel.wait_close()?;
-        let exit_status = channel.exit_status()?;
-
-        if exit_status != 0 {
-            let error_details = if !stderr.trim().is_empty() {
-                stderr.trim().to_string()
-            } else if !output.trim().is_empty() {
-                output.trim().to_string()
-            } else {
-                format!("No error message (command: {})", command)
-            };
-            return Err(format!("Command failed (exit {}): {}", exit_status, error_details).into());
-        }
-
-        if stderr.trim().is_empty() {
-            Ok(output)
-        } else if output.trim().is_empty() {
-            Ok(stderr)
-        } else {
-            Ok(format!("{}\n{}", output.trim_end(), stderr.trim_end()))
-        }
-    })
+fn execute_with_persistent_session(command: &str) -> Result<String, Box<dyn std::error::Error>> {
+    execute_command(command, false, COMMAND_TIMEOUT_MS)
 }
 
 /// Upload file using persistent session
-fn upload_with_persistent_session(
+pub(crate) fn upload_with_progress(
+    account: &SSHIdentity,
     local_path: &str,
     remote_path: &str,
+    progress: &mut impl FnMut(u64, u64) -> std::io::Result<()>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let local_file = std::fs::File::open(local_path)?;
     let metadata = local_file.metadata()?;
     let file_size = metadata.len();
 
-    with_session(|session| {
-        let mut remote_file = session.scp_send(Path::new(remote_path), 0o644, file_size, None)?;
+    with_session_for(Some(account), |session| {
+        let _timeout = SessionTimeout::new(session, UPLOAD_TIMEOUT_MS);
+        let mut remote_file = session.scp_send(Path::new(remote_path), 0o600, file_size, None)?;
 
-        std::io::copy(
-            &mut std::io::BufReader::new(std::fs::File::open(local_path)?),
-            &mut remote_file,
-        )?;
-
+        crate::scp_transfer::send_contents_observed(&mut std::io::BufReader::new(local_file), &mut remote_file, file_size, progress)?;
+        remote_file.send_eof()?;
+        remote_file.wait_eof()?;
+        remote_file.close()?;
+        remote_file.wait_close()?;
+        let code = remote_file.exit_status()?;
+        if code != 0 {
+            let mut diagnostic = String::new();
+            remote_file.stderr().take(4096).read_to_string(&mut diagnostic)?;
+            return Err(Box::new(RemoteExit { code, output: diagnostic }));
+        }
         Ok(())
     })
 }
@@ -656,7 +709,7 @@ fn replace_queue_suffix(queue: &str, suffix: &str) -> String {
     }
 }
 
-fn queue_for_duplex_mode(queue: &str, simplex: bool) -> String {
+pub(crate) fn queue_for_duplex_mode(queue: &str, simplex: bool) -> String {
     let normalized = normalize_legacy_public_queue(queue);
 
     if normalized.ends_with("-nb") {
@@ -698,7 +751,7 @@ fn is_safe_print_queue_name(queue: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
 }
 
-fn parse_lpq_jobs(output: &str) -> Vec<PrintQueueJob> {
+pub(crate) fn parse_lpq_jobs(output: &str) -> Vec<PrintQueueJob> {
     output.lines().filter_map(parse_lpq_job_line).collect()
 }
 
@@ -841,6 +894,52 @@ mod tests {
     use super::*;
 
     #[test]
+    fn stale_connection_cannot_restore_account_after_disconnect_or_switch() {
+        let config = |username: &str| SSHConfig {
+            host: "stu".into(), port: 22, username: username.into(),
+            auth_type: SSHAuthType::StoredPassword,
+        };
+        let mut manager = SSHConnectionManager::new();
+        let old = manager.begin_connection();
+        manager.disconnect();
+        assert!(manager.finish_connection(old, Session::new().unwrap(), config("alice")).is_err());
+        assert!(!manager.is_connected());
+        assert!(manager.get_config().is_none());
+
+        let reconnect = manager.begin_connection();
+        let replacement = manager.begin_connection();
+        manager.finish_connection(replacement, Session::new().unwrap(), config("bob")).unwrap();
+        assert!(manager.finish_connection(reconnect, Session::new().unwrap(), config("alice")).is_err());
+        assert_eq!(manager.get_config().unwrap().username, "bob");
+    }
+
+    #[test]
+    fn scoped_operation_timeout_restores_even_on_failure() {
+        let session = Session::new().unwrap();
+        session.set_timeout(AUTH_TIMEOUT_MS);
+        let operation = || -> Result<(), &'static str> {
+            let _timeout = SessionTimeout::new(&session, PRINT_TIMEOUT_MS);
+            assert_eq!(session.timeout(), PRINT_TIMEOUT_MS);
+            Err("simulated timeout")
+        };
+        assert!(operation().is_err());
+        assert_eq!(session.timeout(), AUTH_TIMEOUT_MS);
+    }
+
+    #[test]
+    fn uncertain_submission_is_distinguished_from_remote_rejection() {
+        let timeout = std::io::Error::new(std::io::ErrorKind::TimedOut, "Timed out waiting on socket");
+        let error = PrintSubmissionError::submission(Box::new(timeout));
+        assert!(error.uncertain);
+        assert!(error.to_string().contains("no automatic retry"));
+        let rejected = PrintSubmissionError::submission(Box::new(RemoteExit { code: 1, output: "queue unavailable".into() }));
+        assert!(!rejected.uncertain);
+        let preparation = PrintSubmissionError::preparation("conversion timed out");
+        assert!(!preparation.uncertain);
+        assert!(preparation.to_string().contains("print command was not sent"));
+    }
+
+    #[test]
     fn parses_lpq_jobs_with_total_size() {
         let output = "\
 Printer: psts@print
@@ -894,6 +993,61 @@ Queue: no printable jobs in queue
         assert_eq!(queue_for_duplex_mode("psc008", true), "psc008-sx");
         assert_eq!(queue_for_duplex_mode("pstsb", false), "pstb-dx");
         assert_eq!(queue_for_duplex_mode("pstsc-sx", false), "pstc-dx");
+    }
+
+    fn duplex_test_settings(duplex: DuplexMode, orientation: Orientation) -> PrintSettings {
+        PrintSettings {
+            copies: 2,
+            duplex,
+            orientation,
+            page_range: PageRange::All,
+            pages_per_sheet: 1,
+            booklet: false,
+            paper_size: PaperSize::A4,
+        }
+    }
+
+    #[test]
+    fn submission_preserves_binding_for_both_orientations_and_layouts() {
+        for orientation in [Orientation::Portrait, Orientation::Landscape] {
+            for (mode, suffix, sides) in [
+                (DuplexMode::Simplex, "sx", "one-sided"),
+                (DuplexMode::DuplexLongEdge, "dx", "two-sided-long-edge"),
+                (DuplexMode::DuplexShortEdge, "dx", "two-sided-short-edge"),
+            ] {
+                for (pages_per_sheet, booklet) in [(1, false), (2, false), (1, true)] {
+                    let mut settings = duplex_test_settings(mode.clone(), orientation.clone());
+                    settings.pages_per_sheet = pages_per_sheet;
+                    settings.booklet = booklet;
+                    assert_eq!(
+                        build_lpr_command("psts-sx", "/tmp/alice's file.pdf", &settings).unwrap(),
+                        format!("lpr -P psts-{} -o sides={} '-#' 2 {}", suffix, sides,
+                            shell_quote("/tmp/alice's file.pdf"))
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn submission_validates_queue_and_preserves_no_banner() {
+        let mut settings = duplex_test_settings(DuplexMode::DuplexShortEdge, Orientation::Portrait);
+        settings.copies = 1;
+        assert!(build_lpr_command("psts; touch /tmp/unwanted", "/tmp/test.pdf", &settings).is_err());
+        assert_eq!(build_lpr_command("psts-nb", "/tmp/test.pdf", &settings).unwrap(),
+            "lpr -P psts-nb -o sides=two-sided-short-edge '/tmp/test.pdf'");
+    }
+
+    #[test]
+    fn paper_dimensions_respect_orientation_and_size() {
+        let mut settings = duplex_test_settings(DuplexMode::DuplexShortEdge, Orientation::Landscape);
+        assert_eq!(print_page_dimensions(&settings), (842, 595));
+        settings.paper_size = PaperSize::A3;
+        assert_eq!(print_page_dimensions(&settings), (1191, 842));
+        settings.orientation = Orientation::Portrait;
+        assert_eq!(print_page_dimensions(&settings), (842, 1191));
+        settings.paper_size = PaperSize::A4;
+        assert_eq!(print_page_dimensions(&settings), (595, 842));
     }
 
     #[test]

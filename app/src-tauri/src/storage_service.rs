@@ -67,6 +67,7 @@ pub fn load_print_history() -> Result<HashMap<String, PrintJob>, String> {
     let mut map = HashMap::new();
     let mut recovered = 0;
     for mut job in jobs {
+        if job.recover_interrupted() { recovered += 1; }
         if !Path::new(&job.file_path).exists() {
             if let Some(backup_path) = get_backup_file_path(&job.id) {
                 job.file_path = backup_path.to_string_lossy().to_string();
@@ -194,7 +195,7 @@ pub fn get_storage_info() -> Result<StorageInfo, String> {
 
     let history_size = get_dir_size(&history_dir);
     let backups_size = get_dir_size(&backups_dir);
-    let total_size = history_size + backups_size;
+    let total_size = history_size + backups_size + get_dir_size(&data_dir.join("imports"));
 
     // Count backup files
     let backup_count = if backups_dir.exists() {

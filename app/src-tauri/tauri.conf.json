@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Print_at_SoC",
-  "version": "0.328.7",
+  "version": "0.328.8",
   "identifier": "tech.silan.PrintAtSoC",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -10,22 +10,21 @@
     "frontendDist": "../dist"
   },
   "app": {
+    "macOSPrivateApi": true,
     "withGlobalTauri": true,
     "windows": [
       {
         "label": "main",
+        "create": false,
         "title": "Print@SoC - Smart Printing for NUS SoC",
         "width": 1400,
         "height": 900,
+        "minWidth": 480,
+        "minHeight": 480,
         "resizable": true,
         "fullscreen": false,
         "decorations": true,
-        "titleBarStyle": "Overlay",
-        "hiddenTitle": true,
-        "trafficLightPosition": {
-          "x": 18,
-          "y": 18
-        },
+        "titleBarStyle": "Visible",
         "transparent": false
       }
     ],
@@ -39,6 +38,11 @@
           ],
           "permissions": [
             "core:default",
+            "core:window:allow-start-dragging",
+            "core:window:allow-set-size",
+            "core:window:allow-set-position",
+            "core:window:allow-toggle-maximize",
+            "core:window:allow-set-theme",
             "core:path:default",
             "core:event:allow-listen",
             "shell:allow-open",
@@ -173,7 +177,7 @@
           "en-US"
         ],
         "template": null,
-        "version": "0.1.18439"
+        "version": "0.1.18440"
       },
       "nsis": {
         "installerIcon": "icons/icon.ico",

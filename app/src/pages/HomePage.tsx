@@ -1,9 +1,12 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useI18n } from '@/lib/i18n'
+import { jobStatusLabel } from '@/lib/job-progress'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { usePrinterStore } from '@/store/printer-store'
-import { getAllPrintJobs, getBackupPath, getPDFInfo } from '@/lib/printer-api'
-import { isTauriAvailable, safeDialogOpen } from '@/lib/tauri-utils'
+import { getAllPrintJobs, getBackupPath } from '@/lib/printer-api'
+import { prepareDocument, browseDocument } from '@/lib/documents'
 import { toast } from 'sonner'
+import { useNativeFileDrop } from '@/hooks/useNativeFileDrop'
 import { FileText, Printer, Edit3, X, Loader2, UploadCloud, ArrowRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -22,13 +25,19 @@ const statusColors: Record<PrintJobStatus, string> = {
 }
 
 export default function ModernHomePageV2() {
+  const { locale } = useI18n()
   const navigate = useNavigate()
   const location = useLocation()
   const { connectionStatus, printJobs, setPrintJobs, setCurrentFile, draftJobs, removeDraftJob } = usePrinterStore()
   const isConnected = connectionStatus.type === 'connected'
   const isUiPreview = import.meta.env.DEV && new URLSearchParams(location.search).has('ui-preview')
   const [loading, setLoading] = useState(false)
-  const [isDragging, setIsDragging] = useState(false)
+  const openingFile = useRef(false)
+  const mounted = useRef(false)
+  useEffect(() => {
+    mounted.current = true
+    return () => { mounted.current = false }
+  }, [])
   const [errorDialog, setErrorDialog] = useState<{
     open: boolean
     title: string
@@ -48,48 +57,54 @@ export default function ModernHomePageV2() {
   }
 
   const handleFileSelect = useCallback(async (filePath: string, jobId?: string) => {
+    if (openingFile.current) return
+    openingFile.current = true
     setLoading(true)
     try {
       let resolvedPath = filePath
-      let info = await getPDFInfo(resolvedPath)
+      let info = await prepareDocument(resolvedPath)
 
-      if (!info.success && jobId && info.error?.includes('PDF file not found')) {
+      if (!info.success && jobId && info.error?.includes('Source file not found')) {
         const backup = await getBackupPath(jobId)
         if (backup.success && backup.data) {
           resolvedPath = backup.data
-          info = await getPDFInfo(resolvedPath)
+          info = await prepareDocument(resolvedPath)
         }
       }
 
+      if (!mounted.current) return
+
       if (info.success && info.data) {
+        resolvedPath = info.data.path
         setCurrentFile(null, resolvedPath)
         const sessionId = Math.random().toString(36).substring(2, 10)
-        navigate(`/preview/${sessionId}`, { state: { filePath: resolvedPath, pdfInfo: info.data } })
+        navigate(`/preview/${sessionId}`, { state: { filePath: resolvedPath, pdfInfo: info.data.info, fileName: info.data.name } })
       } else {
         const errorMsg = info.error || 'Unknown error occurred'
-        const missingFile = errorMsg.includes('PDF file not found')
+        const missingFile = errorMsg.includes('Source file not found')
 
         setErrorDialog({
           open: true,
-          title: missingFile ? 'Source file unavailable' : 'Failed to load PDF',
+          title: missingFile ? 'Source file unavailable' : 'Failed to prepare document',
           message: missingFile
             ? 'The original PDF and its local backup are no longer available. Choose the document again to continue.'
-            : 'The PDF could not be opened. Review the technical details or choose another document.',
+            : 'The document could not be prepared. Review the technical details or choose another document.',
           technicalDetails: errorMsg,
         })
 
-        toast.error(missingFile ? 'Source file unavailable' : 'Failed to load PDF')
+        toast.error(missingFile ? 'Source file unavailable' : 'Failed to prepare document')
         console.error('PDF load error:', errorMsg)
       }
     } catch (error) {
+      if (!mounted.current) return
       const errorMsg = error instanceof Error ? error.message : String(error)
       const errorStack = error instanceof Error ? error.stack : undefined
 
       // Show detailed error dialog
       setErrorDialog({
         open: true,
-        title: 'Error Loading File',
-        message: 'An unexpected error occurred while loading the PDF file.',
+        title: 'Error Loading Document',
+        message: 'An unexpected error occurred while preparing the document.',
         technicalDetails: errorStack || errorMsg,
       })
 
@@ -97,17 +112,17 @@ export default function ModernHomePageV2() {
       toast.error('Error loading file')
       console.error('PDF load exception:', error)
     } finally {
-      setLoading(false)
+      openingFile.current = false
+      if (mounted.current) setLoading(false)
     }
   }, [setCurrentFile, navigate])
 
   const handleBrowseFile = useCallback(async () => {
-    const file = await safeDialogOpen({
-      multiple: false,
-      filters: [{ name: 'PDF', extensions: ['pdf'] }],
-    })
-    if (file) {
-      handleFileSelect(file as string)
+    let file: string | string[] | null
+    try { file = await browseDocument() }
+    catch (error) { toast.error(String(error)); return }
+    if (mounted.current && typeof file === 'string') {
+      void handleFileSelect(file)
     }
   }, [handleFileSelect])
 
@@ -118,6 +133,7 @@ export default function ModernHomePageV2() {
       state: {
         filePath: draft.file_path,
         pdfInfo: draft.pdf_info,
+        fileName: draft.name,
         draftSettings: draft.settings,
         draftPrinter: draft.selected_printer,
       }
@@ -138,45 +154,15 @@ export default function ModernHomePageV2() {
     loadJobs()
   }, [isConnected, isUiPreview, navigate])
 
-  // Tauri file drop event listener (Tauri v2 API)
-  useEffect(() => {
-    if (!isTauriAvailable()) return
-
-    let unlisten: (() => void) | undefined
-
-    const setupListeners = async () => {
-      try {
-        const { getCurrentWebviewWindow } = await import('@tauri-apps/api/webviewWindow')
-        const webview = getCurrentWebviewWindow()
-
-        unlisten = await webview.onDragDropEvent((event) => {
-          const payload = event.payload as any
-          if (payload.type === 'enter' || payload.type === 'over') {
-            setIsDragging(true)
-          } else if (payload.type === 'leave') {
-            setIsDragging(false)
-          } else if (payload.type === 'drop') {
-            const paths: string[] = payload.paths || []
-            const pdfPath = paths.find((p) => p.toLowerCase().endsWith('.pdf'))
-            if (pdfPath) {
-              handleFileSelect(pdfPath)
-            } else {
-              toast.error('Please drop a PDF file')
-            }
-            setIsDragging(false)
-          }
-        })
-      } catch (error) {
-        console.error('Error setting up drag & drop listener:', error)
-      }
+  const isDragging = useNativeFileDrop((paths) => {
+    if (openingFile.current) return
+    if (paths.length !== 1) {
+      toast.error('Drop one document at a time')
+      return
     }
-
-    setupListeners()
-
-    return () => {
-      if (unlisten) unlisten()
-    }
-  }, [handleFileSelect])
+    const [path] = paths
+    void handleFileSelect(path)
+  })
 
   const recentJobs = useMemo(() => printJobs.slice(0, 6), [printJobs])
   return (
@@ -184,7 +170,7 @@ export default function ModernHomePageV2() {
       header={
         <PageHeader
           title="Print workbench"
-          description="Prepare and review a PDF before printing"
+          description="Prepare and review a document before printing"
           icon={<Printer />}
         />
       }
@@ -197,9 +183,9 @@ export default function ModernHomePageV2() {
           <div className="flex items-start justify-between gap-4 px-5 pb-4 pt-5 sm:px-6">
             <div>
               <p className="text-xs font-semibold uppercase text-primary">New job</p>
-              <h2 className="mt-1 text-lg font-semibold text-foreground">Add a PDF document</h2>
+              <h2 className="mt-1 text-lg font-semibold text-foreground">Add a document or image</h2>
             </div>
-            <span className="font-mono text-xs text-muted-foreground">PDF / A4 / A3</span>
+            <span className="font-mono text-xs text-muted-foreground">PDF / Images / Office</span>
           </div>
           <div
             className={`relative mx-3 mb-3 flex flex-1 items-center justify-center overflow-hidden rounded-md border border-dashed px-6 py-16 transition-colors sm:mx-4 sm:mb-4 sm:py-24 ${
@@ -207,13 +193,15 @@ export default function ModernHomePageV2() {
                 ? 'border-[var(--border-hover)] bg-primary/7'
                 : 'border-[var(--border-hover)]/70 bg-workspace'
             }`}
-            aria-label="PDF upload area"
+            aria-label="Document import area"
+            aria-busy={loading}
+            aria-live="polite"
           >
             {loading ? (
               <div className="flex items-center justify-center text-center">
                 <div>
                   <Loader2 className="mx-auto mb-4 h-9 w-9 animate-spin text-muted-foreground" />
-                  <p className="text-muted-foreground">Loading PDF...</p>
+                  <p className="text-muted-foreground">Preparing document...</p>
                 </div>
               </div>
             ) : isDragging ? (
@@ -223,7 +211,7 @@ export default function ModernHomePageV2() {
                     <UploadCloud className="h-8 w-8" />
                   </div>
                   <h3 className="mb-2 text-lg font-semibold text-primary">
-                    Drop PDF Here
+                    Drop document here
                   </h3>
                   <p className="text-muted-foreground">
                     Release to upload
@@ -236,9 +224,9 @@ export default function ModernHomePageV2() {
                   <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-md bg-primary/10 text-primary">
                     <UploadCloud className="h-6 w-6" />
                   </div>
-                  <h3 className="mb-2 text-lg font-semibold text-foreground">Choose a PDF</h3>
+                  <h3 className="mb-2 text-lg font-semibold text-foreground">Choose a document</h3>
                   <p className="mb-6 text-sm leading-6 text-muted-foreground">
-                    <span className="sm:hidden">Select a PDF from your device.</span>
+                    <span className="sm:hidden">Select a document or image.</span>
                     <span className="hidden sm:inline">Drag a file here or browse your computer.</span>
                   </p>
                   <Button
@@ -293,7 +281,7 @@ export default function ModernHomePageV2() {
                       </span>
                     </span>
                   </span>
-                  <span className={`text-xs font-semibold ${statusColors[job.status]}`}>{job.status}</span>
+                  <span className={`text-xs font-semibold ${statusColors[job.status]}`}>{jobStatusLabel(job, locale)}</span>
                 </button>
               ))}
             </div>

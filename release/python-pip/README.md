@@ -47,6 +47,26 @@ The inspection commands support `--server stu|stf`, `--host`, `--port`,
 `PSOC_SSH_*` environment variables listed below. Human-readable commands print
 tables/key-value output; pass `--json` for scripts.
 
+## Updates and uninstall
+
+```bash
+print-soc self update --check
+print-soc self update
+print-soc self update --auto apply
+print-soc self update --rollback
+print-soc self uninstall --dry-run
+print-soc self uninstall --purge --remove-cli
+```
+
+Updates verify downloads before replacing the desktop and retain a previous
+version for rollback. Normal CLI desktop launches check daily (notification by
+default); automatic installation is opt-in on macOS/Linux. The uninstall wizard
+previews owned components and lets you retain data or purge app data and saved
+credentials. Use `--plain` for simple text, or `--non-interactive --yes` in scripts.
+Python/npm package upgrades and CUPS service refreshes remain separate from
+desktop updates. See [maintenance and recovery details](https://github.com/Qingbolan/Print-SoC/blob/main/docs/maintenance.md), including Windows
+native-installer limits and the intentionally retained non-secret lock file.
+
 ## Virtual Printer
 
 macOS and Linux can install a CUPS virtual printer queue named `PrintAtSoC`.
@@ -68,6 +88,61 @@ Configuration is stored in `~/.PrintAtSoC/virtual-printer.json` with mode `0600`
 Use `--password-stdin` instead of `--ask-password` for scripted setup, or use
 `--key-path` for SSH key authentication. The default server is
 `stu.comp.nus.edu.sg`; pass `--server stf` for staff accounts.
+
+Start the interactive installer with:
+
+```bash
+print-soc virtual-printer install
+```
+
+The terminal wizard offers arrow-key menus for the server, authentication,
+paper and sides; validates typed values; hides password input; and previews the
+account and destination before asking to install. Decline the confirmation to
+edit the settings or cancel before any system changes. Animated stage indicators run
+only while work is happening, and stop before password prompts. Ctrl+C exits
+cleanly. The result explains how to use the printer or shows stage-specific
+repair steps when setup fails. Re-running setup repairs an existing queue.
+
+```bash
+# Walk through setup without passwords, sudo or system changes:
+print-soc virtual-printer install --dry-run
+
+# Simple numbered prompts, without colors or animation:
+print-soc virtual-printer install --plain
+
+# Scripted installation: authenticate the administrator separately first.
+sudo -v
+print-soc virtual-printer install --non-interactive --username YOUR_SOC_ID --key-path ~/.ssh/id_ed25519
+```
+
+Scripts can provide a password through `--password-stdin` (one line) or the
+existing `PSOC_SSH_PASSWORD` environment variable. Avoid `--password` in shell
+history. Non-interactive mode never prompts, including for sudo; missing inputs
+produce an actionable error and nonzero exit code. Redirected output, `NO_COLOR`
+and `TERM=dumb` produce plain logs. `--yes` skips only the final confirmation;
+use `--non-interactive` to disable all prompts. Authentication sources are
+mutually exclusive. Exit status is `0` for success/declined review, `1` for a
+handled failure, `2` for invalid command arguments, and `130` for Ctrl+C/EOF.
+A successful installation verifies the local queue, not remote SSH connectivity
+or physical printing. Setup never automatically submits a test page.
+
+In the desktop app, open **Settings → Advanced → Add system printer**.
+Setup opens Terminal to request the SoC password and administrator authentication;
+return to the app and refresh integration status after installation completes.
+The same installer is available through the command above. Run it as your normal
+user: it requests `sudo` only for system changes. A working CUPS service and a
+system/Homebrew Python installed outside the home directory are required.
+
+The installer snapshots the backend and its installed dependencies into a
+root-owned system directory (`/Library/Application Support/PrintAtSoC/cups` on
+macOS, `/usr/local/lib/print-at-soc/cups` on Linux). It stores the forwarding
+configuration in `/etc/print-at-soc/virtual-printer.json` with mode `0600` and
+copies an explicitly configured SSH key there with the same permissions. This
+allows the CUPS service to run without access to a logged-in user's home or SSH
+agent. All local Print@SoC queues use this system forwarding account. Re-run the
+installer after upgrading the CLI to update the installed backend snapshot.
+The normal user configuration remains available for CLI commands; configuring
+an installed virtual printer also updates its system configuration.
 
 Useful virtual printer commands:
 
@@ -156,7 +231,7 @@ upgrade the Python package and reinstall the queue:
 
 ```bash
 python -m pip install --upgrade print-at-soc
-sudo "$(command -v python)" -m print_at_soc virtual-printer install
+python -m print_at_soc virtual-printer install --username your-soc-id --ask-password
 ```
 
 The installer now registers the packaged PDF PPD on both macOS and Linux. A4/A3

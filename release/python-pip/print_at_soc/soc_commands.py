@@ -425,7 +425,7 @@ def virtual_printer_cli(argv: List[str]) -> int:
         print(
             "Usage:\n"
             "  print-soc virtual-printer configure [options]\n"
-            "  print-soc virtual-printer install [options]\n"
+            "  print-soc virtual-printer install [options]  Interactive setup wizard\n"
             "  print-soc virtual-printer status [options]\n"
             "  print-soc virtual-printer uninstall [options]"
         )

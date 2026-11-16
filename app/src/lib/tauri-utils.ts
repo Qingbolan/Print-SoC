@@ -16,6 +16,8 @@ import type {
 } from '@/types/printer'
 
 type TauriCommandResponses = {
+  credential_save: boolean
+  credential_delete: boolean
   check_network_connectivity: boolean
   ssh_connect: string
   ssh_disconnect: string
@@ -43,6 +45,7 @@ type TauriCommandResponses = {
   print_cleanup_history: string[]
   print_get_storage_info: StorageInfo
   app_open_devtools: string
+  integration_add_virtual_printer: string
   integration_get_status: IntegrationStatus
   integration_test_mcp: string
 }
@@ -77,6 +80,11 @@ export async function safeInvoke<T>(
   command: string,
   args?: Record<string, unknown>
 ): Promise<ApiResponse<T>> {
+  // Credential operations must never report mock persistence.
+  if ((command === 'credential_save' || command === 'credential_delete' || command === 'document_prepare' || command === 'document_extensions') && !isTauriAvailable()) {
+    return { success: false, error: 'This operation requires the desktop app' }
+  }
+
   // If in debug mode and Tauri is not available, return mock success
   if (isDebugMode() && !isTauriAvailable()) {
     console.log(`[Debug Mode] Mock invoke: ${command}`, args)
@@ -163,6 +171,9 @@ function getMockResponse(command: string, args?: Record<string, unknown>): ApiRe
         raw_output: 'Print quota: mock output',
         summary: 'Print quota: mock output',
       } satisfies PrintQuota)
+
+    case 'print_get_queue_snapshot':
+      return success({ status: 'Unknown', jobs: MOCK_QUEUE_JOBS, diagnostics: ['Offline preview: no live printer data'], raw_output: 'Offline preview: no live printer data', checked_at: new Date().toISOString(), jobs_complete: false })
 
     case 'print_check_printer_status':
       return success(MOCK_QUEUE_JOBS)

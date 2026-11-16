@@ -32,7 +32,7 @@ For macOS users, the official configuration requires:
 5. Select protocol: IPP (Internet Printing Protocol)
 6. Enter queue name (e.g., `psts-dx`)
 7. Download and install printer drivers (PPD files)
-8. Configure paper size, duplex printing, and other options
+8. Configure paper size and choose Single-sided, Flip on long edge, or Flip on short edge. Long edge suits portrait book-style reading; short edge suits landscape book-style reading. Changing orientation preserves the selected binding edge.
 9. ...15+ additional steps
 
 #### Critical Issues
@@ -133,7 +133,7 @@ When you upload `assignment.pdf`:
 scp assignment.pdf stu.comp.nus.edu.sg:~/temp/
 
 # 2. Submit print job via lpr
-ssh stu.comp.nus.edu.sg "lpr -P psts-dx ~/temp/assignment.pdf"
+ssh stu.comp.nus.edu.sg "lpr -P psts-dx -o sides=two-sided-long-edge ~/temp/assignment.pdf"
 
 # 3. Check print queue status
 ssh stu.comp.nus.edu.sg "lpq -P psts-dx"
@@ -143,6 +143,8 @@ ssh stu.comp.nus.edu.sg "rm ~/temp/assignment.pdf"
 ```
 
 All of this happens automatically - users simply upload and print.
+
+Binding is passed explicitly with the [CUPS `sides` option](https://www.cups.org/doc/man-lpr.html): `one-sided`, `two-sided-long-edge`, or `two-sided-short-edge`. The remote `lpr` and printer queue must support this option. The app does not silently retry with a different binding mode. The selected edge is also retained for n-up and booklet jobs; select short-edge binding for a landscape booklet.
 
 Print@SoC defaults to `psts-dx`, one of the common public SOCprint queues in
 COM1 Level 1. The student-facing default list follows SOCprint's common public
@@ -239,6 +241,26 @@ pip install print-at-soc
 psoc
 ```
 
+### Updates and uninstall
+
+```bash
+print-soc self update --check
+print-soc self update
+print-soc self update --auto apply
+print-soc self update --rollback
+print-soc self uninstall --dry-run
+print-soc self uninstall --purge --remove-cli
+```
+
+Updates verify downloads before replacing the desktop and retain a previous
+version for rollback. Normal CLI desktop launches check daily (notification by
+default); automatic installation is opt-in on macOS/Linux. The uninstall wizard
+previews owned components and lets you retain data or purge app data and saved
+credentials. Use `--plain` for simple text, or `--non-interactive --yes` in scripts.
+Python/npm package upgrades and CUPS service refreshes remain separate from
+desktop updates. See [maintenance and recovery details](docs/maintenance.md), including Windows
+native-installer limits and the intentionally retained non-secret lock file.
+
 ### Virtual Printer
 
 The Python CLI can install a macOS/Linux CUPS virtual printer queue. Apps print
@@ -250,6 +272,61 @@ SoC SSH to the configured remote `lpr` queue. The default remote queue is
 pip install print-at-soc
 print-soc --install-virtual-printer --username your-soc-id --ask-password --printer psts-dx
 ```
+
+Start the interactive installer with:
+
+```bash
+print-soc virtual-printer install
+```
+
+The terminal wizard offers arrow-key menus for the server, authentication,
+paper and sides; validates typed values; hides password input; and previews the
+account and destination before asking to install. Decline the confirmation to
+edit the settings or cancel before any system changes. Animated stage indicators run
+only while work is happening, and stop before password prompts. Ctrl+C exits
+cleanly. The result explains how to use the printer or shows stage-specific
+repair steps when setup fails. Re-running setup repairs an existing queue.
+
+```bash
+# Walk through setup without passwords, sudo or system changes:
+print-soc virtual-printer install --dry-run
+
+# Simple numbered prompts, without colors or animation:
+print-soc virtual-printer install --plain
+
+# Scripted installation: authenticate the administrator separately first.
+sudo -v
+print-soc virtual-printer install --non-interactive --username YOUR_SOC_ID --key-path ~/.ssh/id_ed25519
+```
+
+Scripts can provide a password through `--password-stdin` (one line) or the
+existing `PSOC_SSH_PASSWORD` environment variable. Avoid `--password` in shell
+history. Non-interactive mode never prompts, including for sudo; missing inputs
+produce an actionable error and nonzero exit code. Redirected output, `NO_COLOR`
+and `TERM=dumb` produce plain logs. `--yes` skips only the final confirmation;
+use `--non-interactive` to disable all prompts. Authentication sources are
+mutually exclusive. Exit status is `0` for success/declined review, `1` for a
+handled failure, `2` for invalid command arguments, and `130` for Ctrl+C/EOF.
+A successful installation verifies the local queue, not remote SSH connectivity
+or physical printing. Setup never automatically submits a test page.
+
+In the desktop app, open **Settings → Advanced → Add system printer**.
+Setup opens Terminal to request the SoC password and administrator authentication;
+return to the app and refresh integration status after installation completes.
+The same installer is available through the command above. Run it as your normal
+user: it requests `sudo` only for system changes. A working CUPS service and a
+system/Homebrew Python installed outside the home directory are required.
+
+The installer snapshots the backend and its installed dependencies into a
+root-owned system directory (`/Library/Application Support/PrintAtSoC/cups` on
+macOS, `/usr/local/lib/print-at-soc/cups` on Linux). It stores the forwarding
+configuration in `/etc/print-at-soc/virtual-printer.json` with mode `0600` and
+copies an explicitly configured SSH key there with the same permissions. This
+allows the CUPS service to run without access to a logged-in user's home or SSH
+agent. All local Print@SoC queues use this system forwarding account. Re-run the
+installer after upgrading the CLI to update the installed backend snapshot.
+The normal user configuration remains available for CLI commands; configuring
+an installed virtual printer also updates its system configuration.
 
 Useful maintenance commands:
 
@@ -371,3 +448,58 @@ Built with the needs of NUS School of Computing students in mind. Special thanks
 
 All versions are generated by Tide. See [VERSIONING.md](VERSIONING.md) for local
 builds, CI receipts, and the coordinated desktop/PyPI/npm release process.
+
+### Remembering your login password
+
+On the desktop login screen, select **Remember account and save password securely**.
+After a successful SSH login, the password is stored in macOS Keychain, Windows
+Credential Manager, or the Linux Secret Service. On later launches, press Connect
+without re-entering it. Enter a new password to replace the saved one after a
+successful login. Browser storage contains only the account identity and a saved
+status flag; the backend reads saved passwords without returning them to the webview.
+
+Clearing the saved account or logging out deletes its saved password. Unchecking
+the option uses the typed password for this session without accessing the system
+password store; existing saved credentials remain until explicitly cleared.
+If the system password store is locked or unavailable, the app reports the error
+and does not fall back to storing passwords in a file. Existing remembered accounts
+need one successful password login to opt into secure password storage.
+
+### Importing documents and images
+
+The desktop workbench and preview accept PDF, static PNG/JPEG/WebP/BMP images,
+and DOC/DOCX/ODT, PPT/PPTX/ODP, XLS/XLSX/ODS, RTF, TXT and CSV documents.
+Images convert locally with transparency composited onto white paper and EXIF
+orientation respected. Office/text formats require LibreOffice (detected in the
+standard macOS/Windows installation or as `soffice` on PATH). Fonts and pagination
+may differ from the originating application; review the converted PDF before printing.
+
+Preview and printing use the same converted PDF. Conversions are reused by content
+hash in the application's `imports` directory so saved drafts remain available.
+Conversion inputs are limited to 128 MB and static images to 40 megapixels.
+Animated images and unrecognized formats are rejected with an explanation. For
+other applications or formats, use their native Print → Save as PDF. No claim is
+made to render arbitrary binary files.
+
+macOS controls Keychain authorization prompts. Selecting **Always Allow** grants
+this app access to that item; rebuilding an unsigned development binary may cause
+macOS to request authorization again. The app retains credentials only in memory
+for active SSH reconnects and clears them on disconnect, reducing repeated reads.
+New accounts do not save passwords unless the checkbox is selected.
+
+### Layout and interrupted submissions
+
+Page selection, n-up and booklet layout require `pdfjam` with TeX Live on the
+local desktop. Booklet mode arranges pages for folding, adds blank pages when
+needed, and starts with landscape/short-edge duplex settings. Review both sides
+before printing. A missing layout tool stops the job before upload.
+
+Imported PDFs are kept as immutable local copies, including when the source is
+already a PDF. Moving or editing the original after import does not change the
+previewed document. A document must finish preparation before it can be submitted.
+
+After a restart, interrupted preparation can be retried. A job that may already
+have reached the printer is checked against its original account and receipt;
+it is never automatically printed again. If a queue ID cannot be recovered,
+check the queue and the physical output before using the manual confirmation
+controls in job details. Confirmation updates history only.

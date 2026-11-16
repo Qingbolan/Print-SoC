@@ -1,24 +1,15 @@
 """Binary downloader for Print@SoC"""
 
 import os
-import sys
 import platform
-import urllib.request
-import json
-import tarfile
-import zipfile
-import shutil
 import subprocess
-from urllib.parse import urlparse, unquote
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional
 
 from .config import (
-    GITHUB_API_URL,
     BINARY_DIR,
     VERSION_FILE,
     PLATFORM_BINARIES,
-    ensure_dirs,
 )
 
 
@@ -125,28 +116,6 @@ def get_installed_version() -> Optional[str]:
     return None
 
 
-def download_with_progress(url: str, dest: Path):
-    """Download file with progress bar"""
-    print(f"Downloading from: {url}")
-
-    def reporthook(block_num, block_size, total_size):
-        downloaded = block_num * block_size
-        if total_size > 0:
-            percent = min(downloaded * 100 / total_size, 100)
-            size_mb = total_size / (1024 * 1024)
-            downloaded_mb = downloaded / (1024 * 1024)
-            sys.stdout.write(
-                f"\rProgress: {percent:.1f}% ({downloaded_mb:.1f}/{size_mb:.1f} MB)"
-            )
-            sys.stdout.flush()
-
-    try:
-        urllib.request.urlretrieve(url, dest, reporthook=reporthook)
-        print("\nDownload complete!")
-    except Exception as e:
-        raise RuntimeError(f"Download failed: {e}")
-
-
 def _run_nsis_installer(installer_path: Path) -> None:
     """Run NSIS installer."""
     if platform.system() != "Windows":
@@ -164,50 +133,6 @@ def _run_nsis_installer(installer_path: Path) -> None:
 
     subprocess.run([str(installer_path)], check=True)
     print("\nInstaller completed.")
-
-
-def extract_archive(archive_path: Path, extract_dir: Path):
-    """Extract downloaded archive or run installer"""
-    print(f"Processing: {extract_dir}")
-
-    if archive_path.suffix == ".gz" and archive_path.stem.endswith(".tar"):
-        print("Extracting tar.gz archive...")
-        with tarfile.open(archive_path, "r:gz") as tar:
-            tar.extractall(extract_dir)
-        print("Extraction complete!")
-    elif archive_path.suffix == ".zip":
-        print("Extracting zip archive...")
-        with zipfile.ZipFile(archive_path, "r") as zip_ref:
-            zip_ref.extractall(extract_dir)
-        print("Extraction complete!")
-    elif archive_path.suffix == ".AppImage":
-        dest = extract_dir / archive_path.name
-        try:
-            if archive_path.resolve() != dest.resolve():
-                shutil.move(str(archive_path), dest)
-            os.chmod(dest, 0o755)
-            print(f"AppImage ready: {dest}")
-        except Exception as e:
-            print(f"Warning: {e}")
-    elif archive_path.suffix == ".exe":
-        dest = extract_dir / archive_path.name
-        try:
-            if archive_path.resolve() != dest.resolve():
-                shutil.copy(str(archive_path), dest)
-        except Exception:
-            pass
-        _run_nsis_installer(archive_path if archive_path.exists() else dest)
-    elif archive_path.suffix == ".msi":
-        dest = extract_dir / archive_path.name
-        try:
-            if archive_path.resolve() != dest.resolve():
-                shutil.copy(str(archive_path), dest)
-        except Exception:
-            pass
-        print("Running MSI installer...")
-        _install_msi(archive_path if archive_path.exists() else dest)
-    else:
-        raise RuntimeError(f"Unsupported archive format: {archive_path.suffix}")
 
 
 def _find_windows_installed_exe(product_name: str = "Print_at_SoC",
@@ -290,120 +215,12 @@ def _install_msi(msi_path: Path) -> None:
         raise RuntimeError(f"MSI installation failed with exit code {result.returncode}")
 
 
-def get_download_url() -> Tuple[str, str]:
-    """Get download URL from GitHub releases"""
-    platform_key = get_platform_key()
-    config = PLATFORM_BINARIES[platform_key]
-    asset_name = config["asset_name"]
-    fallback_name = config.get("asset_name_fallback")
-
-    print("Fetching latest release information...")
-
-    try:
-        req = urllib.request.Request(GITHUB_API_URL)
-        req.add_header("Accept", "application/vnd.github.v3+json")
-
-        with urllib.request.urlopen(req, timeout=30) as response:
-            data = json.loads(response.read().decode())
-
-        for asset in data.get("assets", []):
-            if asset["name"] == asset_name:
-                return asset["browser_download_url"], data["tag_name"]
-
-        if fallback_name:
-            for asset in data.get("assets", []):
-                if asset["name"] == fallback_name:
-                    print(f"Note: Using fallback installer ({fallback_name})")
-                    return asset["browser_download_url"], data["tag_name"]
-
-        raise RuntimeError(
-            f"No matching binary found for platform: {platform_key}\n"
-            f"Looking for: {asset_name}" +
-            (f" or {fallback_name}" if fallback_name else "")
-        )
-
-    except urllib.error.HTTPError as e:
-        if e.code == 404:
-            raise RuntimeError(
-                "No releases found. Please ensure binaries are published to GitHub Releases.\n"
-                f"Repository: {GITHUB_API_URL}"
-            )
-        raise RuntimeError(f"Failed to fetch release info: {e}")
-    except Exception as e:
-        raise RuntimeError(f"Failed to get download URL: {e}")
-
-
 def download_and_install():
-    """Download and install the binary for current platform"""
-    ensure_dirs()
-
-    if is_installed():
-        installed_version = get_installed_version()
-        print(f"Print@SoC is already installed (version: {installed_version})")
-
-        response = input("Do you want to reinstall? (y/N): ").strip().lower()
-        if response not in ("y", "yes"):
-            return
-
-        print("Removing existing installation...")
-        if BINARY_DIR.exists():
-            shutil.rmtree(BINARY_DIR)
-        BINARY_DIR.mkdir(parents=True, exist_ok=True)
-
-    download_url, version = get_download_url()
-
-    platform_key = get_platform_key()
-    asset_name = Path(unquote(urlparse(download_url).path)).name
-    if not asset_name:
-        raise RuntimeError("Release asset URL has no filename")
-    download_path = BINARY_DIR / asset_name
-
-    download_with_progress(download_url, download_path)
-
-    if PLATFORM_BINARIES[platform_key]["is_bundle"] or download_path.suffix in (".gz", ".zip"):
-        extract_archive(download_path, BINARY_DIR)
-        download_path.unlink()
-    elif download_path.suffix in (".msi", ".exe"):
-        extract_archive(download_path, BINARY_DIR)
-    elif download_path.suffix == ".AppImage":
-        target_path = BINARY_DIR / PLATFORM_BINARIES[platform_key]["executable_path"]
-        try:
-            if target_path.exists():
-                target_path.unlink()
-        except Exception:
-            pass
-        shutil.move(str(download_path), target_path)
-        try:
-            os.chmod(target_path, 0o755)
-        except Exception:
-            pass
-
-    if platform.system() != "Windows":
-        binary_path = get_binary_path()
-        if binary_path.exists():
-            os.chmod(binary_path, 0o755)
-
-    # macOS: Remove quarantine attribute to allow unsigned app to run
-    if platform.system() == "Darwin":
-        import subprocess
-        try:
-            # Find the .app bundle
-            for app_dir in BINARY_DIR.rglob("*.app"):
-                print(f"Removing quarantine attribute from {app_dir.name}...")
-                subprocess.run(["xattr", "-cr", str(app_dir)], capture_output=True, check=False)
-                subprocess.run(["xattr", "-dr", "com.apple.quarantine", str(app_dir)], capture_output=True, check=False)
-                break
-        except Exception as e:
-            print(f"Note: Could not remove quarantine attribute: {e}")
-            print("You may need to allow the app in System Preferences > Security & Privacy")
-
-    if not is_installed():
-        raise RuntimeError("Installation did not produce a usable desktop executable")
-
-    VERSION_FILE.write_text(version)
-
-    print(f"\nPrint@SoC {version} installed successfully!")
-    print(f"Installation directory: {BINARY_DIR}")
+    """Install or repair through the shared verified transaction engine."""
+    from .maintenance import maintenance_cli
+    code = maintenance_cli(["update", "--force"])
+    if code:
+        raise RuntimeError("Desktop installation did not complete; see the maintenance guidance above")
 
 
 def check_and_install():

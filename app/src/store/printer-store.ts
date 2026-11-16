@@ -13,6 +13,7 @@ export interface SavedCredentials {
   serverType: 'stu' | 'stf'
   username: string
   rememberMe: boolean
+  passwordSaved?: boolean
 }
 
 export interface AppSettings {
@@ -130,7 +131,8 @@ function sanitizeSavedCredentials(value: unknown): SavedCredentials | null {
   return {
     serverType,
     username: username.trim(),
-    rememberMe: true,
+    rememberMe: value.rememberMe !== false,
+    passwordSaved: value.passwordSaved === true,
   }
 }
 

@@ -1,9 +1,91 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-@import "leaflet/dist/leaflet.css";
-@import "leaflet-routing-machine/dist/leaflet-routing-machine.css";
 
 @custom-variant dark (&:is(.dark *));
+
+/* Expose the AppKit material below the webview; content panels stay opaque. */
+html[data-native-material='acrylic'],
+html[data-native-material='acrylic'] body,
+html[data-native-material='acrylic'] #root,
+html[data-native-material='acrylic'] .app-shell,
+html[data-native-material='acrylic'] .app-sidebar-frame,
+html[data-native-material='acrylic'] .app-sidebar-frame .app-sidebar,
+html[data-native-material='acrylic'] .app-frame-background {
+  background: transparent;
+}
+
+.app-titlebar {
+  display: none;
+}
+
+.app-shell {
+  --app-rail-width: clamp(5.25rem, 6vw, 6rem);
+}
+
+html[data-native-material='acrylic'] .app-shell {
+  position: relative;
+  isolation: isolate;
+  grid-template-rows: minmax(0, 1fr);
+  --chrome-tint: rgb(243 243 243 / 68%);
+}
+
+html.dark[data-native-material='acrylic'] .app-shell {
+  --chrome-tint: rgb(32 32 32 / 72%);
+}
+
+/* One continuous tint/noise surface over AppKit's desktop blur. */
+html[data-native-material='acrylic'] .app-shell:not([data-auth-route])::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(var(--chrome-tint), var(--chrome-tint)),
+    url('/acrylic-noise.svg');
+}
+
+html[data-native-material='acrylic'] .app-titlebar {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 8px;
+  z-index: 30;
+  display: block;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Keep the traffic-light/drag space in the rail, not above the workspace. */
+html[data-native-material='acrylic'] .app-sidebar-frame {
+  padding-top: 40px;
+}
+
+html[data-native-material='acrylic'] .app-shell:not([data-auth-route]):not([data-mobile-navigation]) > .app-titlebar::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--app-rail-width);
+  height: 40px;
+}
+
+.window-resize-handle { position: absolute; z-index: 60; touch-action: none; }
+.window-resize-handle[data-edge='n'] { inset: 0 12px auto; height: 5px; cursor: ns-resize; }
+.window-resize-handle[data-edge='s'] { inset: auto 12px 0; height: 5px; cursor: ns-resize; }
+.window-resize-handle[data-edge='e'] { inset: 12px 0 12px auto; width: 5px; cursor: ew-resize; }
+.window-resize-handle[data-edge='w'] { inset: 12px auto 12px 0; width: 5px; cursor: ew-resize; }
+.window-resize-handle[data-edge='ne'] { top: 0; right: 0; width: 12px; height: 12px; cursor: nesw-resize; }
+.window-resize-handle[data-edge='nw'] { top: 0; left: 0; width: 12px; height: 12px; cursor: nwse-resize; }
+.window-resize-handle[data-edge='se'] { bottom: 0; right: 0; width: 12px; height: 12px; cursor: nwse-resize; }
+.window-resize-handle[data-edge='sw'] { bottom: 0; left: 0; width: 12px; height: 12px; cursor: nesw-resize; }
+
+/* Login is full bleed: the photo continues beneath the native traffic lights. */
+html[data-native-material='acrylic'] .app-shell[data-auth-route] > .app-titlebar {
+  height: 40px;
+}
+
+html[data-native-material='acrylic'] .app-shell[data-auth-route] > main {
+  grid-area: 1 / 1;
+}
 
 @keyframes gradient {
   0%, 100% { background-position: 0% 50%; }
@@ -35,7 +117,7 @@
 }
 
 :root {
-  /* Print@SoC product system: NUS identity on quiet operational surfaces. */
+  /* Print@SoC product system: NUS identity on quiet macOS-style surfaces. */
 
   --brand-blue: #003D7C;
   --brand-blue-hover: #07366B;
@@ -48,19 +130,19 @@
   --brand-orange-border: color-mix(in srgb, var(--brand-orange) 24%, transparent);
   --brand-gold: #C9A64A;
 
-  --background: #DDE4EA;
-  --workspace: #F4F6F7;
-  --foreground: #10243A;
+  --background: #ECECEC;
+  --workspace: #F5F5F7;
+  --foreground: #1D1D1F;
 
   /* Acrylic/Mica materials */
   --acrylic-base: #FFFFFF;
-  --acrylic-overlay: #F8FAFC;
-  --mica-base: #F4F7FA;
+  --acrylic-overlay: #FAFAFA;
+  --mica-base: #F5F5F7;
 
   /* Material tint colors (RGB for rgba usage) */
-  --acrylic-tint: 250 252 255;
-  --mica-tint: 247 250 253;
-  --mica-alt-tint: 238 244 250;
+  --acrylic-tint: 255 255 255;
+  --mica-tint: 245 245 247;
+  --mica-alt-tint: 236 236 236;
 
   /* Primary - NUS Blue */
   --primary: var(--brand-blue);
@@ -70,62 +152,62 @@
   --primary-subtle: var(--brand-blue-subtle);
 
   /* Secondary - cool neutral */
-  --secondary: #E9EEF3;
-  --secondary-hover: #DEE6ED;
-  --secondary-foreground: #18324D;
+  --secondary: #E8E8ED;
+  --secondary-hover: #DCDCE1;
+  --secondary-foreground: #1D1D1F;
 
-  /* Accent - subtle hover surface; NUS Orange lives in brand tokens */
-  --accent: #E8EDF2;
-  --accent-hover: #DDE5EC;
-  --accent-foreground: #102033;
+  /* Accent - subtle hover surface (macOS quaternary fill) */
+  --accent: #EBEBF0;
+  --accent-hover: #E0E0E5;
+  --accent-foreground: #1D1D1F;
 
   /* Success */
-  --success: oklch(0.62 0.15 145);
-  --success-hover: oklch(0.58 0.17 145);
-  --success-foreground: oklch(0.99 0 0);
-  --success-subtle: oklch(0.92 0.08 145);
+  --success: #34C759;
+  --success-hover: #2DB14F;
+  --success-foreground: #FFFFFF;
+  --success-subtle: #E8F8EC;
 
   /* Warning */
   --warning: var(--brand-orange);
   --warning-hover: var(--brand-orange-hover);
-  --warning-foreground: oklch(0.15 0.01 80);
+  --warning-foreground: #1D1D1F;
   --warning-subtle: var(--brand-orange-subtle);
 
   /* Destructive */
-  --destructive: oklch(0.60 0.20 25);
-  --destructive-hover: oklch(0.56 0.22 25);
-  --destructive-foreground: oklch(0.99 0 0);
-  --destructive-subtle: oklch(0.92 0.08 25);
+  --destructive: #FF3B30;
+  --destructive-hover: #E6352B;
+  --destructive-foreground: #FFFFFF;
+  --destructive-subtle: #FFEBEA;
 
   /* Card surfaces - calm content panels */
   --card: #FFFFFF;
-  --card-hover: #F6F8F9;
-  --card-foreground: #102033;
-  --card-border: #D7DEE4;
+  --card-hover: #FAFAFA;
+  --card-foreground: #1D1D1F;
+  --card-border: #E5E5EA;
 
   /* Elevated surfaces */
   --elevated: #FFFFFF;
   --elevated-hover: #FFFFFF;
 
   /* Muted */
-  --muted: #E9EEF1;
-  --muted-hover: #DFE6EA;
-  --muted-foreground: #5A6C7E;
+  --muted: #F2F2F7;
+  --muted-hover: #E5E5EA;
+  --muted-foreground: #6E6E73;
 
   /* Borders & Inputs */
-  --border: #D8E0E7;
-  --border-hover: #AEBCC9;
+  --border: #D1D1D6;
+  --border-hover: #AEAEB2;
   --input: #FFFFFF;
   --input-hover: #FFFFFF;
-  --ring: oklch(0.42 0.13 258 / 0.46);
+  --ring: rgb(0 61 124 / 0.45);
 
   /* Elevation is reserved for transient overlays and the physical page preview. */
   --shadow-xs: none;
   --shadow-sm: none;
-  --shadow-md: 0 12px 30px -22px rgb(23 37 54 / 0.32);
-  --shadow-lg: 0 18px 44px -26px rgb(23 37 54 / 0.36);
-  --shadow-xl: 0 24px 56px -30px rgb(23 37 54 / 0.42);
-  --shadow-2xl: 0 28px 64px -30px rgb(23 37 54 / 0.48);
+  --shadow-md: 0 12px 30px -22px rgb(0 0 0 / 0.32);
+  --shadow-lg: 0 18px 44px -26px rgb(0 0 0 / 0.36);
+  --shadow-xl: 0 24px 56px -30px rgb(0 0 0 / 0.42);
+  --shadow-2xl: 0 28px 64px -30px rgb(0 0 0 / 0.48);
 
   /* Fluent Radius */
   --radius-xs: 0.25rem;
@@ -159,32 +241,31 @@
   /* Noise texture for Mica/Acrylic */
   --noise-opacity: 0.02;
 
-  /* Theme Gradient - NUS Blue to NUS Orange */
+  /* Theme Gradient - NUS Blue family */
   --theme-gradient-start: var(--brand-blue);
   --theme-gradient-end: #2F6DA8;
 
   /* Sidebar */
-  --sidebar: #082B4A;
-  --sidebar-foreground: #DDE8F1;
-  --sidebar-primary: #FFFFFF;
-  --sidebar-accent: #123B5D;
-  --sidebar-border: #214761;
+  --sidebar: #E8E8ED;
+  --sidebar-foreground: #3C3C43;
+  --sidebar-primary: #1D1D1F;
+  --sidebar-accent: #DCDCE1;
+  --sidebar-border: #D1D1D6;
 
   /* Chart Colors - NUS SoC palette */
   --chart-1: var(--brand-blue);
   --chart-2: var(--brand-orange);
-  --chart-3: oklch(0.62 0.15 145);
-  --chart-4: oklch(0.58 0.12 220);
+  --chart-3: #34C759;
+  --chart-4: #2F6DA8;
   --chart-5: var(--brand-gold);
 
   /* ReactBits Sidebar defaults */
-  --rb-sidebar-width: 236px;
 }
 
 .dark {
-  --background: #111416;
-  --workspace: #191D20;
-  --foreground: #F0F3F5;
+  --background: #1E1E1E;
+  --workspace: #1C1C1E;
+  --foreground: #F5F5F7;
 
   --brand-blue: #003D7C;
   --brand-blue-hover: #0E5BA8;
@@ -198,14 +279,14 @@
   --brand-gold: #D8BC6A;
 
   /* Acrylic/Mica materials - darker with better contrast */
-  --acrylic-base: #202428;
-  --acrylic-overlay: #24292E;
-  --mica-base: #171A1D;
+  --acrylic-base: #2C2C2E;
+  --acrylic-overlay: #3A3A3C;
+  --mica-base: #1C1C1E;
 
   /* Material tint colors (RGB for rgba usage) - darker for dark mode */
-  --acrylic-tint: 32 36 40;
-  --mica-tint: 23 26 29;
-  --mica-alt-tint: 17 20 22;
+  --acrylic-tint: 44 44 46;
+  --mica-tint: 28 28 30;
+  --mica-alt-tint: 30 30 30;
 
   /* Primary - accessible NUS Blue family for dark surfaces */
   --primary: #1F6DAA;
@@ -215,38 +296,44 @@
   --primary-subtle: var(--brand-blue-subtle);
 
   /* Secondary */
-  --secondary: #252B30;
-  --secondary-hover: #2D343A;
-  --secondary-foreground: #EEF6FF;
+  --secondary: #3A3A3C;
+  --secondary-hover: #48484A;
+  --secondary-foreground: #F5F5F7;
 
   /* Accent */
-  --accent: #293036;
-  --accent-hover: #333B42;
-  --accent-foreground: #EEF6FF;
+  --accent: #3A3A3C;
+  --accent-hover: #48484A;
+  --accent-foreground: #F5F5F7;
 
-  /* Status text must remain legible on dark translucent surfaces. */
+  /* Apple dark-mode system colors; status text stays legible on dark surfaces. */
+  --success: #30D158;
+  --success-hover: #4ADA6E;
+  --success-subtle: #12301A;
   --warning-foreground: #FFB15C;
+  --destructive: #FF453A;
+  --destructive-hover: #FF6259;
+  --destructive-subtle: #3A1614;
 
   /* Card surfaces */
-  --card: #202428;
-  --card-hover: #252A2F;
-  --card-foreground: #EEF6FF;
-  --card-border: #363D43;
+  --card: #2C2C2E;
+  --card-hover: #323234;
+  --card-foreground: #F5F5F7;
+  --card-border: #38383A;
 
   /* Elevated */
-  --elevated: #252A2F;
-  --elevated-hover: #2B3136;
+  --elevated: #3A3A3C;
+  --elevated-hover: #48484A;
 
   /* Muted */
-  --muted: #252A2F;
-  --muted-hover: #2D3338;
-  --muted-foreground: #AAB5BE;
+  --muted: #2C2C2E;
+  --muted-hover: #3A3A3C;
+  --muted-foreground: #98989D;
 
   /* Borders & Inputs */
-  --border: #363D43;
-  --border-hover: #59636C;
-  --input: #1C2023;
-  --input-hover: #22272B;
+  --border: #38383A;
+  --border-hover: #636366;
+  --input: #1C1C1E;
+  --input-hover: #232325;
   --ring: oklch(0.72 0.12 250 / 0.60);
 
   --shadow-xs: none;
@@ -261,15 +348,15 @@
   --theme-gradient-end: #1F6DAA;
 
   /* Sidebar */
-  --sidebar: #081B2A;
-  --sidebar-foreground: #DDE8F1;
-  --sidebar-accent: #123047;
-  --sidebar-border: #274258;
+  --sidebar: #262628;
+  --sidebar-foreground: #EBEBF5;
+  --sidebar-accent: #3A3A3C;
+  --sidebar-border: #38383A;
 
   /* Charts - adjusted for dark */
   --chart-1: #4A9DDB;
   --chart-2: #FF9A2B;
-  --chart-3: oklch(0.68 0.17 145);
+  --chart-3: #30D158;
   --chart-4: oklch(0.72 0.11 220);
   --chart-5: var(--brand-gold);
 }
@@ -666,7 +753,7 @@
 }
 
 .dark .leaflet-container {
-  background: #1a1a2e;
+  background: #1C1C1E;
 }
 
 /* Ensure tiles are visible */
@@ -692,30 +779,30 @@
 
 /* Fix leaflet popup styling in dark mode */
 .dark .leaflet-popup-content-wrapper {
-  background: #1f2937;
-  color: #f3f4f6;
+  background: #2C2C2E;
+  color: #F5F5F7;
 }
 
 .dark .leaflet-popup-tip {
-  background: #1f2937;
+  background: #2C2C2E;
 }
 
 /* Leaflet controls dark mode */
 .dark .leaflet-control-zoom a {
-  background: #374151;
-  color: #f3f4f6;
-  border-color: #4b5563;
+  background: #3A3A3C;
+  color: #F5F5F7;
+  border-color: #48484A;
 }
 
 .dark .leaflet-control-zoom a:hover {
-  background: #4b5563;
+  background: #48484A;
 }
 
 .dark .leaflet-control-attribution {
-  background: rgba(31, 41, 55, 0.8);
-  color: #9ca3af;
+  background: rgba(44, 44, 46, 0.8);
+  color: #98989D;
 }
 
 .dark .leaflet-control-attribution a {
-  color: #60a5fa;
+  color: #74B7FF;
 }

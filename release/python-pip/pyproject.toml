@@ -15,6 +15,10 @@ license = {text = "MIT"}
 keywords = ["nus", "soc", "printing", "ssh", "pdf", "desktop-application"]
 dependencies = [
     "paramiko>=3.4",
+    "packaging>=23",
+    "rich>=13,<15",
+    "questionary>=2,<3",
+    "secretstorage>=3.3; sys_platform == 'linux'",
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",

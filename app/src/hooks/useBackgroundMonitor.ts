@@ -1,249 +1,65 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 import { usePrinterStore } from '@/store/printer-store'
 import { getAvailablePrintersFromQueues, getPrintersForServerType } from '@/data/printers'
-import { checkPrinterQueue, checkActiveJobs, getAllPrintJobs, listPrintQueues } from '@/lib/printer-api'
+import { checkActiveJobs, getAllPrintJobs, getQueueSnapshot, listPrintQueues } from '@/lib/printer-api'
 
-// Global refs to manage refresh state across all instances
-const globalIsLoadingRef = { current: false }
-const globalShouldContinueRef = { current: true }
-const PRINTER_REFRESH_INTERVAL_MS = 30000
-const ACTIVE_JOB_REFRESH_INTERVAL_MS = 5000
-const ACTIVE_JOB_STATUSES = new Set(['Pending', 'Uploading', 'Queued', 'Printing'])
+let refreshInFlight: Promise<void> | undefined
 
-/**
- * Background monitor hook that automatically queries printer data when logged in
- * This runs in the background and updates the store
- */
-export function useBackgroundMonitor() {
-  const {
-    sshConfig,
-    connectionStatus,
-    savedCredentials,
-    printJobs,
-    printers,
-    setPrinters,
-    setPrintJobs,
-    updatePrinterStatus,
-    setIsRefreshing,
-    setLastRefreshTime
-  } = usePrinterStore()
-  const hasInitializedRef = useRef(false)
-  const printersInitializedRef = useRef(false)
-  const isConnected = connectionStatus.type === 'connected'
-  const serverType = savedCredentials?.serverType || (sshConfig?.host?.includes('stf') ? 'stf' : 'stu')
-  const hasActivePrintJobs = printJobs.some((job) => ACTIVE_JOB_STATUSES.has(job.status))
-
-  const refreshActiveJobs = useCallback(async () => {
-    if (!isConnected || !sshConfig) return
-
-    try {
-      const result = await checkActiveJobs(sshConfig)
-      if (result.success && result.data && result.data.length > 0) {
-        const jobsResult = await getAllPrintJobs()
-        if (jobsResult.success && jobsResult.data) {
-          setPrintJobs(jobsResult.data)
-        }
-      }
-    } catch (error) {
-      console.error('Failed to check active jobs:', error)
-    }
-  }, [isConnected, sshConfig, setPrintJobs])
-
-  const runActiveJobPoll = useCallback(async () => {
-    if (!isConnected || !sshConfig || globalIsLoadingRef.current) return
-
-    globalIsLoadingRef.current = true
-    try {
-      await refreshActiveJobs()
-    } finally {
-      globalIsLoadingRef.current = false
-    }
-  }, [isConnected, refreshActiveJobs, sshConfig])
-
-  const loadAllQueues = useCallback(async () => {
-    if (!isConnected || !sshConfig || globalIsLoadingRef.current) return
-
-    globalIsLoadingRef.current = true
-    setIsRefreshing(true)
-
-    try {
-      await refreshActiveJobs()
-
-      let printersToCheck = usePrinterStore.getState().printers
-
-      try {
-        const queuesResult = await listPrintQueues(sshConfig)
-        if (queuesResult.success && queuesResult.data) {
-          const availablePrinters = getAvailablePrintersFromQueues(queuesResult.data, serverType)
-          if (availablePrinters.length > 0) {
-            setPrinters(availablePrinters)
-            printersToCheck = availablePrinters
-          }
-        }
-      } catch (error) {
-        console.error('Failed to list print queues:', error)
-      }
-
-      // Fetch queue data for discovered printers sequentially to avoid overwhelming the persistent SSH connection
-      // Can be interrupted if component unmounts or connection is lost
-      for (const printer of printersToCheck) {
-        // Check if we should continue
-        if (!globalShouldContinueRef.current) {
-          break
-        }
-
-        try {
-          const result = await checkPrinterQueue(sshConfig, printer.queue_name)
-          const queueCount = result.success ? (result.data?.length || 0) : 0
-          const status = result.success ? 'Online' : 'Error'
-          updatePrinterStatus(printer.id, status, queueCount)
-        } catch (error) {
-          console.error(`Failed to check queue for ${printer.name}:`, error)
-          updatePrinterStatus(printer.id, 'Error', 0)
-        }
-      }
-
-      setLastRefreshTime(new Date())
-    } catch (error) {
-      console.error('Failed to load printer queues:', error)
-    } finally {
-      globalIsLoadingRef.current = false
-      setIsRefreshing(false)
-    }
-  }, [
-    isConnected,
-    refreshActiveJobs,
-    serverType,
-    setIsRefreshing,
-    setLastRefreshTime,
-    setPrinters,
-    sshConfig,
-    updatePrinterStatus,
-  ])
-
-  useEffect(() => {
-    // Initialize printers in store only once
-    if (!printersInitializedRef.current && printers.length === 0) {
-      printersInitializedRef.current = true
-      setPrinters(getPrintersForServerType(serverType))
-    }
-  }, [printers, setPrinters, serverType])
-
-  useEffect(() => {
-    globalShouldContinueRef.current = true
-
-    if (!isConnected || !sshConfig) {
-      hasInitializedRef.current = false
-      globalIsLoadingRef.current = false
-      return
-    }
-
-    // Load data immediately when connected (only once per connection)
-    if (!hasInitializedRef.current) {
-      hasInitializedRef.current = true
-
-      // Delay initial load to avoid blocking login
-      setTimeout(() => {
-        loadAllQueues()
-      }, 500)
-    }
-
-    // Set up printer/queue overview refresh every 30 seconds.
-    const interval = setInterval(() => {
-      if (!globalIsLoadingRef.current) {
-        loadAllQueues()
-      }
-    }, PRINTER_REFRESH_INTERVAL_MS)
-
-    return () => {
-      clearInterval(interval)
-      globalShouldContinueRef.current = false
-      globalIsLoadingRef.current = false
-    }
-  }, [isConnected, loadAllQueues, sshConfig])
-
-  useEffect(() => {
-    if (!isConnected || !sshConfig || !hasActivePrintJobs) return
-
-    const interval = setInterval(runActiveJobPoll, ACTIVE_JOB_REFRESH_INTERVAL_MS)
-    return () => clearInterval(interval)
-  }, [hasActivePrintJobs, isConnected, runActiveJobPoll, sshConfig])
+export function refreshPrinters(): Promise<void> {
+  if (refreshInFlight) return refreshInFlight
+  refreshInFlight = refresh().finally(() => { refreshInFlight = undefined })
+  return refreshInFlight
 }
 
-/**
- * Manually trigger a printer refresh from any component
- * This is a global function that can be called from anywhere
- */
-export async function refreshPrinters() {
+async function refresh() {
   const store = usePrinterStore.getState()
-  const {
-    sshConfig,
-    connectionStatus,
-    savedCredentials,
-    updatePrinterStatus,
-    setPrintJobs,
-    setPrinters,
-    setIsRefreshing,
-    setLastRefreshTime,
-  } = store
-
-  if (connectionStatus.type !== 'connected' || !sshConfig || globalIsLoadingRef.current) return
-  const serverType = savedCredentials?.serverType || (sshConfig.host?.includes('stf') ? 'stf' : 'stu')
-
-  globalIsLoadingRef.current = true
-  setIsRefreshing(true)
-
-  try {
-    // Check active print jobs first and update their status
-    try {
-      const result = await checkActiveJobs(sshConfig)
-      if (result.success && result.data && result.data.length > 0) {
-        // Refresh job list if any jobs completed
-        const jobsResult = await getAllPrintJobs()
-        if (jobsResult.success && jobsResult.data) {
-          setPrintJobs(jobsResult.data)
-        }
-      }
-    } catch (error) {
-      console.error('Failed to check active jobs:', error)
-    }
-
-    let printersToCheck = usePrinterStore.getState().printers
-
-    try {
-      const queuesResult = await listPrintQueues(sshConfig)
-      if (queuesResult.success && queuesResult.data) {
-        const availablePrinters = getAvailablePrintersFromQueues(queuesResult.data, serverType)
-        if (availablePrinters.length > 0) {
-          setPrinters(availablePrinters)
-          printersToCheck = availablePrinters
-        }
-      }
-    } catch (error) {
-      console.error('Failed to list print queues:', error)
-    }
-
-    for (const printer of printersToCheck) {
-      if (!globalShouldContinueRef.current) {
-        break
-      }
-
-      try {
-        const result = await checkPrinterQueue(sshConfig, printer.queue_name)
-        const queueCount = result.success ? (result.data?.length || 0) : 0
-        const status = result.success ? 'Online' : 'Error'
-        updatePrinterStatus(printer.id, status, queueCount)
-      } catch (error) {
-        console.error(`Failed to check queue for ${printer.name}:`, error)
-        updatePrinterStatus(printer.id, 'Error', 0)
-      }
-    }
-
-    setLastRefreshTime(new Date())
-  } catch (error) {
-    console.error('Failed to load printer queues:', error)
-  } finally {
-    globalIsLoadingRef.current = false
-    setIsRefreshing(false)
+  const config = store.sshConfig
+  if (store.connectionStatus.type !== 'connected' || !config) return
+  const current = () => {
+    const latest = usePrinterStore.getState()
+    return latest.connectionStatus.type === 'connected' && latest.sshConfig === config
   }
+  store.setIsRefreshing(true)
+  try {
+    await checkActiveJobs(config)
+    const jobs = await getAllPrintJobs()
+    if (!current()) return
+    if (jobs.success && jobs.data) store.setPrintJobs(jobs.data)
+    const serverType = config.host.toLowerCase() === 'stf.comp.nus.edu.sg' ? 'stf' : 'stu'
+    const queues = await listPrintQueues(config)
+    if (!current()) return
+    if (queues.success && queues.data) store.setPrinters(getAvailablePrintersFromQueues(queues.data, serverType))
+    for (const printer of usePrinterStore.getState().printers) {
+      if (!current()) return
+      const response = await getQueueSnapshot(printer.queue_name)
+      if (!current()) return
+      store.updatePrinterStatus(printer.id, response.data?.status || 'Unknown', response.success ? response.data?.jobs.length : undefined)
+    }
+    store.setLastRefreshTime(new Date())
+  } finally { store.setIsRefreshing(false) }
+}
+
+export function useBackgroundMonitor() {
+  const config = usePrinterStore(state => state.sshConfig)
+  const connected = usePrinterStore(state => state.connectionStatus.type === 'connected')
+  useEffect(() => {
+    if (!connected || !config) return
+    const store = usePrinterStore.getState()
+    if (!store.printers.length) store.setPrinters(getPrintersForServerType(config.host.includes('stf') ? 'stf' : 'stu'))
+    let disposed = false
+    let polling = false
+    let timer: ReturnType<typeof setTimeout>
+    async function poll() {
+      if (disposed || polling) return
+      polling = true
+      try { if (document.visibilityState !== 'hidden') await refreshPrinters() }
+      catch (error) { console.error('Queue refresh failed:', error) }
+      polling = false
+      if (!disposed) timer = setTimeout(poll, 15000)
+    }
+    const visible = () => { if (document.visibilityState !== 'hidden') { clearTimeout(timer); void poll() } }
+    void poll()
+    document.addEventListener('visibilitychange', visible)
+    return () => { disposed = true; clearTimeout(timer); document.removeEventListener('visibilitychange', visible) }
+  }, [connected, config])
 }

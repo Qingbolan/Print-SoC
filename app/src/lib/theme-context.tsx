@@ -1,5 +1,7 @@
 
 import * as React from "react"
+import { getCurrentWindow } from '@tauri-apps/api/window'
+import { isTauri } from '@tauri-apps/api/core'
 
 type Theme = "light" | "dark" | "system"
 
@@ -20,6 +22,15 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   })
   const [resolvedTheme, setResolvedTheme] = React.useState<"light" | "dark">("light")
   const isTransitioningRef = React.useRef(false)
+
+  // AppKit's material appearance must match the web content's selected theme.
+  React.useEffect(() => {
+    if (isTauri()) {
+      void getCurrentWindow().setTheme(resolvedTheme).catch(error => {
+        console.error('Failed to synchronize native window appearance:', error)
+      })
+    }
+  }, [resolvedTheme])
 
   React.useEffect(() => {
     const root = document.documentElement

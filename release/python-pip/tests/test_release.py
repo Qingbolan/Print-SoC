@@ -20,38 +20,17 @@ def test_doctor_never_installs_or_launches(monkeypatch, system):
     install.assert_not_called()
 
 
-@pytest.mark.parametrize('suffix', ['.exe', '.msi'])
-def test_windows_selected_asset_is_installed(monkeypatch, tmp_path, suffix):
-    monkeypatch.setattr(downloader, 'BINARY_DIR', tmp_path)
-    monkeypatch.setattr(downloader, 'VERSION_FILE', tmp_path / 'version.txt')
-    monkeypatch.setattr(downloader, 'ensure_dirs', lambda: None)
-    monkeypatch.setattr(downloader, 'get_platform_key', lambda: 'windows_x86_64')
-    monkeypatch.setattr(downloader.platform, 'system', lambda: 'Windows')
-    installed = Mock(side_effect=[False, True])
-    monkeypatch.setattr(downloader, 'is_installed', installed)
-    asset = 'Print_at_SoC_windows_x86_64' + suffix
-    monkeypatch.setattr(downloader, 'get_download_url', lambda: ('https://example.org/' + asset, 'v0.1.0'))
-    monkeypatch.setattr(downloader, 'download_with_progress', lambda url, path: path.write_bytes(b'installer'))
-    installer = Mock()
-    monkeypatch.setattr(downloader, '_run_nsis_installer' if suffix == '.exe' else '_install_msi', installer)
-    downloader.download_and_install()
-    installer.assert_called_once_with(tmp_path / asset)
-    assert (tmp_path / 'version.txt').read_text() == 'v0.1.0'
-
-
-def test_failed_install_does_not_record_success(monkeypatch, tmp_path):
-    monkeypatch.setattr(downloader, 'BINARY_DIR', tmp_path)
-    monkeypatch.setattr(downloader, 'VERSION_FILE', tmp_path / 'version.txt')
-    monkeypatch.setattr(downloader, 'ensure_dirs', lambda: None)
-    monkeypatch.setattr(downloader, 'get_platform_key', lambda: 'windows_x86_64')
-    monkeypatch.setattr(downloader.platform, 'system', lambda: 'Windows')
-    monkeypatch.setattr(downloader, 'is_installed', lambda: False)
-    monkeypatch.setattr(downloader, 'get_download_url', lambda: ('https://example.org/setup.exe', 'v0.1.0'))
-    monkeypatch.setattr(downloader, 'download_with_progress', lambda url, path: path.write_bytes(b''))
-    monkeypatch.setattr(downloader, '_run_nsis_installer', lambda path: None)
-    with pytest.raises(RuntimeError, match='usable desktop executable'):
+@pytest.mark.parametrize('code', [0, 1, 130])
+def test_legacy_installer_uses_shared_maintenance_transaction(monkeypatch, code):
+    from print_at_soc import maintenance
+    install = Mock(return_value=code)
+    monkeypatch.setattr(maintenance, 'maintenance_cli', install)
+    if code:
+        with pytest.raises(RuntimeError, match='did not complete'):
+            downloader.download_and_install()
+    else:
         downloader.download_and_install()
-    assert not (tmp_path / 'version.txt').exists()
+    install.assert_called_once_with(['update', '--force'])
 
 
 def test_encrypted_key_uses_paramiko():

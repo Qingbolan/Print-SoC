@@ -1,6 +1,6 @@
 export function AppBackground({ identity = false }: { identity?: boolean }) {
   if (!identity) {
-    return <div className="pointer-events-none absolute inset-0 bg-sidebar" />
+    return <div className="app-frame-background pointer-events-none absolute inset-0 bg-sidebar" />
   }
 
   return (

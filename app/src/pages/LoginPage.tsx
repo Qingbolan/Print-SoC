@@ -1,4 +1,6 @@
-import { useState, useEffect } from 'react'
+import { savePassword, savedAccountConfig } from '@/lib/credentials'
+import type { SSHConfig } from '@/types/printer'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -25,8 +27,13 @@ export default function LoginPage() {
   const [serverType, setServerType] = useState<'stu' | 'stf' | null>(null)
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
-  const [rememberMe, setRememberMe] = useState(true)
+  const [rememberMe, setRememberMe] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const submission = useRef(false)
   const [autoLoginAttempted, setAutoLoginAttempted] = useState(false)
+
+  const canUseSavedPassword = Boolean(rememberMe && savedCredentials?.passwordSaved &&
+    savedCredentials.serverType === serverType && savedCredentials.username === username)
 
   // Build SSH config from current state
   const buildConfig = (server: 'stu' | 'stf', user: string, pass: string) => ({
@@ -38,7 +45,7 @@ export default function LoginPage() {
 
   // Perform login with given config
   const performLogin = async (
-    config: ReturnType<typeof buildConfig>,
+    config: SSHConfig,
     server: 'stu' | 'stf',
     user: string,
     remember: boolean,
@@ -69,11 +76,19 @@ export default function LoginPage() {
     const result = await connect(config)
 
     if (result.success) {
-      if (remember) {
-        setSavedCredentials({ serverType: server, username: user, rememberMe: true })
-      } else {
-        setSavedCredentials(null)
+      try {
+        if (remember) {
+          if (config.auth_type.type === 'Password') await savePassword(config, savedCredentials)
+          setSavedCredentials({ serverType: server, username: user, rememberMe: true, passwordSaved: true })
+          // Keep a reference to the OS credential, not the password, in frontend session state.
+          setConnectedSession({ ...config, auth_type: { type: 'StoredPassword' } })
+        } else if (savedCredentials) {
+          setSavedCredentials({ ...savedCredentials, rememberMe: false })
+        }
+      } catch (error) {
+        toast.error(`Connected, but password storage failed: ${error instanceof Error ? error.message : String(error)}`)
       }
+      setPassword('')
       toast.success(`Connected to ${server.toUpperCase()}!`)
       hideSplash() // Hide splash before navigating
       navigate('/home')
@@ -89,17 +104,17 @@ export default function LoginPage() {
     }
   }
 
-  // Restore saved login identity without storing or replaying secrets.
+  // Restore identity only; the backend reads the saved password when Connect is pressed.
   useEffect(() => {
     if (savedCredentials && !autoLoginAttempted) {
-      // Restore the saved login identity only. Passwords are never stored.
+      // Never retrieve the saved password into the webview.
       setAutoLoginAttempted(true)
       setServerType(savedCredentials.serverType)
       setUsername(savedCredentials.username)
       setPassword('')
-      setRememberMe(true)
+      setRememberMe(savedCredentials.rememberMe)
       setStep('credentials')
-      toast.info('Saved account loaded. Enter your password to connect.')
+      if (!savedCredentials.passwordSaved || !savedCredentials.rememberMe) toast.info('Saved account loaded. Enter your password to connect.')
       hideSplash() // Show login form
     } else if (!savedCredentials && !autoLoginAttempted) {
       // No saved credentials - show welcome screen
@@ -110,10 +125,17 @@ export default function LoginPage() {
   }, [savedCredentials, autoLoginAttempted])
 
   const handleConnect = async () => {
-    if (!username || !password || !serverType) return
+    if (submission.current || !username || (!password && !canUseSavedPassword) || !serverType) return
 
-    const config = buildConfig(serverType, username, password)
-    await performLogin(config, serverType, username, rememberMe, false)
+    const config = password ? buildConfig(serverType, username, password) : savedAccountConfig(savedCredentials!)
+    submission.current = true
+    setSubmitting(true)
+    try {
+      await performLogin(config, serverType, username, rememberMe, false)
+    } finally {
+      submission.current = false
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -138,7 +160,7 @@ export default function LoginPage() {
               className="space-y-4"
             >
               <BrandLogo
-                className="mx-auto w-fit rounded-lg bg-card p-3"
+                className="mx-auto w-fit"
                 iconClassName="h-12 w-12"
                 showName={false}
               />
@@ -279,13 +301,13 @@ export default function LoginPage() {
                   <Input
                     id="password"
                     type="password"
-                    placeholder="Enter your password"
+                    placeholder={canUseSavedPassword ? "Saved securely — enter a new password to replace" : "Enter your password"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="h-10 text-sm"
                     autoComplete="current-password"
-                    required
-                    aria-required="true"
+                    required={!canUseSavedPassword}
+                    aria-required={!canUseSavedPassword}
                   />
                 </div>
 
@@ -298,18 +320,18 @@ export default function LoginPage() {
                     className="h-4 w-4 rounded border-border text-primary focus:ring-primary focus:ring-offset-0"
                   />
                   <label htmlFor="remember-me" className="cursor-pointer text-sm text-foreground">
-                    Remember this account
+                    Save and reuse password securely
                   </label>
                 </div>
 
                 <p className="text-xs text-muted-foreground">
-                  Your password is used only for this SSH connection and is not stored by Print@SoC.
+                  Optional. macOS may ask you to authorize Keychain access. Leave unchecked and enter your password to connect without accessing Keychain. Existing saved passwords remain until you clear the account or log out.
                 </p>
 
                 <Button
                   type="submit"
                   className="h-10 w-full bg-primary text-sm text-white hover:bg-[var(--primary-hover)]"
-                  disabled={isConnecting || !username || !password}
+                  disabled={submitting || isConnecting || !username || (!password && !canUseSavedPassword)}
                   aria-label={isConnecting ? 'Connecting to server' : 'Connect to server'}
                 >
                   {isConnecting ? (

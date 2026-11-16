@@ -34,7 +34,7 @@ export function ThemeToggle({ collapsed = false }: { collapsed?: boolean }) {
         title={resolvedTheme === "light" ? "Switch to Dark" : "Switch to Light"}
         className={cn(
           "flex h-9 w-full items-center justify-center rounded-md text-sidebar-foreground/80 transition-colors duration-167",
-          "hover:bg-sidebar-accent hover:text-white"
+          "hover:bg-sidebar-accent hover:text-sidebar-primary"
         )}
       >
         {resolvedTheme === "light" ? (
@@ -66,8 +66,8 @@ export function ThemeToggle({ collapsed = false }: { collapsed?: boolean }) {
           className={cn(
             "flex h-8 min-w-0 items-center justify-center gap-1.5 rounded-md px-1 text-xs transition-colors duration-167",
             theme === value
-              ? "bg-white/12 text-white"
-              : "text-sidebar-foreground/65 hover:bg-sidebar-accent/80 hover:text-white"
+              ? "bg-card text-sidebar-primary"
+              : "text-sidebar-foreground/65 hover:bg-sidebar-accent/80 hover:text-sidebar-primary"
           )}
         >
           <Icon className="size-3.5 shrink-0" />

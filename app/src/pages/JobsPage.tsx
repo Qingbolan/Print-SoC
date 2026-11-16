@@ -1,3 +1,6 @@
+import { useI18n } from '@/lib/i18n'
+import { jobStatusLabel } from '@/lib/job-progress'
+import { DUPLEX_LABELS } from '@/lib/print-settings'
 import { useEffect, useCallback, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePrinterStore } from '@/store/printer-store'
@@ -63,7 +66,7 @@ const statusConfig: Record<
   Completed: {
     color: 'bg-success/10 text-success',
     icon: <CheckCircle2 className="w-4 h-4" />,
-    label: 'Completed',
+    label: 'Left queue',
   },
   Failed: {
     color: 'bg-destructive/10 text-destructive',
@@ -78,6 +81,7 @@ const statusConfig: Record<
 }
 
 export default function JobsPage() {
+  const { locale } = useI18n()
   const navigate = useNavigate()
   const { printJobs, setPrintJobs, removePrintJob, sshConfig, connectionStatus } = usePrinterStore()
   const activeSshConfig = connectionStatus.type === 'connected' ? sshConfig : null
@@ -161,7 +165,7 @@ export default function JobsPage() {
       header={
         <PageHeader
           title="Print queue"
-          description="Track active submissions and completed documents"
+          description="Track submissions, server queue status and history"
           icon={<FileText />}
           actions={
             <>
@@ -186,7 +190,7 @@ export default function JobsPage() {
         <div className="grid grid-cols-3 overflow-hidden rounded-md bg-card">
           {[
             { label: 'Active', value: activeJobs.length, icon: Clock },
-            { label: 'Completed', value: completedJobs.filter(j => j.status === 'Completed').length, icon: CheckCircle2 },
+            { label: 'Left queue', value: completedJobs.filter(j => j.status === 'Completed').length, icon: CheckCircle2 },
             { label: 'Failed', value: completedJobs.filter(j => j.status === 'Failed').length, icon: XCircle },
           ].map(({ label, value, icon: Icon }, index) => (
             <div key={label} className={`flex min-w-0 items-center gap-3 px-4 py-3 sm:px-5 ${index > 0 ? 'border-l border-border/60' : ''}`}>
@@ -221,7 +225,7 @@ export default function JobsPage() {
               {selectedTab === 'active' ? 'No active print jobs' : 'No job history'}
             </p>
             <p className="text-sm mt-2">
-              {selectedTab === 'active' ? 'Start a new print job from the Home page' : 'Completed jobs will appear here'}
+              {selectedTab === 'active' ? 'Start a new print job from the Home page' : 'Jobs that left the queue will appear here'}
             </p>
             </div>
           </div>
@@ -253,12 +257,12 @@ export default function JobsPage() {
                       className={`${statusConfig[job.status].color} flex-shrink-0`}
                     >
                       {statusConfig[job.status].icon}
-                      <span className="ml-1">{statusConfig[job.status].label}</span>
+                      <span className="ml-1">{jobStatusLabel(job, locale)}</span>
                     </Badge>
                 </div>
                 <div className="hidden text-xs leading-5 text-muted-foreground md:block">
                   <div className="font-medium text-foreground">{job.settings.copies} × {job.settings.paper_size}</div>
-                  <div>{job.settings.duplex === 'Simplex' ? 'Simplex' : 'Duplex'}{job.settings.pages_per_sheet > 1 ? ` · ${job.settings.pages_per_sheet}-up` : ''}</div>
+                  <div>{DUPLEX_LABELS[job.settings.duplex]}{job.settings.pages_per_sheet > 1 ? ` · ${job.settings.pages_per_sheet}-up` : ''}</div>
                 </div>
                 <div className="hidden text-xs leading-5 text-muted-foreground md:block">
                   <div>{new Date(job.created_at).toLocaleDateString('en-SG', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
@@ -332,7 +336,7 @@ export default function JobsPage() {
         )}
       {/* Job Detail Dialog */}
       <JobDetailDialog
-        job={selectedJob}
+        job={printJobs.find(job => job.id === selectedJob?.id) ?? selectedJob}
         open={detailDialogOpen}
         onOpenChange={setDetailDialogOpen}
       />

@@ -122,7 +122,15 @@ jobs:
       # Install npm dependencies
       - name: Install frontend dependencies
         working-directory: ./app
-        run: npm install
+        run: npm ci
+
+      - name: Check frontend behavior and types
+        working-directory: ./app
+        run: npm run lint && npm test
+
+      - name: Test Rust services
+        working-directory: ./app/src-tauri
+        run: cargo test --lib --target ${{ matrix.target }}
 
       # Build Tauri app
       - name: Build Tauri app (macOS/Windows)
@@ -299,6 +307,9 @@ jobs:
             git push origin "refs/tags/v$RELEASE_VERSION"
           fi
 
+      - name: Include the shared source-commit receipt
+        run: cp .release-version.json release-version.json
+
       - name: Create Release
         id: create_release
         uses: softprops/action-gh-release@v2
@@ -329,7 +340,8 @@ jobs:
             - **Linux**: Make the AppImage executable (`chmod +x`) and run it
 
           files: |
-            ./artifacts/*/*.tar.gz
+            release-version.json
+            ./artifacts/*/Print_at_SoC_*.tar.gz
             ./artifacts/*/*.msi
             ./artifacts/*/*.exe
             ./artifacts/*/*.AppImage
@@ -374,6 +386,12 @@ jobs:
         working-directory: ./release/python-pip
         run: twine check dist/*
 
+      - uses: actions/upload-artifact@v4
+        with:
+          name: python-package
+          path: release/python-pip/dist/*
+          if-no-files-found: error
+
   test-npm:
     needs: resolve-version
     name: Test npm Package
@@ -405,7 +423,13 @@ jobs:
 
       - name: Test package
         working-directory: ./release/node.js-npm
-        run: npm pack --dry-run
+        run: npm pack
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: npm-package
+          path: release/node.js-npm/*.tgz
+          if-no-files-found: error
 
   publish-pypi:
     if: inputs.publish_pypi
@@ -435,9 +459,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install build twine
 
-      - name: Build Python package
-        working-directory: ./release/python-pip
-        run: python -m build
+      - uses: actions/download-artifact@v4
+        with:
+          name: python-package
+          path: release/python-pip/dist
 
       - name: Publish to PyPI
         working-directory: ./release/python-pip
@@ -447,9 +472,9 @@ jobs:
         run: twine upload dist/*
 
   publish-npm:
-    if: inputs.publish_npm
+    if: ${{ always() && inputs.publish_npm && needs.create-release.result == 'success' && needs.test-npm.result == 'success' && (needs.publish-pypi.result == 'success' || needs.publish-pypi.result == 'skipped') }}
     name: Publish to npm
-    needs: [resolve-version, create-release, test-npm]
+    needs: [resolve-version, create-release, test-npm, publish-pypi]
     runs-on: ubuntu-latest
     environment: npm
 
@@ -470,12 +495,13 @@ jobs:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
 
-      - name: Install dependencies
-        working-directory: ./release/node.js-npm
-        run: npm install
+      - uses: actions/download-artifact@v4
+        with:
+          name: npm-package
+          path: release/node.js-npm/package-dist
 
       - name: Publish to npm
         working-directory: ./release/node.js-npm
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --access public
+        run: npm publish package-dist/*.tgz --access public

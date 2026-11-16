@@ -78,7 +78,7 @@ function createPrinterGroup(
       queue_name: queueName,
       location,
       model,
-      status: 'Online' as const,
+      status: 'Unknown' as const,
       supports_duplex: !variant.includes('sx'), // sx = simplex only
       supports_color: supportsColor,
       supported_paper_sizes: supportedPaperSizes,
@@ -399,7 +399,7 @@ function createDiscoveredPrinter(queueName: string): Printer {
       floor: '-',
     },
     model: 'Unknown',
-    status: 'Online',
+    status: 'Unknown',
     supports_duplex: variant !== 'sx',
     supports_color: normalized.startsWith('c'),
     supported_paper_sizes: ['A4'],

@@ -1,20 +1,24 @@
+import { requireReadyDocument, type QueuedDocument } from '@/lib/document-state'
+import { JobProgress } from '@/components/jobs/JobProgress'
+import { useNativeFileDrop } from '@/hooks/useNativeFileDrop'
+import { PdfSheet } from '@/components/preview/PdfSheet'
+import { makeSheets, makeBookletSheets, bindingAxis, backRotation, type TurnAxis } from '@/lib/print-preview'
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useNavigate, useLocation, useParams } from 'react-router-dom'
 import { usePrinterStore } from '@/store/printer-store'
 import { getDefaultPrinterQueue, normalizePrintQueueName } from '@/data/printers'
-import { Document, Page, pdfjs } from 'react-pdf'
+import { pdfjs } from 'react-pdf'
 import {
   createPrintJob,
   submitPrintJob,
-  getPDFInfo,
 } from '@/lib/printer-api'
 import { Button } from '@/components/ui/button'
-import { Switch } from '@/components/ui/switch'
+import { DUPLEX_LABELS } from '@/lib/print-settings'
 import { Slider } from '@/components/ui/slider'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { PageScaffold } from '@/components/layout/PageScaffold'
 import { FileErrorDialog } from '@/components/common/FileErrorDialog'
-import { safeDialogOpen } from '@/lib/tauri-utils'
+import { prepareDocument, browseDocument } from '@/lib/documents'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import {
@@ -42,22 +46,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import type { PrintSettings, Printer as PrinterType, PDFInfo, PrinterGroup } from '@/types/printer'
+import type { PrintSettings, Printer as PrinterType, PrinterGroup } from '@/types/printer'
 import 'react-pdf/dist/Page/AnnotationLayer.css'
 import 'react-pdf/dist/Page/TextLayer.css'
 
 // Use local worker file instead of CDN for Tauri app
 pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs'
 
-interface QueuedFile {
-  id: string
-  path: string
-  name: string
-  pdfUrl: string | null
-  pdfInfo: PDFInfo | null
-  loading: boolean
-  error: string | null
-}
+type QueuedFile = QueuedDocument
 
 // Generate a short unique session ID
 const generateSessionId = () => {
@@ -85,7 +81,6 @@ export default function ModernPreviewPage() {
   const printers = printerGroups.flatMap((g: PrinterGroup) => g.printers)
 
   const initialFilePath = location.state?.filePath
-  const initialPdfInfo = location.state?.pdfInfo
   const draftSettings = location.state?.draftSettings
   const draftPrinter = location.state?.draftPrinter
 
@@ -94,8 +89,8 @@ export default function ModernPreviewPage() {
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null)
 
   // Current file state
-  const [pageNumber, setPageNumber] = useState(1)
   const [submitting, setSubmitting] = useState(false)
+  const submissionInFlight = useRef(false)
   const [recommendedPrinter, setRecommendedPrinter] = useState<PrinterType | null>(null)
 
   // Zoom control
@@ -181,57 +176,32 @@ export default function ModernPreviewPage() {
     return pages
   }, [selectedFile, settings.page_range])
 
-  // Calculate effective sheet count after n-up
-  const effectiveSheetCount = useMemo(() => {
-    const pagesCount = pagesToPrint.size
-    if (settings.pages_per_sheet > 1) {
-      return Math.ceil(pagesCount / settings.pages_per_sheet)
-    }
-    return pagesCount
-  }, [pagesToPrint, settings.pages_per_sheet])
+  const sheets = useMemo(() => settings.booklet
+    ? makeBookletSheets(Array.from(pagesToPrint))
+    : makeSheets(Array.from(pagesToPrint), settings.pages_per_sheet, settings.duplex),
+    [pagesToPrint, settings.pages_per_sheet, settings.duplex, settings.booklet])
+  const effectiveSheetCount = sheets.length
 
   // Current sheet number for preview (1-indexed)
   const [currentSheet, setCurrentSheet] = useState(1)
 
   // Get n-up grid dimensions
   const nupGrid = useMemo(() => {
-    switch (settings.pages_per_sheet) {
+    switch (settings.booklet ? 2 : settings.pages_per_sheet) {
       case 2: return { cols: 2, rows: 1 }
       case 4: return { cols: 2, rows: 2 }
       case 6: return { cols: 3, rows: 2 }
       case 9: return { cols: 3, rows: 3 }
       default: return { cols: 1, rows: 1 }
     }
-  }, [settings.pages_per_sheet])
+  }, [settings.pages_per_sheet, settings.booklet])
 
-  // Calculate which pages appear on the current sheet
-  const pagesOnCurrentSheet = useMemo(() => {
-    const sortedPages = Array.from(pagesToPrint).sort((a, b) => a - b)
-    const pagesPerSheet = settings.pages_per_sheet
-    const startIdx = (currentSheet - 1) * pagesPerSheet
-    return sortedPages.slice(startIdx, startIdx + pagesPerSheet)
-  }, [pagesToPrint, currentSheet, settings.pages_per_sheet])
-
-  // For duplex, track if viewing front or back
   const [viewingBack, setViewingBack] = useState(false)
-
-  // Calculate sheets for duplex preview
-  const duplexSheets = useMemo(() => {
-    if (settings.duplex === 'Simplex') return null
-
-    const sortedPages = Array.from(pagesToPrint).sort((a, b) => a - b)
-    const pagesPerSheet = settings.pages_per_sheet
-    const sheets: { front: number[], back: number[] }[] = []
-
-    // Group pages into sheets
-    for (let i = 0; i < sortedPages.length; i += pagesPerSheet * 2) {
-      const frontPages = sortedPages.slice(i, i + pagesPerSheet)
-      const backPages = sortedPages.slice(i + pagesPerSheet, i + pagesPerSheet * 2)
-      sheets.push({ front: frontPages, back: backPages })
-    }
-
-    return sheets
-  }, [pagesToPrint, settings.pages_per_sheet, settings.duplex])
+  const [turnAxis, setTurnAxis] = useState<TurnAxis>('vertical')
+  const currentPhysicalSheet = sheets[currentSheet - 1]
+  const pagesOnCurrentSheet = currentPhysicalSheet
+    ? (viewingBack ? currentPhysicalSheet.back : currentPhysicalSheet.front) : []
+  const selectedBindingAxis = bindingAxis(settings.duplex, settings.orientation)
 
   // Get paper dimensions (width/height ratio)
   const paperDimensions = useMemo(() => {
@@ -264,39 +234,6 @@ export default function ModernPreviewPage() {
     return () => observer.disconnect()
   }, [paperDimensions.aspectRatio, selectedFile])
 
-  // Calculate optimal page size for n-up grid
-  // Uses actual PDF dimensions when available for accurate scaling
-  const calculatePageSize = useMemo(() => {
-    const { cols, rows } = nupGrid
-
-    // Get actual PDF aspect ratio from file info, default to A4
-    const pdfInfo = selectedFile?.pdfInfo
-    const pdfAspectRatio = pdfInfo?.page_size
-      ? pdfInfo.page_size[0] / pdfInfo.page_size[1]  // width/height from PDF
-      : 210 / 297  // A4 default
-
-    // Paper dimensions on screen
-    const paperWidth = previewPaperWidth
-    const paperHeight = previewPaperWidth / paperDimensions.aspectRatio
-
-    // Each cell size in the grid (with padding)
-    const padding = settings.pages_per_sheet === 1 ? 16 : 8
-    const cellWidth = (paperWidth - padding * 2) / cols - (cols > 1 ? 4 : 0)
-    const cellHeight = (paperHeight - padding * 2) / rows - (rows > 1 ? 4 : 0)
-
-    // Calculate the optimal size to fit PDF in cell
-    // Fit by the limiting dimension
-    const fitByWidth = cellWidth
-    const fitByHeight = cellHeight * pdfAspectRatio
-
-    // Use the smaller one to ensure content fits completely
-    const optimalWidth = Math.min(fitByWidth, fitByHeight)
-
-    return {
-      width: Math.max(1, Math.round(optimalWidth)),
-    }
-  }, [nupGrid, paperDimensions, previewPaperWidth, selectedFile?.pdfInfo, settings.pages_per_sheet])
-
   // Generate sessionId if not present
   useEffect(() => {
     if (!sessionId) {
@@ -312,32 +249,33 @@ export default function ModernPreviewPage() {
   useEffect(() => {
     if (initialFilePath && !initialFileAddedRef.current) {
       initialFileAddedRef.current = true
-      addFileToQueue(initialFilePath, initialPdfInfo)
+      addFileToQueue(initialFilePath, location.state?.fileName)
     }
   }, [])
 
   // Reset page/sheet number when switching files or settings change
   useEffect(() => {
     if (selectedFileId) {
-      setPageNumber(1)
       setCurrentSheet(1)
       setViewingBack(false)
     }
   }, [selectedFileId])
 
+  useEffect(() => {
+    setCurrentSheet(sheet => Math.max(1, Math.min(sheet, effectiveSheetCount)))
+  }, [effectiveSheetCount])
+
   // Reset sheet when n-up settings change
   useEffect(() => {
     setCurrentSheet(1)
     setViewingBack(false)
-  }, [settings.pages_per_sheet, settings.duplex, settings.orientation])
+  }, [settings.pages_per_sheet, settings.orientation])
 
-  // Auto-navigate to first printable page if current page is not in range
   useEffect(() => {
-    if (pagesToPrint.size > 0 && !pagesToPrint.has(pageNumber)) {
-      const firstPage = Math.min(...Array.from(pagesToPrint))
-      setPageNumber(firstPage)
-    }
-  }, [pagesToPrint, pageNumber])
+    if (settings.duplex === 'Simplex') setViewingBack(false)
+  }, [settings.duplex])
+
+
 
   // Reset zoom when file or settings change
   useEffect(() => {
@@ -382,21 +320,22 @@ export default function ModernPreviewPage() {
   }, [])
 
   // Add file to queue
-  const addFileToQueue = async (filePath: string, pdfInfo: PDFInfo | null = null) => {
-    const fileName = filePath.split('/').pop() || 'document.pdf'
+  const addFileToQueue = async (filePath: string, displayName?: string) => {
+    const fileName = displayName || filePath.split(/[\\/]/).pop() || 'document'
     const fileId = `${Date.now()}-${Math.random()}`
 
     const newFile: QueuedFile = {
       id: fileId,
-      path: filePath,
+      sourcePath: filePath,
+      path: null,
       name: fileName,
       pdfUrl: null,
-      pdfInfo: pdfInfo,
-      loading: true,
+      pdfInfo: null,
+      state: 'preparing',
       error: null,
     }
 
-    const existing = fileQueueRef.current.find(f => f.path === filePath)
+    const existing = fileQueueRef.current.find(f => f.sourcePath === filePath)
     if (existing) {
       setSelectedFileId(existing.id)
       return
@@ -412,8 +351,12 @@ export default function ModernPreviewPage() {
 
     // Load PDF
     try {
+      const result = await prepareDocument(filePath)
+      if (!result.success || !result.data) throw new Error(result.error || 'Document conversion failed')
+      const prepared = result.data
+      if (!mountedRef.current || !fileQueueRef.current.some(file => file.id === fileId)) return
       const { readFile } = await import('@tauri-apps/plugin-fs')
-      const data = await readFile(filePath)
+      const data = await readFile(prepared.path)
       const blob = new Blob([data], { type: 'application/pdf' })
       objectUrl = URL.createObjectURL(blob)
 
@@ -423,24 +366,10 @@ export default function ModernPreviewPage() {
         return
       }
 
-      // Get PDF info if not provided
-      let info = pdfInfo
-      if (!info) {
-        const infoResult = await getPDFInfo(filePath)
-        if (infoResult.success && infoResult.data) {
-          info = infoResult.data
-        }
-      }
-
-      if (!mountedRef.current || !fileQueueRef.current.some(file => file.id === fileId)) {
-        URL.revokeObjectURL(objectUrl)
-        objectUrl = null
-        return
-      }
-
+      const readyUrl = objectUrl
       updateFileQueue(current => current.map(f =>
         f.id === fileId
-          ? { ...f, pdfUrl: objectUrl, pdfInfo: info, loading: false }
+          ? { ...f, error: null, path: prepared.path, name: displayName || prepared.name, pdfUrl: readyUrl, pdfInfo: prepared.info, state: 'ready' as const }
           : f
       ))
     } catch (error) {
@@ -449,22 +378,26 @@ export default function ModernPreviewPage() {
       if (!mountedRef.current) return
       updateFileQueue(current => current.map(f =>
         f.id === fileId
-          ? { ...f, error: 'Failed to load PDF', loading: false }
+          ? { ...f, path: null, pdfUrl: null, pdfInfo: null, error: error instanceof Error ? error.message : 'Failed to prepare document', state: 'failed' as const }
           : f
       ))
     }
   }
 
   const handleBrowseFile = async () => {
-    const file = await safeDialogOpen({
-      multiple: false,
-      filters: [{ name: 'PDF', extensions: ['pdf'] }],
-    })
+    let file: string | string[] | null
+    try { file = await browseDocument() }
+    catch (error) { toast.error(String(error)); return }
 
     if (file) {
       await addFileToQueue(file as string)
     }
   }
+
+  useNativeFileDrop(paths => {
+    if (paths.length !== 1) { toast.error('Drop one document at a time'); return }
+    void addFileToQueue(paths[0])
+  })
 
   // Remove file from queue
   const removeFile = (fileId: string) => {
@@ -521,7 +454,11 @@ export default function ModernPreviewPage() {
       toast.error('Not connected to server. Please login first.')
       return
     }
-    await printFile(selectedFile)
+    if (submissionInFlight.current) return
+    submissionInFlight.current = true
+    try { await printFile(selectedFile) }
+    catch (error) { toast.error(String(error)) }
+    finally { submissionInFlight.current = false }
   }, [selectedFile, selectedPrinter, activeSshConfig, settings])
 
   const handlePrintAll = useCallback(async () => {
@@ -535,6 +472,10 @@ export default function ModernPreviewPage() {
       return
     }
 
+    if (submissionInFlight.current) return
+    try { fileQueue.forEach(requireReadyDocument) }
+    catch (error) { toast.error(String(error)); return }
+    submissionInFlight.current = true
     setSubmitting(true)
     setPrintDialog({
       open: true,
@@ -545,17 +486,21 @@ export default function ModernPreviewPage() {
 
     let successCount = 0
     let errorCount = 0
+    let failureReason = ''
 
     for (const file of fileQueue) {
       try {
         await printFile(file, true)
         successCount++
       } catch (error) {
-        errorCount++
+        errorCount = fileQueue.length - successCount
+        failureReason = error instanceof Error ? error.message : String(error)
+        break
       }
     }
 
     setSubmitting(false)
+    submissionInFlight.current = false
 
     if (errorCount === 0) {
       setPrintDialog({
@@ -574,10 +519,12 @@ export default function ModernPreviewPage() {
         status: 'error',
         jobName: `${fileQueue.length} files`,
         printer: selectedPrinter,
-        error: `${successCount} succeeded, ${errorCount} failed`,
+        error: `${successCount} submitted; ${errorCount} not confirmed or not attempted. ${failureReason}`,
       })
     }
   }, [fileQueue, selectedPrinter, activeSshConfig, settings])
+
+  const [activeJobId, setActiveJobId] = useState<string | null>(null)
 
   const printFile = async (file: QueuedFile, silent = false) => {
     if (!selectedPrinter) {
@@ -589,8 +536,8 @@ export default function ModernPreviewPage() {
       return
     }
 
+    const readyFile = requireReadyDocument(file)
     const copies = settings.copies
-    const totalJobs = copies > 1 ? copies : 1
     const jobLabel = copies > 1 ? `${file.name} (${copies} copies)` : file.name
 
     if (!silent) {
@@ -604,32 +551,17 @@ export default function ModernPreviewPage() {
     }
 
     try {
-      // Settings for each job (copies = 1 since we submit multiple jobs)
-      const jobSettings = { ...settings, copies: 1 }
-
-      // Submit multiple jobs for multiple copies
-      for (let copyNum = 1; copyNum <= totalJobs; copyNum++) {
-        // Generate job name with copy number suffix for multiple copies
-        const baseName = file.name.replace(/\.pdf$/i, '')
-        const jobName = copies > 1
-          ? `${baseName}-copy${copyNum}.pdf`
-          : file.name
-
-        const createResult = await createPrintJob(jobName, file.path, selectedPrinter, jobSettings)
-
-        if (!createResult.success || !createResult.data) {
-          throw new Error(createResult.error || `Failed to create job (copy ${copyNum})`)
-        }
-
-        const job = createResult.data
-        addPrintJob(job)
-
-        const submitResult = await submitPrintJob(job.id, activeSshConfig)
-
-        if (!submitResult.success) {
-          throw new Error(submitResult.error || `Submission failed (copy ${copyNum})`)
-        }
+      // One document is one spooler job, including all requested copies.
+      // Its receipt therefore describes the whole user action.
+      const createResult = await createPrintJob(file.name, readyFile.path, selectedPrinter, settings)
+      if (!createResult.success || !createResult.data) {
+        throw new Error(createResult.error || 'Failed to create print job')
       }
+      const job = createResult.data
+      addPrintJob(job)
+      setActiveJobId(job.id)
+      const submitResult = await submitPrintJob(job.id, activeSshConfig)
+      if (!submitResult.success) throw new Error(submitResult.error || 'Submission failed')
 
       // Remove draft after successful print
       removeDraftJob(file.id)
@@ -754,13 +686,10 @@ export default function ModernPreviewPage() {
         <div className="hidden min-h-0 flex-col bg-muted/45 xl:col-span-1 xl:flex">
           <div className="px-4 py-3">
             <h3 className="text-sm font-semibold text-foreground">
-              {settings.pages_per_sheet > 1 ? 'SHEETS' : 'PAGES'}
+              SHEETS
             </h3>
             <p className="text-xs text-muted-foreground">
-              {settings.pages_per_sheet > 1
-                ? `${effectiveSheetCount} ${effectiveSheetCount === 1 ? 'sheet' : 'sheets'} (${pagesToPrint.size} pages)`
-                : `${pagesToPrint.size} ${pagesToPrint.size === 1 ? 'page' : 'pages'}`
-              }
+              {effectiveSheetCount} sheets · {pagesToPrint.size} source pages
             </p>
           </div>
 
@@ -769,9 +698,7 @@ export default function ModernPreviewPage() {
               <div className="space-y-3">
                 {Array.from({ length: effectiveSheetCount }, (_, idx) => {
                   const sheetNum = idx + 1
-                  const sortedPages = Array.from(pagesToPrint).sort((a, b) => a - b)
-                  const startIdx = idx * settings.pages_per_sheet
-                  const sheetPages = sortedPages.slice(startIdx, startIdx + settings.pages_per_sheet)
+                  const sheetPages = sheets[idx].front
 
                   return (
                     <div
@@ -784,36 +711,8 @@ export default function ModernPreviewPage() {
                           : 'ring-1 ring-border hover:ring-primary/50'
                       )}
                     >
-                      {/* Mini n-up grid preview */}
-                      <div
-                        className="bg-white p-1 grid gap-0.5"
-                        style={{
-                          gridTemplateColumns: `repeat(${nupGrid.cols}, 1fr)`,
-                          gridTemplateRows: `repeat(${nupGrid.rows}, 1fr)`,
-                          aspectRatio: `${paperDimensions.width} / ${paperDimensions.height}`,
-                        }}
-                      >
-                        {Array.from({ length: settings.pages_per_sheet }, (_, i) => {
-                          const pageNum = sheetPages[i]
-                          // Calculate thumbnail page width based on grid
-                          const thumbWidth = Math.max(1, Math.floor(previewPaperWidth / 4 / nupGrid.cols))
-                          return (
-                            <div key={i} className="bg-muted rounded-sm overflow-hidden flex items-center justify-center">
-                              {pageNum && selectedFile.pdfUrl ? (
-                                <Document file={selectedFile.pdfUrl} loading={null}>
-                                  <Page
-                                    pageNumber={pageNum}
-                                    width={thumbWidth}
-                                    renderTextLayer={false}
-                                    renderAnnotationLayer={false}
-                                  />
-                                </Document>
-                              ) : (
-                                <span className="text-xs text-muted-foreground/50">-</span>
-                              )}
-                            </div>
-                          )
-                        })}
+                      <div className="bg-white" style={{ aspectRatio: `${paperDimensions.width} / ${paperDimensions.height}` }}>
+                        {selectedFile.pdfUrl && <PdfSheet file={selectedFile.pdfUrl} pages={sheetPages} cols={nupGrid.cols} rows={nupGrid.rows} />}
                       </div>
                       {/* Sheet number badge */}
                       <div className={cn(
@@ -866,11 +765,7 @@ export default function ModernPreviewPage() {
                       <ChevronLeft className="w-4 h-4" />
                     </Button>
                     <span className="px-3 text-center text-sm font-medium tabular-nums">
-                      {settings.pages_per_sheet > 1 ? (
-                        <>Sheet {currentSheet} / {effectiveSheetCount}</>
-                      ) : (
-                        <>{currentSheet} / {pagesToPrint.size}</>
-                      )}
+                      Sheet {currentSheet} / {effectiveSheetCount}
                     </span>
                     <Button
                       onClick={() => setCurrentSheet(s => Math.min(effectiveSheetCount, s + 1))}
@@ -893,7 +788,7 @@ export default function ModernPreviewPage() {
                         className="h-8 px-3 gap-2"
                       >
                         <FlipHorizontal className="w-4 h-4" />
-                        <span className="text-xs">{viewingBack ? 'Back' : 'Front'}</span>
+                        <span className="text-xs">{viewingBack ? 'Show front' : 'Show back'}</span>
                       </Button>
                     </div>
                   )}
@@ -943,115 +838,65 @@ export default function ModernPreviewPage() {
                     )}
                     {settings.duplex !== 'Simplex' && (
                       <span className="bg-success/20 text-success px-2 py-1 rounded font-medium">
-                        Duplex
+                        {DUPLEX_LABELS[settings.duplex]}
                       </span>
                     )}
                   </div>
                 </div>
               </div>
 
+              {settings.duplex !== 'Simplex' && (
+                <div className="flex flex-wrap items-center gap-2 px-4 py-2 text-xs text-muted-foreground">
+                  <label htmlFor="preview-turn">Turn the paper</label>
+                  <select id="preview-turn" className="rounded border border-border bg-background px-2 py-1" value={turnAxis} onChange={e => setTurnAxis(e.target.value as TurnAxis)}>
+                    <option value="vertical">Left to right (book)</option>
+                    <option value="horizontal">Top to bottom (calendar)</option>
+                  </select>
+                  <span>{viewingBack ? 'Back' : 'Front'} · Binding: {selectedBindingAxis === 'vertical' ? 'left / right edge' : 'top / bottom edge'}</span>
+                  {viewingBack && pagesOnCurrentSheet.length === 0 && <span>Blank back — nothing will be printed here</span>}
+                  {viewingBack && backRotation(settings.duplex, settings.orientation, turnAxis) === 180 && <span>Back is upside down with this turning direction.</span>}
+                </div>
+              )}
+
               {/* PDF viewer - Intelligent Preview */}
               <div
                 ref={pdfContainerRef}
                 className={cn(
-                  "flex-1 flex items-center justify-center p-6 overflow-auto"
+                  "min-h-0 flex-1 flex p-6 overflow-auto"
                 )}
               >
-                {selectedFile.loading ? (
+                {selectedFile.error ? (
+                  <div role="alert" className="m-auto p-6 text-center text-destructive">
+                    <p className="font-medium">Document could not be prepared</p>
+                    <p className="mt-2 text-sm">{selectedFile.error}</p>
+                    <Button variant="secondary" className="mt-4" onClick={handleBrowseFile}>Choose another document</Button>
+                  </div>
+                ) : selectedFile.state === 'preparing' ? (
                   <div className="flex items-center justify-center w-full h-full">
                     <div className="text-center">
                       <Loader2 className="w-10 h-10 animate-spin text-primary mx-auto mb-4" />
-                      <p className="text-sm font-medium text-muted-foreground">Loading PDF...</p>
+                      <p className="text-sm font-medium text-muted-foreground">Preparing document...</p>
                     </div>
                   </div>
-                ) : selectedFile.pdfUrl && pagesOnCurrentSheet.length > 0 ? (
+                ) : selectedFile.pdfUrl && currentPhysicalSheet ? (
                   <div
-                    className="shadow-2xl bg-white rounded-lg ring-1 ring-black/10 transition-all duration-300 relative flex-shrink-0"
+                    className="m-auto shadow-2xl bg-white ring-1 ring-black/10 relative flex-shrink-0"
                     style={{
-                      transform: `scale(${zoomLevel})`,
-                      transformOrigin: 'center center',
-                      width: `${previewPaperWidth}px`,
+                      width: `${previewPaperWidth * zoomLevel}px`,
                       aspectRatio: `${paperDimensions.width} / ${paperDimensions.height}`,
                     }}
                   >
-                    {/* N-up grid layout */}
-                    <div
-                      className="w-full h-full grid bg-white"
-                      style={{
-                        gridTemplateColumns: `repeat(${nupGrid.cols}, 1fr)`,
-                        gridTemplateRows: `repeat(${nupGrid.rows}, 1fr)`,
-                        gap: settings.pages_per_sheet === 1 ? '0px' : '4px',
-                        padding: settings.pages_per_sheet === 1 ? '16px' : '8px',
-                      }}
-                    >
-                      {(() => {
-                        // Get pages to display based on duplex setting
-                        let pagesToShow = pagesOnCurrentSheet
-                        if (settings.duplex !== 'Simplex' && duplexSheets) {
-                          const sheetIdx = currentSheet - 1
-                          if (sheetIdx < duplexSheets.length) {
-                            pagesToShow = viewingBack
-                              ? duplexSheets[sheetIdx].back
-                              : duplexSheets[sheetIdx].front
-                          }
-                        }
-
-                        // Fill grid with pages or empty slots
-                        const slots = []
-                        for (let i = 0; i < settings.pages_per_sheet; i++) {
-                          const pageNum = pagesToShow[i]
-                          slots.push(
-                            <div
-                              key={i}
-                              className={cn(
-                                "flex items-center justify-center relative",
-                                settings.pages_per_sheet > 1 && "bg-muted/50 rounded border border-border overflow-hidden"
-                              )}
-                            >
-                              {pageNum ? (
-                                <Document
-                                  file={selectedFile.pdfUrl}
-                                  loading={
-                                    <div className="flex items-center justify-center w-full h-full">
-                                      <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-                                    </div>
-                                  }
-                                >
-                                  <Page
-                                    pageNumber={pageNum}
-                                    width={calculatePageSize.width}
-                                    renderTextLayer={false}
-                                    renderAnnotationLayer={false}
-                                  />
-                                </Document>
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center bg-muted/50">
-                                  <span className="text-xs text-muted-foreground/50">Empty</span>
-                                </div>
-                              )}
-                              {/* Page number indicator for n-up */}
-                              {settings.pages_per_sheet > 1 && pageNum && (
-                                <div className="absolute bottom-1 right-1 rounded bg-black/60 px-1.5 py-0.5 text-xs text-white">
-                                  {pageNum}
-                                </div>
-                              )}
-                            </div>
-                          )
-                        }
-                        return slots
-                      })()}
-                    </div>
-
-                    {/* Side indicator for duplex */}
+                    <PdfSheet
+                      file={selectedFile.pdfUrl}
+                      pages={pagesOnCurrentSheet}
+                      cols={nupGrid.cols}
+                      rows={nupGrid.rows}
+                      rotation={viewingBack ? backRotation(settings.duplex, settings.orientation, turnAxis) : 0}
+                    />
                     {settings.duplex !== 'Simplex' && (
-                      <div className={cn(
-                        "absolute bottom-2 left-2 text-xs px-2 py-1 rounded-full font-medium",
-                        viewingBack
-                          ? "bg-warning/20 text-warning"
-                          : "bg-accent/20 text-accent"
-                      )}>
-                        {viewingBack ? 'Back Side' : 'Front Side'}
-                      </div>
+                      <div aria-hidden="true" className={selectedBindingAxis === 'vertical'
+                        ? 'pointer-events-none absolute inset-y-0 -left-1 border-l-2 border-primary'
+                        : 'pointer-events-none absolute inset-x-0 -top-1 border-t-2 border-primary'} />
                     )}
                   </div>
                 ) : (
@@ -1082,11 +927,11 @@ export default function ModernPreviewPage() {
               </div>
               <div className="flex flex-col justify-center border-t border-border/60 px-6 py-8 md:border-l md:border-t-0 sm:px-8">
                 <p className="text-xs font-semibold uppercase text-primary">Document required</p>
-                <h2 className="mt-2 text-xl font-semibold text-foreground">Add a PDF to begin</h2>
+                <h2 className="mt-2 text-xl font-semibold text-foreground">Add a document to begin</h2>
                 <p className="mt-2 text-sm leading-6 text-muted-foreground">The preview workspace will show the physical sheet, page arrangement, and selected queue before printing.</p>
                 <Button onClick={handleBrowseFile} className="mt-6 w-full">
                   <Upload className="size-4" />
-                  Choose PDF
+                  Choose document
                 </Button>
                 <div className="mt-5 grid grid-cols-3 gap-2 text-center text-xs text-muted-foreground">
                   <span className="rounded-md bg-muted px-2 py-2">Layout</span>
@@ -1122,18 +967,26 @@ export default function ModernPreviewPage() {
                 </div>
               </div>
 
-              {/* Double-sided */}
-              <div className="flex justify-between items-center py-2.5 px-3 rounded-lg hover:bg-muted/50 transition-colors">
-                <div>
-                  <div className="text-sm text-foreground">Double-Sided</div>
-                  <div className="text-xs text-muted-foreground">Save 50% paper</div>
-                </div>
-                <Switch
-                  checked={settings.duplex !== 'Simplex'}
-                  onCheckedChange={(checked) =>
-                    setSettings({ ...settings, duplex: checked ? 'DuplexLongEdge' : 'Simplex' })
-                  }
-                />
+              <div className="space-y-2 rounded-lg px-3 py-2.5">
+                <label htmlFor="duplex-mode" className="text-sm text-foreground">Two-sided printing</label>
+                <select
+                  id="duplex-mode"
+                  aria-describedby="duplex-hint"
+                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm font-medium"
+                  value={settings.duplex}
+                  onChange={(event) => setSettings(previous => ({
+                    ...previous,
+                    duplex: event.target.value as PrintSettings['duplex'],
+                  }))}
+                >
+                  {Object.entries(DUPLEX_LABELS).map(([value, label]) => (
+                    <option key={value} value={value} disabled={settings.booklet && value === 'Simplex'}>{label}</option>
+                  ))}
+                </select>
+                <p id="duplex-hint" className="text-xs text-muted-foreground">
+                  Long edge for portrait book-style reading; short edge for landscape book-style reading.
+                  Changing orientation keeps your selected binding edge.
+                </p>
               </div>
 
               {/* Paper size */}
@@ -1162,6 +1015,14 @@ export default function ModernPreviewPage() {
                 </select>
               </div>
 
+              <label className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm">
+                Booklet (fold in half)
+                <input type="checkbox" checked={settings.booklet} onChange={event => setSettings(previous => event.target.checked
+                  ? { ...previous, booklet: true, pages_per_sheet: 2, orientation: 'Landscape', duplex: 'DuplexShortEdge' }
+                  : { ...previous, booklet: false })} />
+              </label>
+              {settings.booklet && <p className="px-3 text-xs text-muted-foreground">Pages are reordered and padded with blanks for folding. Review both sides before printing.</p>}
+
               {/* Pages per sheet */}
               <div className="flex justify-between items-center py-2.5 px-3 rounded-lg hover:bg-muted/50 transition-colors">
                 <div>
@@ -1172,6 +1033,7 @@ export default function ModernPreviewPage() {
                 </div>
                 <select
                   className="px-3 py-1.5 text-sm border border-border rounded-md bg-background font-medium"
+                  disabled={settings.booklet}
                   value={settings.pages_per_sheet}
                   onChange={(e) => setSettings({ ...settings, pages_per_sheet: parseInt(e.target.value) })}
                 >
@@ -1231,7 +1093,7 @@ export default function ModernPreviewPage() {
           </Button>
           <Button
             onClick={handlePrintCurrent}
-            disabled={!selectedFile || !selectedPrinter || submitting}
+            disabled={selectedFile?.state !== 'ready' || !selectedPrinter || submitting}
             size="lg"
             className="px-6"
           >
@@ -1241,7 +1103,7 @@ export default function ModernPreviewPage() {
           {fileQueue.length > 1 && (
             <Button
               onClick={handlePrintAll}
-              disabled={fileQueue.length === 0 || !selectedPrinter || submitting}
+              disabled={fileQueue.length === 0 || fileQueue.some(file => file.state !== 'ready') || !selectedPrinter || submitting}
               size="lg"
               className="px-6 bg-success hover:bg-success-hover"
             >
@@ -1281,6 +1143,7 @@ export default function ModernPreviewPage() {
                 <AlertDialogDescription>
                   {printDialog.jobName}
                 </AlertDialogDescription>
+                {activeJobId && <JobProgress key={activeJobId} jobId={activeJobId} config={activeSshConfig} />}
               </AlertDialogHeader>
             </>
           )}
@@ -1319,7 +1182,7 @@ export default function ModernPreviewPage() {
                 <div className="flex items-center gap-3">
                   <AlertCircle className="w-6 h-6 text-destructive" />
                   <AlertDialogTitle className="text-destructive">
-                    Print Job Failed
+                    {printDialog.error?.includes('Submission not confirmed') ? 'Submission Not Confirmed' : 'Print Job Failed'}
                   </AlertDialogTitle>
                 </div>
                 <AlertDialogDescription>
@@ -1327,6 +1190,10 @@ export default function ModernPreviewPage() {
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
+                <AlertDialogAction onClick={() => {
+                  setPrintDialog({ open: false, status: 'error' })
+                  navigate('/jobs')
+                }}>Check Jobs</AlertDialogAction>
                 <AlertDialogAction onClick={() => setPrintDialog({ open: false, status: 'error' })}>
                   Close
                 </AlertDialogAction>

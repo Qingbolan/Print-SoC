@@ -72,8 +72,15 @@ fn command_path(command: &str) -> Option<PathBuf> {
     let mut candidates = Vec::new();
     if let Some(home) = dirs::home_dir() {
         candidates.push(home.join(".local/bin").join(command));
-        candidates.push(home.join("Library/Python/3.12/bin").join(command));
-        candidates.push(home.join("Library/Python/3.11/bin").join(command));
+        if let Ok(entries) = std::fs::read_dir(home.join("Library/Python")) {
+            let mut python_bins: Vec<_> = entries
+                .flatten()
+                .map(|entry| entry.path().join("bin").join(command))
+                .collect();
+            python_bins.sort();
+            python_bins.reverse();
+            candidates.extend(python_bins);
+        }
     }
     candidates.push(PathBuf::from("/opt/homebrew/bin").join(command));
     candidates.push(PathBuf::from("/usr/local/bin").join(command));
@@ -96,18 +103,109 @@ fn cups_backend_path() -> Option<PathBuf> {
 
 fn virtual_printer_registered() -> bool {
     Command::new("lpstat")
-        .args(["-p", VIRTUAL_PRINTER_NAME])
+        .args(["-v", VIRTUAL_PRINTER_NAME])
         .output()
-        .map(|output| output.status.success())
+        .map(|output| {
+            output.status.success()
+                && String::from_utf8_lossy(&output.stdout).contains("printatsoc://default")
+        })
         .unwrap_or(false)
 }
 
 fn virtual_printer_configured() -> bool {
-    let system_config = Path::new("/etc/print-at-soc/virtual-printer.json");
-    let user_config = dirs::home_dir()
-        .map(|home| home.join(".PrintAtSoC/virtual-printer.json"))
-        .unwrap_or_default();
-    system_config.exists() || user_config.exists()
+    // The root-only forwarding configuration is deliberately unreadable by the
+    // desktop user. Only the installer writes this non-secret validation receipt.
+    Path::new("/etc/print-at-soc/virtual-printer.json").exists()
+        && std::fs::read_to_string("/etc/print-at-soc/status.json")
+            .ok()
+            .and_then(|text| serde_json::from_str::<Value>(&text).ok())
+            .and_then(|value| value.get("configured").and_then(Value::as_bool))
+            == Some(true)
+}
+
+fn shell_argument(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "'\\''"))
+}
+
+#[tauri::command]
+pub fn integration_add_virtual_printer(
+    username: String,
+    host: String,
+    port: u16,
+    printer: String,
+) -> ApiResponse<String> {
+    if username.trim().is_empty() || host.trim().is_empty() || port == 0 {
+        return ApiResponse::error("Enter your SSH account, host and port first".to_string());
+    }
+    let Some(cli) = find_cli() else {
+        return ApiResponse::error("Install the print-at-soc Python CLI first".to_string());
+    };
+    let command = format!(
+        "{} --install-virtual-printer --username {} --host {} --port {} --printer {} --ask-password",
+        shell_argument(&cli.to_string_lossy()), shell_argument(&username),
+        shell_argument(&host), port, shell_argument(&printer),
+    );
+    let result = if cfg!(target_os = "macos") {
+        // Pass the shell command as an AppleScript argument, never as source.
+        Command::new("osascript")
+            .args([
+                "-e",
+                "on run argv",
+                "-e",
+                "tell application \"Terminal\"",
+                "-e",
+                "activate",
+                "-e",
+                "do script (item 1 of argv)",
+                "-e",
+                "end tell",
+                "-e",
+                "end run",
+                &command,
+            ])
+            .output()
+    } else if cfg!(target_os = "linux") {
+        let (terminal, separator) = if let Some(path) = command_path("x-terminal-emulator") {
+            (path, "-e")
+        } else if let Some(path) = command_path("gnome-terminal") {
+            (path, "--")
+        } else {
+            return ApiResponse::error(
+                "No supported terminal found. Use the copied setup command in your terminal"
+                    .to_string(),
+            );
+        };
+        // Keep the setup result visible when the terminal would otherwise close.
+        let script = format!("{}; setup_status=$?; printf '\nPress Enter to close this setup window...'; read -r setup_done; exit \"$setup_status\"", command);
+        return match Command::new(terminal)
+            .args([separator, "sh", "-c", &script])
+            .spawn()
+        {
+            Ok(mut child) => {
+                std::thread::spawn(move || {
+                    let _ = child.wait();
+                });
+                ApiResponse::success(
+                    "Setup opened in Terminal. Complete authentication, then refresh status"
+                        .to_string(),
+                )
+            }
+            Err(error) => ApiResponse::error(format!("Cannot open Terminal: {}", error)),
+        };
+    } else {
+        return ApiResponse::error(
+            "System printer registration supports macOS and Linux".to_string(),
+        );
+    };
+    match result {
+        Ok(output) if output.status.success() => ApiResponse::success(
+            "Setup opened in Terminal. Complete authentication, then refresh status".to_string(),
+        ),
+        Ok(output) => {
+            ApiResponse::error(String::from_utf8_lossy(&output.stderr).trim().to_string())
+        }
+        Err(error) => ApiResponse::error(format!("Cannot open Terminal: {}", error)),
+    }
 }
 
 #[tauri::command]
@@ -252,5 +350,28 @@ pub fn app_open_devtools(window: tauri::WebviewWindow) -> ApiResponse<String> {
     {
         let _ = window;
         ApiResponse::error("Developer tools are disabled in release builds".to_string())
+    }
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn terminal_arguments_remain_single_literal_arguments() {
+        for value in [
+            "a'b",
+            "$(touch /tmp/unwanted)",
+            "line\nbreak",
+            "a; exit 1",
+            "path with spaces",
+        ] {
+            let output = Command::new("sh")
+                .args(["-c", &format!("printf %s {}", shell_argument(value))])
+                .output()
+                .unwrap();
+            assert!(output.status.success());
+            assert_eq!(String::from_utf8(output.stdout).unwrap(), value);
+        }
     }
 }

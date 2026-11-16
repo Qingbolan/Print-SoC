@@ -7,6 +7,7 @@ export interface SSHConfig {
 }
 
 export type SSHAuthType =
+  | { type: 'StoredPassword' }
   | { type: 'Password'; password: string }
   | { type: 'PrivateKey'; key_path: string; passphrase?: string }
 
@@ -23,6 +24,8 @@ export interface PrintJob {
   error?: string
   /** The job ID assigned by lpq (e.g., "psts-123") */
   lpq_job_id?: string
+  submission?: { id: string; account: { host: string; port: number; username: string } } | null
+  progress?: PrintProgress
 }
 
 export interface PrintSettings {
@@ -95,7 +98,7 @@ export interface Coordinates {
   y: number
 }
 
-export type PrinterStatus = 'Online' | 'Offline' | 'Busy' | 'OutOfPaper' | 'Error'
+export type PrinterStatus = 'Unknown' | 'Online' | 'Offline' | 'Busy' | 'OutOfPaper' | 'Error'
 
 export interface PrintQueueJob {
   rank: string
@@ -104,6 +107,21 @@ export interface PrintQueueJob {
   file: string
   total_size?: string
   raw_line: string
+}
+
+export interface PrintProgress {
+  stage: 'Preparing' | 'Uploading' | 'Formatting' | 'Submitting' | 'Accepted' | 'SubmissionUnknown' | 'LeftQueue'
+  bytes_sent: number
+  total_bytes: number
+}
+
+export interface QueueSnapshot {
+  status: PrinterStatus
+  jobs: PrintQueueJob[]
+  diagnostics: string[]
+  raw_output: string
+  checked_at: string
+  jobs_complete: boolean
 }
 
 export interface PrintQuota {

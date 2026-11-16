@@ -49,7 +49,7 @@ export function AppSidebar({ mode = 'rail' }: { mode?: 'rail' | 'drawer' }) {
   return (
     <div className={cn(
       "app-sidebar flex h-full w-full flex-col overflow-hidden bg-sidebar pb-3 text-sidebar-foreground",
-      rail ? "px-2 pt-12" : "px-3 pt-2",
+      rail ? "px-2 pt-4" : "px-3 pt-2",
     )}>
       <div className={cn(
         "flex shrink-0",
@@ -57,12 +57,14 @@ export function AppSidebar({ mode = 'rail' }: { mode?: 'rail' | 'drawer' }) {
       )}>
         {rail ? (
           <>
-            <img src="/logo-mark-white.png" alt="" className="size-9 shrink-0 object-contain" />
-            <span className="text-xs font-semibold leading-4 text-white">Print@SoC</span>
+            <span className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-primary">
+              <img src="/logo-mark-white.png" alt="" className="size-full object-contain" />
+            </span>
+            <span className="text-xs font-semibold leading-4 text-sidebar-primary">Print@SoC</span>
             <span className="text-xs uppercase leading-4 text-sidebar-foreground/65">NUS SoC</span>
           </>
         ) : (
-          <BrandLogo className="min-w-0 gap-2" iconClassName="size-8" subtitle="NUS SoC Utility" inverse />
+          <BrandLogo className="min-w-0 gap-2" iconClassName="size-8" subtitle="NUS SoC Utility" />
         )}
       </div>
 
@@ -89,8 +91,8 @@ export function AppSidebar({ mode = 'rail' }: { mode?: 'rail' | 'drawer' }) {
                   ? "min-h-14 flex-col justify-center gap-1 px-1 py-2 text-center text-xs leading-4"
                   : "h-11 gap-3 px-3 text-sm",
                 isActive
-                  ? "bg-white/12 text-white"
-                  : "text-sidebar-foreground hover:bg-sidebar-accent/90 hover:text-white",
+                  ? "bg-[var(--brand-blue-subtle)] text-primary dark:text-white"
+                  : "text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-primary",
               )}
               aria-current={isActive ? 'page' : undefined}
             >
@@ -116,7 +118,7 @@ export function AppSidebar({ mode = 'rail' }: { mode?: 'rail' | 'drawer' }) {
           title={rail ? (locale === "en" ? "中文" : "English") : undefined}
           aria-label={locale === "en" ? "Switch language to Chinese" : "Switch language to English"}
           className={cn(
-            "flex h-9 w-full items-center rounded-md text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-white",
+            "flex h-9 w-full items-center rounded-md text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-sidebar-primary",
             rail ? "justify-center" : "gap-2.5 px-3",
           )}
         >

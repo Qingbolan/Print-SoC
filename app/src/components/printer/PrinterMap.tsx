@@ -1,6 +1,9 @@
 import { useEffect, useMemo } from 'react'
 import { MapContainer, TileLayer, Marker, Popup, Circle, useMap } from 'react-leaflet'
 import L from 'leaflet'
+import markerIcon from 'leaflet/dist/images/marker-icon.png'
+import markerIconRetina from 'leaflet/dist/images/marker-icon-2x.png'
+import markerShadow from 'leaflet/dist/images/marker-shadow.png'
 import type { Printer } from '@/types/printer'
 import { BUILDING_GPS_COORDINATES, NUS_SOC_CENTER } from '@/data/printers'
 import { useGeolocation, calculateGpsDistance, formatGpsDistance, type GeolocationPosition } from '@/hooks/useGeolocation'
@@ -19,18 +22,19 @@ import { Badge } from '@/components/ui/badge'
 import { Locate, Navigation, Printer as PrinterIcon, MapPin } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-// Fix Leaflet default marker icon issue
+// Use bundled icons so native/offline launches do not depend on a CDN.
 delete (L.Icon.Default.prototype as any)._getIconUrl
 L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+  iconRetinaUrl: markerIconRetina,
+  iconUrl: markerIcon,
+  shadowUrl: markerShadow,
 })
 
 // Custom marker icons
 const createPrinterIcon = (status: 'Online' | 'Offline' | 'Busy' | string, queueCount: number) => {
   const color = status === 'Online' && queueCount === 0 ? '#22c55e' :
-                status === 'Online' ? '#f59e0b' :
+                status === 'Online' || status === 'Busy' ? '#f59e0b' :
+                status === 'Unknown' ? '#64748b' :
                 '#ef4444'
 
   return L.divIcon({

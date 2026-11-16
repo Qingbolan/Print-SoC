@@ -170,7 +170,7 @@ export default function HelpPage() {
                   <AccordionItem value="duplex" className="border-0">
                     <AccordionTrigger className="text-left hover:no-underline">How do I print double-sided?</AccordionTrigger>
                     <AccordionContent className="text-sm leading-6 text-muted-foreground">
-                      Enable Double-Sided in preview and choose a duplex queue. Queue names ending in <code className="font-mono">-sx</code> are simplex only.
+                      In preview, choose Flip on long edge (portrait book-style reading) or Flip on short edge (landscape book-style reading). Choose Single-sided to disable duplex. Queue names ending in <code className="font-mono">-sx</code> are simplex only.
                     </AccordionContent>
                   </AccordionItem>
                   <AccordionItem value="paper" className="border-0">

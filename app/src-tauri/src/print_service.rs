@@ -57,6 +57,7 @@ where
 
 fn fail_job(job_id: &str, error: String) {
     let _ = update_job(job_id, |job| {
+        if job.status == PrintJobStatus::Cancelled { return; }
         job.status = PrintJobStatus::Failed;
         job.error = Some(error);
     });
@@ -70,6 +71,16 @@ pub fn print_create_job(
     printer: String,
     settings: PrintSettings,
 ) -> ApiResponse<PrintJob> {
+    let info = match crate::pdf_service::get_pdf_info_internal(&file_path) {
+        Ok(info) => info,
+        Err(error) => return ApiResponse::error(format!("Prepare a valid PDF before creating a print job: {}", error)),
+    };
+    if let Err(error) = crate::pdf_service::validate_print_settings(&settings, info.num_pages) {
+        return ApiResponse::error(error);
+    }
+    if let Err(error) = crate::ssh_service::validate_print_queue_name(&printer) {
+        return ApiResponse::error(error);
+    }
     let job_id = Uuid::new_v4().to_string();
 
     // Backup the PDF file
@@ -94,6 +105,8 @@ pub fn print_create_job(
         updated_at: Utc::now(),
         error: None,
         lpq_job_id: None,
+        progress: None,
+        submission: None,
     };
 
     let mut jobs = PRINT_JOBS.lock().unwrap();
@@ -132,76 +145,99 @@ pub fn print_update_job_status(
     status: PrintJobStatus,
     error: Option<String>,
 ) -> ApiResponse<PrintJob> {
-    match update_job(&job_id, |job| {
-        job.status = status;
-        job.error = error;
-    }) {
-        Ok(job) => ApiResponse::success(job),
-        Err(e) => ApiResponse::error(e),
+    let mut jobs = PRINT_JOBS.lock().unwrap();
+    let Some(job) = jobs.get_mut(&job_id) else { return ApiResponse::error("Job not found".into()); };
+    if let Err(error) = job.request_status(status, error) { return ApiResponse::error(error); }
+    let result = job.clone();
+    mark_dirty();
+    drop(jobs);
+    match save_if_dirty() {
+        Ok(()) => ApiResponse::success(result),
+        Err(error) => ApiResponse::error(error),
     }
 }
 
 /// Cancel a print job
 #[tauri::command]
-pub fn print_cancel_job(job_id: String, ssh_config: SSHConfig) -> ApiResponse<String> {
+pub async fn print_cancel_job(job_id: String, ssh_config: SSHConfig) -> ApiResponse<String> {
+    match tauri::async_runtime::spawn_blocking(move || print_cancel_job_blocking(job_id, ssh_config)).await {
+        Ok(result) => result,
+        Err(error) => ApiResponse::error(error.to_string()),
+    }
+}
+
+fn print_cancel_job_blocking(job_id: String, ssh_config: SSHConfig) -> ApiResponse<String> {
     let remote_cancel = {
-        let jobs = PRINT_JOBS.lock().unwrap();
-        let job = match jobs.get(&job_id) {
+        let mut jobs = PRINT_JOBS.lock().unwrap();
+        let job = match jobs.get_mut(&job_id) {
             Some(job) => job,
             None => return ApiResponse::error("Job not found".to_string()),
         };
 
-        if matches!(
-            job.status,
-            PrintJobStatus::Queued | PrintJobStatus::Printing
-        ) {
-            if let Err(e) = crate::ssh_service::validate_print_queue_name(&job.printer) {
-                return ApiResponse::error(e);
+        if matches!(job.status, PrintJobStatus::Pending | PrintJobStatus::Failed | PrintJobStatus::Uploading) {
+            if let Err(error) = job.request_status(PrintJobStatus::Cancelled, None) {
+                if job.status != PrintJobStatus::Uploading { return ApiResponse::error(error); }
+                return ApiResponse::error("Submission is in flight. Wait for the queue receipt before cancelling.".into());
             }
-
-            let lpq_job_id = match job
-                .lpq_job_id
-                .as_deref()
-                .map(crate::ssh_service::normalize_lpq_job_id)
-            {
-                Some(lpq_job_id) => lpq_job_id,
-                None => {
-                    return ApiResponse::error(
-                        "Cannot cancel remote job before queue ID is known".to_string(),
-                    )
-                }
-            };
-
-            if !lpq_job_id
-                .chars()
-                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
-            {
-                return ApiResponse::error(format!("Invalid queue job ID: {}", lpq_job_id));
-            }
-
-            Some((job.printer.clone(), lpq_job_id))
-        } else {
-            None
+            mark_dirty();
+            drop(jobs);
+            let _ = save_if_dirty();
+            return ApiResponse::success("Preparation cancelled. No print command will be sent.".into());
+        }
+        match job.remote_cancellation(&SSHIdentity::from(&ssh_config)) {
+            Ok(request) => request,
+            Err(error) => return ApiResponse::error(error),
         }
     };
 
-    if let Some((printer, lpq_job_id)) = remote_cancel {
-        let command = format!("lprm -P {} {}", printer, lpq_job_id);
-        let result = crate::ssh_service::ssh_execute_command(ssh_config, command);
-        if !result.success {
-            return ApiResponse::error(format!(
-                "Failed to cancel job: {}",
-                result.error.unwrap_or_else(|| "unknown error".to_string())
-            ));
-        }
+    let result = crate::ssh_service::ssh_execute_command(ssh_config, remote_cancel.command());
+    if !result.success {
+        return ApiResponse::error(format!(
+            "Failed to cancel job: {}",
+            result.error.unwrap_or_else(|| "unknown error".to_string())
+        ));
     }
 
-    match update_job(&job_id, |job| {
-        job.status = PrintJobStatus::Cancelled;
-        job.error = None;
-    }) {
-        Ok(_) => ApiResponse::success("Job cancelled successfully".to_string()),
-        Err(e) => ApiResponse::error(e),
+    let mut jobs = PRINT_JOBS.lock().unwrap();
+    let changed = jobs.get_mut(&job_id)
+        .is_some_and(|job| job.complete_remote_cancellation(&remote_cancel));
+    if changed { mark_dirty(); }
+    drop(jobs);
+    match save_if_dirty() {
+        Ok(()) if changed => ApiResponse::success("Job cancelled successfully".into()),
+        Ok(()) => ApiResponse::success("Cancellation request completed. The job had already changed state.".into()),
+        Err(error) => ApiResponse::error(error),
+    }
+}
+
+/// The user explicitly identifies the original account for pre-identity history.
+#[tauri::command]
+pub fn print_link_job_account(job_id: String, ssh_config: SSHConfig) -> ApiResponse<PrintJob> {
+    let mut jobs = PRINT_JOBS.lock().unwrap();
+    let Some(job) = jobs.get_mut(&job_id) else { return ApiResponse::error("Job not found".into()); };
+    if let Err(error) = job.adopt_account(SSHIdentity::from(&ssh_config)) { return ApiResponse::error(error); }
+    let result = job.clone();
+    mark_dirty();
+    drop(jobs);
+    match save_if_dirty() {
+        Ok(()) => ApiResponse::success(result),
+        Err(error) => ApiResponse::error(error),
+    }
+}
+
+/// Explicitly close an unresolvable submission after the user checks the queue
+/// and physical output. This never sends a new print command.
+#[tauri::command]
+pub fn print_resolve_submission(job_id: String, printed: bool) -> ApiResponse<PrintJob> {
+    let mut jobs = PRINT_JOBS.lock().unwrap();
+    let Some(job) = jobs.get_mut(&job_id) else { return ApiResponse::error("Job not found".into()); };
+    if let Err(error) = job.resolve_review(printed) { return ApiResponse::error(error); }
+    let result = job.clone();
+    mark_dirty();
+    drop(jobs);
+    match save_if_dirty() {
+        Ok(()) => ApiResponse::success(result),
+        Err(error) => ApiResponse::error(error),
     }
 }
 
@@ -209,6 +245,9 @@ pub fn print_cancel_job(job_id: String, ssh_config: SSHConfig) -> ApiResponse<St
 #[tauri::command]
 pub fn print_delete_job(job_id: String) -> ApiResponse<String> {
     let mut jobs = PRINT_JOBS.lock().unwrap();
+    if jobs.get(&job_id).is_some_and(|job| !job.can_delete()) {
+        return ApiResponse::error("Cancel or resolve this active job before deleting its history".into());
+    }
     match jobs.remove(&job_id) {
         Some(_) => {
             mark_dirty();
@@ -224,18 +263,59 @@ pub fn print_delete_job(job_id: String) -> ApiResponse<String> {
     }
 }
 
+fn begin_submission(job_id: &str, config: &SSHConfig) -> Result<PrintJob, String> {
+    let mut jobs = PRINT_JOBS.lock().map_err(|_| "Print job state unavailable")?;
+    let job = jobs.get_mut(job_id).ok_or("Job not found")?;
+    if !matches!(job.status, PrintJobStatus::Pending | PrintJobStatus::Failed) {
+        return Err("This job is already being submitted or has been submitted. Check its queue status before creating another job.".into());
+    }
+    job.submission = Some(SubmissionAttempt { id: Uuid::new_v4().to_string(), account: SSHIdentity::from(config) });
+    job.status = PrintJobStatus::Uploading;
+    job.printer = crate::ssh_service::queue_for_duplex_mode(&job.printer, matches!(job.settings.duplex, DuplexMode::Simplex));
+    job.progress = Some(PrintProgress { stage: PrintStage::Preparing, bytes_sent: 0, total_bytes: 0 });
+    job.error = None;
+    job.lpq_job_id = None;
+    job.updated_at = Utc::now();
+    let result = job.clone();
+    mark_dirty();
+    drop(jobs);
+    let _ = save_if_dirty();
+    Ok(result)
+}
+
+fn advance_stage(job_id: &str, stage: PrintStage) -> Result<(), String> {
+    let mut jobs = PRINT_JOBS.lock().map_err(|_| "Job state unavailable")?;
+    let job = jobs.get_mut(job_id).ok_or("Job not found")?;
+    job.transition(stage)?;
+    mark_dirty();
+    drop(jobs);
+    save_if_dirty()
+}
+
+fn upload_progress(job_id: &str, sent: u64, total: u64) -> std::io::Result<()> {
+    let mut jobs = PRINT_JOBS.lock().map_err(|_| std::io::Error::other("Job state unavailable"))?;
+    let job = jobs.get_mut(job_id).ok_or_else(|| std::io::Error::other("Job not found"))?;
+    if job.status == PrintJobStatus::Cancelled { return Err(std::io::Error::other("Upload cancelled")); }
+    job.progress = Some(PrintProgress { stage: PrintStage::Uploading, bytes_sent: sent, total_bytes: total });
+    Ok(())
+}
+
 /// Submit a print job via SSH
 #[tauri::command]
-pub fn print_submit_job(job_id: String, ssh_config: SSHConfig) -> ApiResponse<String> {
-    let job = match update_job(&job_id, |job| {
-        job.status = PrintJobStatus::Uploading;
-        job.error = None;
-        job.lpq_job_id = None;
-    }) {
+pub async fn print_submit_job(job_id: String, ssh_config: SSHConfig) -> ApiResponse<String> {
+    match tauri::async_runtime::spawn_blocking(move || submit_job(job_id, ssh_config)).await {
+        Ok(response) => response,
+        Err(_) => ApiResponse::error("Submission not confirmed: the print worker stopped. Check the printer queue before retrying.".into()),
+    }
+}
+
+pub(crate) fn submit_job(job_id: String, ssh_config: SSHConfig) -> ApiResponse<String> {
+    let job = match begin_submission(&job_id, &ssh_config) {
         Ok(job) => job,
-        Err(e) => return ApiResponse::error(e),
+        Err(error) => return ApiResponse::error(error),
     };
 
+    let attempt = job.submission.clone().expect("begin_submission creates an attempt");
     let file_path = job.file_path;
     let printer_name = job.printer;
     let settings = job.settings;
@@ -252,97 +332,60 @@ pub fn print_submit_job(job_id: String, ssh_config: SSHConfig) -> ApiResponse<St
     // Use original file directly - scaling will be done on server
     let base_file_path = file_path.clone();
 
-    // Apply n-up layout or booklet if needed
-    let processed_file_path = if settings.pages_per_sheet > 1 {
-        // Use NUS SoC recommended pdfjam for n-up layout
-        let temp_dir = std::env::temp_dir();
-        let output_path = temp_dir.join(format!("nup_{}.pdf", job_id));
+    // Apply the selected layout before upload; never silently submit the original on failure.
+    let processed_file_path = if settings.pages_per_sheet > 1 || settings.booklet || !matches!(settings.page_range, PageRange::All) {
+        let output_path = std::env::temp_dir().join(format!("layout_{}.pdf", job_id));
         let output_str = output_path.to_string_lossy().to_string();
-
-        eprintln!(
-            "[Print] Creating {}-up layout: {} -> {}",
-            settings.pages_per_sheet, base_file_path, output_str
-        );
-        match crate::pdf_service::create_nup_pdf_internal(
-            &base_file_path,
-            &output_str,
-            settings.pages_per_sheet,
-        ) {
-            Ok(_) => {
-                eprintln!("[Print] N-up layout succeeded");
-                output_str
-            }
-            Err(e) => {
-                eprintln!("[Print] N-up layout failed: {}", e);
-                fail_job(&job_id, format!("PDF n-up layout failed: {}", e));
-                return ApiResponse::error(format!("Failed to create n-up layout: {}", e));
-            }
+        if let Err(error) = crate::pdf_service::create_print_layout_cancellable(&base_file_path, &output_str, &settings, || {
+            PRINT_JOBS.lock().map(|jobs| jobs.get(&job_id).is_none_or(|job| job.status == PrintJobStatus::Cancelled)).unwrap_or(true)
+        }) {
+            let _ = std::fs::remove_file(&output_path);
+            let message = format!("PDF layout failed: {}", error);
+            fail_job(&job_id, message.clone());
+            return ApiResponse::error(message);
         }
-    } else if settings.booklet {
-        // Use booklet layout
-        let temp_dir = std::env::temp_dir();
-        let output_path = temp_dir.join(format!("booklet_{}.pdf", job_id));
-        let output_str = output_path.to_string_lossy().to_string();
-
-        eprintln!(
-            "[Print] Creating booklet layout: {} -> {}",
-            base_file_path, output_str
-        );
-        match crate::pdf_service::create_booklet_pdf_internal(&base_file_path, &output_str) {
-            Ok(_) => {
-                eprintln!("[Print] Booklet layout succeeded");
-                output_str
-            }
-            Err(e) => {
-                eprintln!("[Print] Booklet layout failed: {}", e);
-                fail_job(&job_id, format!("Booklet creation failed: {}", e));
-                return ApiResponse::error(format!("Failed to create booklet: {}", e));
-            }
-        }
+        output_str
     } else {
-        eprintln!("[Print] Using original file directly");
-        base_file_path
+        base_file_path.clone()
     };
 
     // Generate remote file path using job_id (UUID, always safe)
-    let remote_path = format!("/tmp/{}.pdf", job_id);
-    let upload_result = crate::ssh_service::ssh_upload_file(
-        ssh_config.clone(),
-        processed_file_path,
-        remote_path.clone(),
-    );
-
-    if !upload_result.success {
-        let error_msg = upload_result
-            .error
-            .clone()
-            .unwrap_or_else(|| "Unknown error".to_string());
-        fail_job(&job_id, error_msg.clone());
-        return ApiResponse::error(error_msg);
+    let remote_path = format!("/tmp/{}.pdf", attempt.id);
+    if let Err(error) = advance_stage(&job_id, PrintStage::Uploading) {
+        if processed_file_path != base_file_path { let _ = std::fs::remove_file(&processed_file_path); }
+        return ApiResponse::error(error);
     }
-
-    if let Err(e) = update_job(&job_id, |job| {
-        job.status = PrintJobStatus::Queued;
-        job.error = None;
-    }) {
+    let upload_result = crate::ssh_service::upload_with_progress(
+        &attempt.account, &processed_file_path, &remote_path, &mut |sent, total| upload_progress(&job_id, sent, total),
+    );
+    if processed_file_path != base_file_path { let _ = std::fs::remove_file(&processed_file_path); }
+    if let Err(error) = upload_result {
+        let message = error.to_string();
+        fail_job(&job_id, message.clone());
+        let _ = crate::ssh_service::ssh_execute_command(ssh_config.clone(), format!("rm -f {}", crate::ssh_service::shell_quote(&remote_path)));
+        return ApiResponse::error(message);
+    }
+    let submit_result = match advance_stage(&job_id, PrintStage::Formatting) {
+        Ok(()) => submit_print_job_ssh(&attempt, &printer_name, &remote_path, &settings,
+            || advance_stage(&job_id, PrintStage::Submitting)),
+        Err(error) => {
+            let _ = crate::ssh_service::ssh_execute_command(ssh_config.clone(), format!("rm -f {}", crate::ssh_service::shell_quote(&remote_path)));
+            return ApiResponse::error(error);
+        }
+    };
+    if submit_result.is_ok() || submit_result.as_ref().is_err_and(|error| !error.uncertain) {
         let _ = crate::ssh_service::ssh_execute_command(
             ssh_config.clone(),
             format!("rm -f {}", crate::ssh_service::shell_quote(&remote_path)),
         );
-        return ApiResponse::error(e);
     }
-
-    let submit_result = submit_print_job_ssh(&ssh_config, &printer_name, &remote_path, &settings);
-    let _ = crate::ssh_service::ssh_execute_command(
-        ssh_config.clone(),
-        format!("rm -f {}", crate::ssh_service::shell_quote(&remote_path)),
-    );
 
     match submit_result {
         Ok(output) => {
             let lpq_job_id = parse_lpr_job_id(&output);
             match update_job(&job_id, |job| {
-                job.status = PrintJobStatus::Printing;
+                job.status = PrintJobStatus::Queued;
+                if let Some(progress) = &mut job.progress { progress.stage = PrintStage::Accepted; }
                 job.error = None;
                 // Parse lpq job ID from lpr output (format: "request id is psts-123 (1 file(s))")
                 if let Some(lpq_id) = lpq_job_id {
@@ -355,15 +398,21 @@ pub fn print_submit_job(job_id: String, ssh_config: SSHConfig) -> ApiResponse<St
         }
         Err(e) => {
             let error = e.to_string();
-            fail_job(&job_id, error.clone());
-            ApiResponse::error(format!("Failed to submit print job: {}", error))
+            if e.uncertain {
+                let _ = advance_stage(&job_id, PrintStage::SubmissionUnknown);
+                let _ = update_job(&job_id, |job| {
+                    job.status = PrintJobStatus::Queued;
+                    job.error = Some(error.clone());
+                });
+            } else { fail_job(&job_id, error.clone()); }
+            ApiResponse::error(error)
         }
     }
 }
 
 /// Parse the lpq job ID from lpr output
 /// Format: "request id is psts-123 (1 file(s))"
-fn parse_lpr_job_id(output: &str) -> Option<String> {
+pub(crate) fn parse_lpr_job_id(output: &str) -> Option<String> {
     // Look for "request id is XXX" pattern
     if let Some(start) = output.find("request id is ") {
         let rest = &output[start + 14..]; // Skip "request id is "
@@ -379,11 +428,11 @@ fn parse_lpr_job_id(output: &str) -> Option<String> {
     None
 }
 
-fn lpq_job_id_matches(queue_job: &PrintQueueJob, lpq_job_id: &str) -> bool {
+pub(crate) fn lpq_job_id_matches(queue_job: &PrintQueueJob, lpq_job_id: &str) -> bool {
     let normalized = crate::ssh_service::normalize_lpq_job_id(lpq_job_id);
     queue_job.job_id == normalized
         || queue_job.job_id == lpq_job_id
-        || queue_job.raw_line.contains(lpq_job_id)
+
 }
 
 /// Check printer status via SSH
@@ -395,9 +444,25 @@ pub fn print_check_printer_status(
     crate::ssh_service::ssh_check_printer_queue(ssh_config, printer_queue)
 }
 
+#[tauri::command]
+pub async fn print_get_queue_snapshot(printer_queue: String) -> ApiResponse<QueueSnapshot> {
+    match tauri::async_runtime::spawn_blocking(move || crate::ssh_service::queue_snapshot(&printer_queue)).await {
+        Ok(Ok(snapshot)) => ApiResponse::success(snapshot),
+        Ok(Err(error)) => ApiResponse::error(error),
+        Err(error) => ApiResponse::error(error.to_string()),
+    }
+}
+
 /// Dynamically list available print queues from the connected SoC server
 #[tauri::command]
-pub fn print_list_queues(ssh_config: SSHConfig) -> ApiResponse<Vec<String>> {
+pub async fn print_list_queues(ssh_config: SSHConfig) -> ApiResponse<Vec<String>> {
+    match tauri::async_runtime::spawn_blocking(move || print_list_queues_blocking(ssh_config)).await {
+        Ok(result) => result,
+        Err(error) => ApiResponse::error(error.to_string()),
+    }
+}
+
+fn print_list_queues_blocking(ssh_config: SSHConfig) -> ApiResponse<Vec<String>> {
     crate::ssh_service::ssh_list_print_queues(ssh_config)
 }
 
@@ -410,79 +475,37 @@ pub fn print_get_quota(ssh_config: SSHConfig) -> ApiResponse<PrintQuota> {
 /// Check and update status of active print jobs
 /// Returns list of jobs that were marked as completed
 #[tauri::command]
-pub fn print_check_active_jobs(ssh_config: SSHConfig) -> ApiResponse<Vec<String>> {
-    let mut completed_jobs = Vec::new();
-
-    // Get all jobs that are currently in Printing or Queued status
-    let active_jobs: Vec<(String, String, Option<String>)> = {
-        let jobs = PRINT_JOBS.lock().unwrap();
-        jobs.values()
-            .filter(|job| {
-                matches!(
-                    job.status,
-                    PrintJobStatus::Printing | PrintJobStatus::Queued
-                )
-            })
-            .map(|job| (job.id.clone(), job.printer.clone(), job.lpq_job_id.clone()))
-            .collect()
-    };
-
-    if active_jobs.is_empty() {
-        return ApiResponse::success(completed_jobs);
+pub async fn print_check_active_jobs(ssh_config: SSHConfig) -> ApiResponse<Vec<String>> {
+    match tauri::async_runtime::spawn_blocking(move || print_check_active_jobs_blocking(ssh_config)).await {
+        Ok(result) => result,
+        Err(error) => ApiResponse::error(error.to_string()),
     }
+}
 
-    // Group jobs by printer to minimize lpq calls
-    let mut printer_jobs: std::collections::HashMap<String, Vec<(String, Option<String>)>> =
-        std::collections::HashMap::new();
-    for (job_id, printer, lpq_id) in active_jobs {
-        printer_jobs
-            .entry(printer)
-            .or_default()
-            .push((job_id, lpq_id));
+fn print_check_active_jobs_blocking(ssh_config: SSHConfig) -> ApiResponse<Vec<String>> {
+    let account = SSHIdentity::from(&ssh_config);
+    let active: Vec<PrintJob> = PRINT_JOBS.lock().unwrap().values()
+        .filter(|job| matches!(job.status, PrintJobStatus::Queued | PrintJobStatus::Printing))
+        .filter(|job| job.submission.as_ref().is_some_and(|attempt| attempt.account == account))
+        .cloned().collect();
+    let mut snapshots = HashMap::new();
+    let mut completed = Vec::new();
+    for job in active {
+        let attempt = job.submission.as_ref().unwrap();
+        let receipt = if job.lpq_job_id.is_none() || job.progress.as_ref().is_some_and(|p| p.stage == PrintStage::SubmissionUnknown) {
+            crate::submission_receipt::read(attempt).ok().flatten()
+        } else { None };
+        let snapshot = snapshots.entry(job.printer.clone()).or_insert_with(||
+            crate::ssh_service::queue_snapshot_for(&account, &job.printer).ok());
+        let _ = update_job(&job.id, |current| {
+            if current.submission.as_ref().map(|a| &a.id) != Some(&attempt.id) { return; }
+            if !matches!(current.status, PrintJobStatus::Queued | PrintJobStatus::Printing) { return; }
+            if let Some(receipt) = &receipt { current.accept_receipt(receipt); }
+            if let Some(snapshot) = snapshot { current.observe_queue(snapshot); }
+            if current.status == PrintJobStatus::Completed { completed.push(current.id.clone()); }
+        });
     }
-
-    // Check each printer's queue
-    for (printer, jobs_to_check) in printer_jobs {
-        let queue_result =
-            crate::ssh_service::ssh_check_printer_queue(ssh_config.clone(), printer.clone());
-
-        if queue_result.success {
-            let queue_jobs = queue_result.data.unwrap_or_default();
-
-            // Check each job
-            for (job_id, lpq_job_id) in jobs_to_check {
-                let job_in_queue = if let Some(ref lpq_id) = lpq_job_id {
-                    // Check if lpq job ID is in the structured queue output
-                    queue_jobs
-                        .iter()
-                        .any(|queue_job| lpq_job_id_matches(queue_job, lpq_id))
-                } else {
-                    // If no lpq_job_id, assume job completed after some time
-                    false
-                };
-
-                if !job_in_queue {
-                    // Job not in queue anymore, mark as completed
-                    let was_completed = update_job(&job_id, |job| {
-                        if matches!(
-                            job.status,
-                            PrintJobStatus::Printing | PrintJobStatus::Queued
-                        ) {
-                            job.status = PrintJobStatus::Completed;
-                        }
-                    })
-                    .map(|job| job.status == PrintJobStatus::Completed)
-                    .unwrap_or(false);
-
-                    if was_completed {
-                        completed_jobs.push(job_id.clone());
-                    }
-                }
-            }
-        }
-    }
-
-    ApiResponse::success(completed_jobs)
+    ApiResponse::success(completed)
 }
 
 /// Force save print history to disk
@@ -556,4 +579,17 @@ mod tests {
 
         assert!(lpq_job_id_matches(&queue_job, "psts-123"));
     }
+    #[test]
+    fn queue_id_match_is_exact_not_a_substring() {
+        let row = PrintQueueJob { rank: "active".into(), owner: "alice".into(), job_id: "1234".into(), file: "notes-123.pdf".into(), total_size: None, raw_line: "active alice 1234 notes-123.pdf".into() };
+        assert!(!lpq_job_id_matches(&row, "123"));
+        assert!(lpq_job_id_matches(&row, "psts-1234"));
+    }
+
+    #[test]
+    fn cancellation_closes_before_submission_and_stays_closed() {
+        for stage in [PrintStage::Preparing, PrintStage::Uploading, PrintStage::Formatting] { assert!(stage.cancellable()); }
+        for stage in [PrintStage::Submitting, PrintStage::Accepted, PrintStage::SubmissionUnknown, PrintStage::LeftQueue] { assert!(!stage.cancellable()); }
+    }
+
 }

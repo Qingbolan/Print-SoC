@@ -12,12 +12,12 @@ const path = require('path');
 const {
   checkAndInstall,
   getBinaryPath,
-  isInstalled,
-  downloadAndInstall
+  isInstalled
 } = require('./downloader');
 
 const { VERSION } = require('./config');
 const { callConnectedTool } = require('./mcp-client');
+const { MaintenanceBridge } = require('./maintenance');
 
 const MCP_ARGS = new Set(['mcp', 'mcp-server', '--mcp', '--mcp-server']);
 const WRAPPER_FLAGS = new Set([
@@ -58,7 +58,11 @@ Runtime:
   print-soc app launch              Launch the desktop application
 
 Maintenance:
-  print-soc self install            Force reinstall the desktop binary
+  print-soc self install            Safely reinstall the desktop binary
+  print-soc self update             Check and install a verified update
+  print-soc self update --check     Check without changing the installation
+  print-soc self update --rollback  Restore the previous desktop version
+  print-soc self uninstall          Preview and remove the desktop installation
   print-soc self path               Show binary installation path
   print-soc self doctor             Linux runtime dependency check
   print-soc --help                  Show this help message
@@ -505,6 +509,15 @@ async function main() {
     return 0;
   }
 
+  if (args[0] === 'self' && (args[1] === 'update' || args[1] === 'uninstall')) {
+    try {
+      return new MaintenanceBridge().run(args);
+    } catch (error) {
+      console.error(`Maintenance failed: ${error.message}`);
+      return error.exitCode || 1;
+    }
+  }
+
   const structuredResult = await routeStructuredCommand(args);
   if (structuredResult !== null) {
     return structuredResult;
@@ -512,11 +525,10 @@ async function main() {
 
   if (args.includes('--install')) {
     try {
-      await downloadAndInstall(true);
-      return 0;
+      return new MaintenanceBridge().run(['self', 'update', '--force', ...args.filter(arg => arg !== '--install')]);
     } catch (error) {
       console.error(`Installation failed: ${error.message}`);
-      return 1;
+      return error.exitCode || 1;
     }
   }
 
@@ -530,6 +542,12 @@ async function main() {
     return 0;
   }
 
+  if (args.includes('--doctor')) {
+    if (os.platform() === 'linux') linuxRuntimeCheck();
+    else console.log('Runtime diagnostics are only required on Linux.');
+    return 0;
+  }
+
   if (mcpMode) {
     if (!isInstalled()) {
       console.error('Print@SoC binary is not installed. Run "print-soc --install" before starting the MCP server.');
@@ -537,7 +555,18 @@ async function main() {
     }
   } else {
     try {
+      const maintenance = new MaintenanceBridge();
+      const recoveryStatus = maintenance.recover();
+      if (recoveryStatus !== 0) {
+        console.error('Interrupted update recovery failed; launch stopped to preserve the installation. Run print-soc self update for details.');
+        return recoveryStatus;
+      }
+      const previouslyInstalled = isInstalled();
       await checkAndInstall();
+      if (previouslyInstalled) {
+        const autoStatus = maintenance.maybeAutoUpdate();
+        if (autoStatus) return autoStatus;
+      }
     } catch (error) {
       console.error(`Error during installation check: ${error.message}`);
       return 1;
@@ -556,10 +585,6 @@ async function main() {
   if (os.platform() === 'linux') {
     const skipChecks = args.includes('--no-check') || !!process.env.PRINT_AT_SOC_NO_CHECKS;
     const strict = !!process.env.PRINT_AT_SOC_STRICT_CHECKS;
-    if (args.includes('--doctor')) {
-      linuxRuntimeCheck();
-      return 0;
-    }
     if (!skipChecks) {
       const { ok, fuseMissing } = linuxRuntimeCheck();
       if (!ok && strict) return 1;
@@ -631,11 +656,13 @@ async function main() {
   });
 }
 
-main()
-  .then((exitCode) => {
-    process.exit(exitCode);
-  })
-  .catch((error) => {
-    console.error('Unexpected error:', error);
-    process.exit(1);
-  });
+if (require.main === module) {
+  main()
+    .then((exitCode) => { process.exit(exitCode); })
+    .catch((error) => {
+      console.error('Unexpected error:', error);
+      process.exit(1);
+    });
+}
+
+module.exports = { main, rewriteLayeredShortcuts };

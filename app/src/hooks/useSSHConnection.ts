@@ -64,7 +64,10 @@ export function useSSHConnection() {
 
   const disconnect = useCallback(async () => {
     try {
-      await disconnectSSH()
+      const result = await disconnectSSH()
+      if (!result.success) {
+        return { success: false, error: result.error || 'Failed to disconnect' }
+      }
       clearConnectionSession()
       return { success: true }
     } catch (error) {

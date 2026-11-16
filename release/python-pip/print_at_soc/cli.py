@@ -57,12 +57,15 @@ Runtime:
 
 Virtual printer:
   print-soc virtual-printer configure  Save SSH/default printer settings
-  print-soc virtual-printer install    Install the macOS/Linux CUPS queue
+  print-soc virtual-printer install    Interactive system-printer setup wizard
   print-soc virtual-printer status     Show virtual printer installation status
   print-soc virtual-printer uninstall  Remove the CUPS queue/backend/config
 
 Maintenance:
-  print-soc self install            Force reinstall the desktop binary
+  print-soc self install            Safely reinstall the desktop binary
+  print-soc self update             Check and install verified desktop updates
+  print-soc self update --auto apply  Enable automatic desktop updates
+  print-soc self uninstall          Preview and choose what to remove
   print-soc self path               Show binary installation path
   print-soc self doctor             Linux runtime dependency check
   print-soc --help                  Show this help message
@@ -107,6 +110,9 @@ def _route_structured_command(args):
     rest = args[1:]
 
     try:
+        if command == "self" and rest and rest[0] in ("update", "uninstall"):
+            from .maintenance import maintenance_cli
+            return maintenance_cli(rest)
         if command in ("printer", "printers"):
             from .soc_commands import printer_cli
 
@@ -413,13 +419,8 @@ def main():
         )
 
     if "--install" in args:
-        from .downloader import download_and_install
-        try:
-            download_and_install()
-            return 0
-        except Exception as e:
-            print(f"Installation failed: {e}", file=sys.stderr)
-            return 1
+        from .maintenance import maintenance_cli
+        return maintenance_cli(["update", "--force"] + _args_after_flag(args, "--install"))
 
     if platform.system() == "Windows" and not mcp_mode:
         if "--fix-path" in args or "--register-app" in args:
@@ -475,10 +476,18 @@ def main():
             return 1
     else:
         try:
+            from .update_service import UpdateService
+            UpdateService().recover()
             check_and_install()
         except Exception as e:
             print(f"Error during installation check: {e}", file=sys.stderr)
             return 1
+
+    if not mcp_mode and "--no-check" not in args:
+        from .maintenance import maybe_auto_update
+        maintenance_status = maybe_auto_update()
+        if maintenance_status:
+            return maintenance_status
 
     binary_path = get_binary_path()
 

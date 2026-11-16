@@ -382,7 +382,7 @@ fn submit_pdf_print_job_tool(arguments: &Value) -> Value {
         None => return tool_error("Print job was not created"),
     };
 
-    let submit_response = print_service::print_submit_job(job.id.clone(), ssh_config);
+    let submit_response = print_service::submit_job(job.id.clone(), ssh_config);
     if !submit_response.success {
         return api_tool_result("message", submit_response);
     }

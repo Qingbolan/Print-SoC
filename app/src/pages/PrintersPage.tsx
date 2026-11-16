@@ -1,3 +1,4 @@
+import { usePrintCopy, printerStatusLabel } from '@/lib/print-copy'
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePrinterStore } from '@/store/printer-store'
@@ -22,6 +23,7 @@ const statusConfig: Record<
   PrinterStatus,
   { color: string; label: string; icon: React.ReactNode }
 > = {
+  Unknown: { color: 'bg-muted text-muted-foreground', label: 'Status unknown', icon: <AlertCircle className="size-4" /> },
   Online: {
     color: 'bg-success/10 text-success',
     label: 'Online',
@@ -50,8 +52,9 @@ const statusConfig: Record<
 }
 
 export default function PrintQueuePage() {
+  const { locale } = usePrintCopy()
   const navigate = useNavigate()
-  const { sshConfig, connectionStatus, isRefreshing, savedCredentials, printerFilter, userLocation } = usePrinterStore()
+  const { printers, sshConfig, connectionStatus, isRefreshing, savedCredentials, printerFilter, userLocation } = usePrinterStore()
   const [selectedGroup, setSelectedGroup] = useState<string | null>('info')
   const [selectedPrinter, setSelectedPrinter] = useState<Printer | null>(null)
   const [sheetOpen, setSheetOpen] = useState(false)
@@ -60,7 +63,7 @@ export default function PrintQueuePage() {
 
   // Filter printers based on user account type (stu = student, stf = staff)
   const serverType = savedCredentials?.serverType || (sshConfig?.host?.includes('stf') ? 'stf' : 'stu')
-  const basePrinters = useMemo(() => getPrintersForServerType(serverType), [serverType])
+  const basePrinters = useMemo(() => printers.length ? printers : getPrintersForServerType(serverType), [printers, serverType])
 
   // Apply filters
   const filteredPrinters = useMemo(() => {
@@ -267,7 +270,7 @@ export default function PrintQueuePage() {
                 const queueTone =
                   printer.status === 'Online' && queueCount === 0
                     ? 'bg-success/10 text-success'
-                    : printer.status !== 'Online'
+                    : ['Error', 'Offline', 'OutOfPaper'].includes(printer.status)
                     ? 'bg-destructive/10 text-destructive'
                     : 'bg-warning/10 text-warning-foreground'
 
@@ -290,7 +293,7 @@ export default function PrintQueuePage() {
                             variant="outline"
                             className={cn('px-1.5 py-0 text-xs', statusConfig[printer.status].color)}
                           >
-                            {statusConfig[printer.status].label}
+                            {printerStatusLabel(printer.status, locale)}
                           </Badge>
                         </div>
                       </div>

@@ -1,3 +1,4 @@
+import { deleteSavedPassword, savedAccountConfig } from '@/lib/credentials'
 import { version as appVersion } from '../../package.json'
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -106,12 +107,17 @@ export default function SettingsPage() {
 
   const [selectedTab, setSelectedTab] = useState<SettingsSection>('account')
   const [formData, setFormData] = useState<SSHConfig>(
-    sshConfig || {
-      host: 'sunfire.comp.nus.edu.sg',
+    sshConfig || (savedCredentials ? {
+      ...savedAccountConfig(savedCredentials),
+      auth_type: savedCredentials.passwordSaved
+        ? { type: 'StoredPassword' }
+        : { type: 'Password', password: '' },
+    } : {
+      host: 'stu.comp.nus.edu.sg',
       port: 22,
       username: '',
       auth_type: { type: 'Password', password: '' },
-    }
+    })
   )
 
   const [showLogoutDialog, setShowLogoutDialog] = useState(false)
@@ -202,15 +208,33 @@ export default function SettingsPage() {
     }
   }
 
-  const handleClearCredentials = () => {
-    clearSavedCredentials()
-    toast.success('Saved account cleared')
+  const handleClearCredentials = async () => {
+    try {
+      if (savedCredentials) await deleteSavedPassword(savedCredentials)
+      clearSavedCredentials()
+      toast.success('Saved account and password removed')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not remove saved password')
+    }
   }
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    const result = await disconnect()
+    if (!result.success) { toast.error(result.error || 'Could not disconnect'); return }
+    let removalError: string | undefined
+    try {
+      if (savedCredentials) await deleteSavedPassword(savedCredentials)
+    } catch (error) {
+      removalError = error instanceof Error ? error.message : String(error)
+    }
     logout()
+    if (removalError && savedCredentials) {
+      // Retain the identity for a later deletion attempt, but never automatically
+      // reuse a password the user just asked to remove.
+      usePrinterStore.getState().setSavedCredentials({ ...savedCredentials, rememberMe: false })
+      toast.error(`Disconnected, but the saved password could not be removed: ${removalError}. Clear the saved account after unlocking the password store.`)
+    } else { toast.success('Logged out; saved password removed') }
     setShowLogoutDialog(false)
-    toast.success('Logged out successfully')
     navigate('/login')
   }
 
@@ -235,7 +259,7 @@ export default function SettingsPage() {
       setFormData({ ...formData, [field]: value })
     } else if (field === 'port') {
       setFormData({ ...formData, port: Number(value) })
-    } else if (field === 'password' && formData.auth_type.type === 'Password') {
+    } else if (field === 'password') {
       setFormData({
         ...formData,
         auth_type: { type: 'Password', password: value as string },
@@ -249,18 +273,36 @@ export default function SettingsPage() {
       && integrationStatus.virtual_printer.configured
   )
   const serverType = savedCredentials?.serverType || (formData.host.includes('stf') ? 'stf' : 'stu')
-  const integrationUsername = savedCredentials?.username || formData.username
+  const integrationUsername = formData.username.trim()
   const cliCommand = integrationStatus?.cli.command || 'print-soc'
   const setupCommand = [
     shellQuote(cliCommand),
     '--install-virtual-printer',
-    '--server',
-    serverType,
+    '--host',
+    shellQuote(formData.host || `${serverType}.comp.nus.edu.sg`),
+    '--port',
+    String(formData.port || 22),
     ...(integrationUsername ? ['--username', shellQuote(integrationUsername)] : []),
     '--ask-password',
     '--printer',
     shellQuote(settings.defaultPrinter || 'psts-dx'),
   ].join(' ')
+  const [printerSetupOpening, setPrinterSetupOpening] = useState(false)
+  const openPrinterSetup = async () => {
+    setPrinterSetupOpening(true)
+    try {
+      const result = await safeInvoke('integration_add_virtual_printer', {
+        username: integrationUsername,
+        host: formData.host || `${serverType}.comp.nus.edu.sg`,
+        port: formData.port || 22,
+        printer: settings.defaultPrinter || 'psts-dx',
+      })
+      if (result.success) toast.info(result.data || 'Complete setup in Terminal, then refresh status')
+      else toast.error(result.error || 'Could not open printer setup')
+    } finally {
+      setPrinterSetupOpening(false)
+    }
+  }
   const removeCommand = `${shellQuote(cliCommand)} --uninstall-virtual-printer`
   const mcpClientConfig = JSON.stringify({
     mcpServers: {
@@ -361,7 +403,7 @@ export default function SettingsPage() {
                   <SimpleCardContent className="space-y-4">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div>
-		                        <div className="font-medium">Account Remembered</div>
+		                        <div className="font-medium">{savedCredentials.passwordSaved ? 'Password saved in system password store' : 'Account remembered (password not saved)'}</div>
 		                        <div className="text-sm text-muted-foreground">
 		                          Server: {savedCredentials.serverType.toUpperCase()} • User: {savedCredentials.username}
 		                        </div>
@@ -722,10 +764,17 @@ export default function SettingsPage() {
                               type="button"
                               size="sm"
                               variant="secondary"
-                              onClick={() => void copyIntegrationText(setupCommand, virtualPrinterReady ? 'Repair command' : 'Setup command')}
+                              disabled={printerSetupOpening}
+                              onClick={() => void openPrinterSetup()}
                             >
-                              <Copy />
-                              {virtualPrinterReady ? 'Copy repair command' : 'Copy setup command'}
+                              <Printer />
+                              {printerSetupOpening ? 'Opening Terminal…' : virtualPrinterReady ? 'Repair system printer' : 'Add system printer'}
+                            </Button>
+                          )}
+                          {integrationStatus.cli.available && integrationUsername && (
+                            <Button type="button" size="sm" variant="ghost"
+                              onClick={() => void copyIntegrationText(setupCommand, 'Setup command')}>
+                              <Copy /> Copy setup command
                             </Button>
                           )}
                           {virtualPrinterReady && (

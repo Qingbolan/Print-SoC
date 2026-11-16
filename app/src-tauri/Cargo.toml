@@ -1,6 +1,6 @@
 [package]
 name = "print_at_soc"
-version = "0.328.7"
+version = "0.328.8"
 description = "Print_at_SoC - Smart Printing for NUS SoC"
 authors = ["Silan Hu(silan.hu@u.nus.edu)"]
 license = "MIT"
@@ -15,7 +15,7 @@ crate-type = ["staticlib", "cdylib", "lib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["macos-private-api"] }
 tauri-plugin-shell = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
@@ -37,6 +37,14 @@ chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 lazy_static = "1.4"
 dirs = "5"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "bmp"] }
+sha2 = "0.10"
+tempfile = "3"
+url = "2"
+keyring = { version = "3.6", features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust", "vendored"] }
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-cli = "2"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

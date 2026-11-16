@@ -10,6 +10,7 @@ import type {
   StorageInfo,
   PrintQueueJob,
   PrintQuota,
+  QueueSnapshot,
 } from '@/types/printer'
 
 // ========== SSH Operations ==========
@@ -59,6 +60,10 @@ export async function checkPrinterQueue(
     sshConfig: config,
     printerQueue: printer,
   })
+}
+
+export function getQueueSnapshot(printerQueue: string): Promise<ApiResponse<QueueSnapshot>> {
+  return safeInvoke<QueueSnapshot>('print_get_queue_snapshot', { printerQueue })
 }
 
 export async function listPrintQueues(
@@ -199,4 +204,12 @@ export async function cleanupHistory(days?: number): Promise<ApiResponse<string[
  */
 export async function getStorageInfo(): Promise<ApiResponse<StorageInfo>> {
   return await safeInvoke('print_get_storage_info')
+}
+
+export function resolveSubmission(jobId: string, printed: boolean): Promise<ApiResponse<PrintJob>> {
+  return safeInvoke<PrintJob>('print_resolve_submission', { jobId, printed })
+}
+
+export function linkJobAccount(jobId: string, sshConfig: SSHConfig): Promise<ApiResponse<PrintJob>> {
+  return safeInvoke<PrintJob>('print_link_job_account', { jobId, sshConfig })
 }
