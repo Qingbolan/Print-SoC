@@ -504,4 +504,4 @@ jobs:
         working-directory: ./release/node.js-npm
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish package-dist/*.tgz --access public
+        run: npm publish ./package-dist/*.tgz --access public
