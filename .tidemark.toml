@@ -12,7 +12,9 @@ name = "origin"
 fallback_to_local = false
 
 [cache]
-enabled = true
+# Pinned Tide does not include the annotated-tag inventory in its cache key.
+# Recompute after tag changes so local and CI release coordinates agree.
+enabled = false
 
 [output]
 metadata_suffix = ""

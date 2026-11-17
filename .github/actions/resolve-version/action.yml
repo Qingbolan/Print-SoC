@@ -17,11 +17,18 @@ runs:
       if: steps.tide-cache.outputs.cache-hit != 'true'
       shell: bash
       run: cargo install --git https://github.com/Qingbolan/TideMark --rev d0fadb4db3f15e329e9cce2d99a6c629560d045c --locked --bin tide --force
+    - name: Restore annotated release anchors
+      shell: bash
+      run: git fetch --force origin "+refs/tags/*:refs/tags/*"
     - name: Resolve and synchronize
       id: resolve
       shell: bash
       run: |
         VERSION=$(python3 scripts/version.py sync --write-receipt .release-version.json)
+        if [[ "$GITHUB_REF" == refs/tags/v* && "${GITHUB_REF#refs/tags/v}" != "$VERSION" ]]; then
+          echo "Release tag does not match the resolved Tide version" >&2
+          exit 1
+        fi
         echo "version=$VERSION" >> "$GITHUB_OUTPUT"
         python3 scripts/version.py check --receipt .release-version.json
     - uses: actions/upload-artifact@v4

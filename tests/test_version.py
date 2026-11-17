@@ -2,6 +2,8 @@ import importlib.util
 import json
 from pathlib import Path
 import sys
+import shutil
+import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -13,6 +15,23 @@ SPEC.loader.exec_module(version)
 
 
 class VersionTests(unittest.TestCase):
+    @unittest.skipUnless(shutil.which('tide'), 'pinned Tide CLI required')
+    def test_new_annotated_anchor_is_not_hidden_by_cached_coordinate(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / '.tidemark.toml').write_text((version.ROOT / '.tidemark.toml').read_text())
+            def git(*args):
+                return subprocess.check_output(
+                    ['git', '-c', 'user.name=Silan.Hu', '-c', 'user.email=silan.hu@u.nus.edu', *args],
+                    cwd=root, text=True, stderr=subprocess.DEVNULL).strip()
+            git('init')
+            git('add', '.tidemark.toml')
+            git('commit', '-m', 'Version fixture')
+            manager = version.VersionManager(root)
+            self.assertEqual(manager.resolve().version, '0.0.0')
+            git('tag', '-a', 'v1.0.0', '-m', 'First stable epoch')
+            self.assertEqual(manager.resolve().version, '1.0.0')
+
     def test_msi_encoding_is_ordered_across_day_boundary(self):
         coordinates = ['0.255.255', '0.256.0', '0.328.4', '1.0.0']
         encoded = [tuple(map(int, version.BuildVersion(v, 'a' * 40).msi_version.split('.'))) for v in coordinates]

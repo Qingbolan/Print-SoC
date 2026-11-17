@@ -1,6 +1,6 @@
 [package]
 name = "print_at_soc"
-version = "0.377.1"
+version = "1.0.0"
 description = "NUS School of Computing desktop printing with document preview, duplex settings and print history"
 authors = ["Silan Hu(silan.hu@u.nus.edu)"]
 license = "MIT"

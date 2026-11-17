@@ -1,6 +1,6 @@
 {
   "name": "print-at-soc",
-  "version": "0.377.1",
+  "version": "1.0.0",
   "description": "NUS School of Computing printing: Node.js launcher for document preview, print history and guided virtual printer setup.",
   "main": "lib/cli.js",
   "bin": {
