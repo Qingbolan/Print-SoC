@@ -17,13 +17,9 @@
   <a href="https://github.com/Qingbolan/Print-SoC/issues">Report an issue</a>
 </p>
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="app/screenshots/readme/preview-native-dark.jpg" />
-  <source media="(prefers-color-scheme: light)" srcset="app/screenshots/readme/preview-native-light.jpg" />
-  <img src="app/screenshots/readme/preview-native-dark.jpg" alt="Real macOS Print@SoC window showing a two-page PDF preview, A4 paper, long-edge duplex and printer selection" width="100%" />
-</picture>
+<img src="app/screenshots/readme/preview-native-split.jpg" alt="Print@SoC preview: original dark and light macOS screenshots joined by a diagonal divider" width="100%" />
 
-<p align="center"><sub>Actual macOS desktop capture · local development build · sample PDF opened through Browse Files.</sub></p>
+<p align="center"><sub>Dark / light comparison · two actual macOS captures joined diagonally · local development build.</sub></p>
 
 **Preview before you print.** Review the page, choose your binding edge, and keep the printer settings in view. [Try the sample PDF](docs/examples/print-guide.pdf) or [inspect the screenshot provenance](app/screenshots/readme/CAPTURES.md).
 

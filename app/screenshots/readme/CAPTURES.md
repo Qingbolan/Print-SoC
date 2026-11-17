@@ -73,3 +73,12 @@ physical output. Physical short-edge output was confirmed separately in the
 [validation record](../../../docs/repair-validation-2026-11-17.md).
 
 The earlier screenshot-sequence animation is no longer used in the README.
+
+## Diagonal theme comparison
+
+`preview-native-split.jpg` joins the original dark and light captures at their
+original 2800 × 1698 alignment. Dark pixels occupy the left of the line from
+(2040, 0) to (1640, 1698); light pixels occupy the right. A 4-pixel blue divider
+marks the join and avoids crossing the document preview. The result is encoded
+as JPEG at quality 92. The published image uses original screenshot pixels,
+not a generated UI. It is a comparison composite, not a single application state.
