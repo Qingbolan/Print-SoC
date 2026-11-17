@@ -529,7 +529,7 @@ mod tests {
                 handle(&mut stream, &config, &std::sync::Mutex::new(()))
             });
             let mut stream = TcpStream::connect(address).unwrap();
-            wire::send(
+            let sent = wire::send(
                 &mut stream,
                 &if authorized {
                     "a".repeat(64)
@@ -541,12 +541,19 @@ mod tests {
                 "",
                 "",
                 &[],
-            )
-            .unwrap();
+            );
             let result = worker.join().unwrap();
             if authorized {
+                sent.unwrap();
                 assert_eq!(result.unwrap(), "ready");
             } else {
+                // Authentication fails after the second header. Linux may reset
+                // the socket while send is still writing the remaining headers.
+                // That is successful rejection, not a protocol-health failure.
+                if let Err(error) = sent {
+                    assert!(matches!(error.kind(), std::io::ErrorKind::ConnectionReset
+                        | std::io::ErrorKind::BrokenPipe | std::io::ErrorKind::ConnectionAborted), "{error}");
+                }
                 assert!(result.unwrap_err().contains("authentication"));
             }
         }
