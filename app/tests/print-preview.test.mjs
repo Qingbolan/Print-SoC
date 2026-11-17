@@ -49,3 +49,13 @@ test('booklet pads blanks and pairs outside-in across odd lengths and selections
     {front:[null,1],back:[2,null]}, {front:[null,3],back:[4,5]},
   ])
 })
+
+ test('turn selection maps to the actual duplex binding for both paper orientations', () => {
+  for (const [orientation, axis, expected] of [
+    ['Portrait','vertical','DuplexLongEdge'], ['Portrait','horizontal','DuplexShortEdge'],
+    ['Landscape','vertical','DuplexShortEdge'], ['Landscape','horizontal','DuplexLongEdge'],
+  ]) {
+    assert.equal(exports.duplexForTurn(axis, orientation), expected)
+    assert.equal(backRotation(expected, orientation, axis), 0)
+  }
+})

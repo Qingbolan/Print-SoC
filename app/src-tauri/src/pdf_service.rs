@@ -219,7 +219,7 @@ pub(crate) fn create_print_layout_cancellable(input_path: &str, output_path: &st
     } else {
         selected.iter().map(u32::to_string).collect::<Vec<_>>().join(",")
     };
-    let mut command = std::process::Command::new("pdfjam");
+    let mut command = crate::process_service::converter_command("pdfjam");
     command.args(arguments).arg(input_path).arg(pages).arg("-o").arg(output_path);
     let result = crate::process_service::run(&mut command, std::time::Duration::from_secs(180), cancelled)
         .map_err(|error| format!("PDF layout requires pdfjam (TeX Live). No job was submitted: {}", error))?;

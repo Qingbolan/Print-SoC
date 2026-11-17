@@ -26,6 +26,16 @@ export interface PrintJob {
   lpq_job_id?: string
   submission?: { id: string; account: { host: string; port: number; username: string } } | null
   progress?: PrintProgress
+  native?: { cups_job_id: string; options: Record<string, string> } | null
+  tracking?: {
+    checked_at: string
+    queue_position: number | null
+    jobs_ahead: number | null
+    stale: boolean
+    error: string | null
+    evidence: string
+    device_message: string | null
+  } | null
 }
 
 export interface PrintSettings {
@@ -107,10 +117,12 @@ export interface PrintQueueJob {
   file: string
   total_size?: string
   raw_line: string
+  files?: string[]
+  origin?: string | null
 }
 
 export interface PrintProgress {
-  stage: 'Preparing' | 'Uploading' | 'Formatting' | 'Submitting' | 'Accepted' | 'SubmissionUnknown' | 'LeftQueue'
+  stage: 'Preparing' | 'Uploading' | 'Formatting' | 'Submitting' | 'Accepted' | 'SubmissionUnknown' | 'LeftQueue' | 'OutputConfirmed'
   bytes_sent: number
   total_bytes: number
 }

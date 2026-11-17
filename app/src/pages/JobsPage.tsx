@@ -1,5 +1,5 @@
 import { useI18n } from '@/lib/i18n'
-import { jobStatusLabel } from '@/lib/job-progress'
+import { jobStatusLabel, queuePositionLabel } from '@/lib/job-progress'
 import { DUPLEX_LABELS } from '@/lib/print-settings'
 import { useEffect, useCallback, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -247,6 +247,7 @@ export default function JobsPage() {
                   </span>
                   <div className="min-w-0">
                     <div className="truncate text-sm font-semibold text-foreground">{job.name}</div>
+                    {job.native && <span className="text-xs text-muted-foreground">{locale === 'zh' ? '系统打印机' : 'System printer'}</span>}
                     <div className="mt-1 truncate font-mono text-xs text-muted-foreground">{job.printer}</div>
                     {job.error && <div className="mt-2 truncate text-xs text-destructive">{job.error}</div>}
                   </div>
@@ -259,9 +260,10 @@ export default function JobsPage() {
                       {statusConfig[job.status].icon}
                       <span className="ml-1">{jobStatusLabel(job, locale)}</span>
                     </Badge>
+                    {queuePositionLabel(job, locale) && <p className="mt-1 text-xs text-muted-foreground">{queuePositionLabel(job, locale)}</p>}
                 </div>
                 <div className="hidden text-xs leading-5 text-muted-foreground md:block">
-                  <div className="font-medium text-foreground">{job.settings.copies} × {job.settings.paper_size}</div>
+                  <div className="font-medium text-foreground">{job.native?.options['requested-copies'] || job.settings.copies} × {job.settings.paper_size}</div>
                   <div>{DUPLEX_LABELS[job.settings.duplex]}{job.settings.pages_per_sheet > 1 ? ` · ${job.settings.pages_per_sheet}-up` : ''}</div>
                 </div>
                 <div className="hidden text-xs leading-5 text-muted-foreground md:block">

@@ -1,3 +1,4 @@
+import { restoreSharedAccount } from '@/lib/credentials'
 import { useEffect, useState, type ReactNode } from 'react'
 import { useLocation } from 'react-router-dom'
 import { AppSidebar } from '@/components/layout/app-sidebar'
@@ -18,6 +19,14 @@ export function AppShell({ children }: { children: ReactNode }) {
   const isMobile = useIsMobile()
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false)
 
+  const [accountReady, setAccountReady] = useState(false)
+  const [accountError, setAccountError] = useState<string | null>(null)
+  useEffect(() => {
+    const restore = () => restoreSharedAccount().then(() => { setAccountReady(true); setAccountError(null) }).catch(error => { setAccountError(String(error)); setAccountReady(true) })
+    void restore()
+    window.addEventListener('focus', restore)
+    return () => window.removeEventListener('focus', restore)
+  }, [])
   useBackgroundMonitor()
 
   useEffect(() => {
@@ -40,6 +49,8 @@ export function AppShell({ children }: { children: ReactNode }) {
     setMobileNavigationOpen(false)
   }, [location.pathname])
 
+  if (!accountReady) return <div role="status" className="p-6">Loading saved account…</div>
+
   return (
     <div
       className="app-shell h-dvh overflow-hidden bg-sidebar font-sans antialiased"
@@ -56,6 +67,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       }}
     >
       <WindowChrome />
+      {accountError && <div role="alert" className="fixed bottom-4 right-4 z-50 max-w-md rounded-lg bg-destructive p-4 text-destructive-foreground">{accountError} · Reopen Settings to save your account, or refocus the window to retry.</div>}
       {!isAuthRoute && !isMobile && (
         <aside className="app-sidebar-frame relative min-h-0 overflow-hidden bg-sidebar">
           <AppSidebar />

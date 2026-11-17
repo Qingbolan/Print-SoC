@@ -4,6 +4,8 @@ use crate::{
     storage_service::get_app_data_dir,
     types::{ApiResponse, PDFInfo},
 };
+#[cfg(test)]
+use std::process::Command;
 use image::ImageDecoder;
 use lopdf::{dictionary, Document, Stream};
 use serde::Serialize;
@@ -12,7 +14,6 @@ use std::{
     fs,
     io::{Read, Write},
     path::{Path, PathBuf},
-    process::Command,
     time::Duration,
 };
 
@@ -30,12 +31,26 @@ pub struct PreparedDocument {
 }
 
 #[tauri::command]
-pub fn document_extensions() -> Vec<String> {
-    std::iter::once("pdf")
+pub fn document_extensions() -> ApiResponse<Vec<String>> {
+    ApiResponse::success(std::iter::once("pdf")
         .chain(IMAGES.iter().copied())
         .chain(OFFICE.iter().copied())
         .map(str::to_owned)
-        .collect()
+        .collect())
+}
+
+#[cfg(test)]
+mod picker_contract_tests {
+    #[test]
+    fn formats_use_the_same_response_contract_as_document_preparation() {
+        let response = serde_json::to_value(super::document_extensions()).unwrap();
+        assert_eq!(response["success"], true);
+        let formats = response["data"].as_array().unwrap();
+        for extension in ["pdf", "pptx", "jpg", "png"] {
+            assert!(formats.iter().any(|value| value == extension));
+        }
+        assert!(formats.iter().all(|value| value.as_str().is_some_and(|s| !s.starts_with('.'))));
+    }
 }
 
 #[tauri::command]
@@ -239,7 +254,8 @@ fn office_to_pdf(source: &Path, output: &Path, work: &Path) -> Result<(), String
     let profile_url =
         url::Url::from_directory_path(&profile).map_err(|_| "Invalid conversion profile path")?;
     // A private profile avoids interfering with open LibreOffice documents.
-    let mut command = Command::new(office_binary());
+    let binary = office_binary();
+    let mut command = crate::process_service::converter_command(&binary.to_string_lossy());
     command.arg(format!("-env:UserInstallation={}", profile_url))
         .args(["--headless", "--nologo", "--nodefault", "--norestore", "--convert-to", "pdf", "--outdir"])
         .arg(work).arg(source);

@@ -29,7 +29,7 @@ class UninstallService:
 
     RUNTIME_NAMES = (
         "bin", "version.txt", "receipt.json", ".previous", ".update-backup",
-        ".update-transaction.json", "win_postinstall_done",
+        ".update-transaction.json", "win_postinstall_done", "native-runtime", "native-service.json",
     )
 
     def __init__(self, root: Path = INSTALL_DIR):
@@ -87,8 +87,7 @@ class UninstallService:
         from . import virtual_printer as vp
         backend = vp.backend_path()
         paths = [backend, vp.RUNTIME_DIR]
-        if purge:
-            paths.extend([vp.SYSTEM_CONFIG_PATH, vp.STATUS_PATH, vp.SYSTEM_CONFIG_DIR / "ssh_key"])
+        paths.extend([vp.SYSTEM_CONFIG_PATH, vp.STATUS_PATH, vp.SYSTEM_CONFIG_DIR / "ssh_key", vp.SYSTEM_CONFIG_DIR / "native.conf"])
         if not shutil.which("lpstat"):
             if any(path.exists() for path in paths):
                 raise RuntimeError("CUPS files are installed but lpstat is missing. Restore CUPS tools before uninstalling.")
@@ -119,6 +118,12 @@ class UninstallService:
                 self._check_path(path, root_child=True)
                 items.append(RemovalItem("Incomplete update download", path, "path"))
         items.extend(self._cups_inventory(purge))
+        if self.system in {'Darwin', 'Linux'}:
+            from .native_driver import service_path
+            agent = service_path(self.home, self.system)
+            self._check_path(agent)
+            if agent.exists() or (self.home / '.PrintAtSoC/native-service.json').exists():
+                items.append(RemovalItem('User print forwarding service', agent, 'relay'))
         if self.system == "Windows":
             uninstallers = self._windows_uninstallers()
             if not uninstallers:
@@ -128,7 +133,7 @@ class UninstallService:
             for command in uninstallers:
                 items.append(RemovalItem("Registered Windows desktop installation", Path(command[0]), "native-uninstall"))
         if purge:
-            for path in [self.root / "virtual-printer.json", self.root / "maintenance.json"] + self._user_data_paths():
+            for path in [self.root / "virtual-printer.json", self.root / "maintenance.json", self.home / ".PrintAtSoC/account.json"] + self._user_data_paths():
                 self._check_path(path, root_child=path.parent == self.root)
                 if path.exists() or path.is_symlink():
                     items.append(RemovalItem("Saved settings, history and cached document copies", path, "path"))
@@ -140,9 +145,9 @@ class UninstallService:
             result = subprocess.run(["tasklist", "/FO", "CSV", "/NH"], capture_output=True, text=True, check=True)
             running = any(row and row[0].lower() == "print_at_soc.exe" for row in csv.reader(result.stdout.splitlines()))
         else:
-            result = subprocess.run(["ps", "-axo", "comm="], capture_output=True, text=True, check=True)
-            running = any(Path(line.strip()).name in {"Print_at_SoC", "print_at_soc", "print-at-soc"}
-                          for line in result.stdout.splitlines())
+            result = subprocess.run(["ps", "-axo", "args="], capture_output=True, text=True, check=True)
+            running = any(re.search(r"(?:^|/)(?:Print_at_SoC|print_at_soc|print-at-soc)(?:\s|$)", line)
+                          and "--native-print-service" not in line.split() for line in result.stdout.splitlines())
         if running:
             raise RuntimeError("Print@SoC is running. Close the desktop application and finish active jobs before uninstalling.")
         from . import virtual_printer as vp
@@ -201,6 +206,9 @@ class UninstallService:
                     vp._run_command(vp._sudo_prefix() + ["rm", "-rf", str(item.path)])
             if purge and system_items:
                 vp._run_command(vp._sudo_prefix() + ["rmdir", str(vp.SYSTEM_CONFIG_DIR)], check=False)
+            if any(item.kind == 'relay' for item in items):
+                from .native_driver import stop_service
+                stop_service(self.home, self.system)
             if self.system == "Windows" and not native_removed:
                 self._uninstall_windows(non_interactive)
             # Keep local configuration available for recovery when the password

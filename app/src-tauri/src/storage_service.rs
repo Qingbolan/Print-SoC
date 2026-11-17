@@ -49,6 +49,12 @@ pub fn load_print_history() -> Result<HashMap<String, PrintJob>, String> {
     let history_path =
         get_history_file_path().ok_or_else(|| "Failed to get history file path".to_string())?;
 
+    if crate::native_jobs::service_mode() {
+        let mut jobs = HashMap::new();
+        crate::native_jobs::merge(&mut jobs)?;
+        for job in jobs.values_mut() { if job.recover_interrupted() { crate::native_jobs::save(job)?; } }
+        return Ok(jobs);
+    }
     if !history_path.exists() {
         eprintln!("[Storage] History file does not exist, returning empty history");
         return Ok(HashMap::new());
@@ -101,7 +107,10 @@ pub fn save_print_history(jobs: &HashMap<String, PrintJob>) -> Result<(), String
         get_history_file_path().ok_or_else(|| "Failed to get history file path".to_string())?;
 
     // Convert HashMap to Vec for serialization
-    let jobs_vec: Vec<&PrintJob> = jobs.values().collect();
+    for job in jobs.values().filter(|job| job.native.is_some()) { crate::native_jobs::save(job)?; }
+    if crate::native_jobs::service_mode() { return Ok(()); }
+    let mut jobs_vec: Vec<&PrintJob> = jobs.values().filter(|job| job.native.is_none()).collect();
+    jobs_vec.sort_by(|a, b| PrintJob::newest_first(a, b));
 
     let content = serde_json::to_string_pretty(&jobs_vec)
         .map_err(|e| format!("Failed to serialize history: {}", e))?;
@@ -231,6 +240,7 @@ pub fn cleanup_old_history(jobs: &mut HashMap<String, PrintJob>, days: i64) -> V
         ) || job.created_at > cutoff;
 
         if !keep {
+            if job.native.is_some() && crate::native_jobs::delete(id).is_err() { return true; }
             removed_ids.push(id.clone());
             // Clean up backup
             let _ = delete_pdf_backup(id);

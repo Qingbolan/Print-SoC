@@ -29,8 +29,14 @@ fn mark_dirty() {
 /// Save history if dirty
 pub fn save_if_dirty() -> Result<(), String> {
     if HISTORY_DIRTY.load(Ordering::SeqCst) {
-        let jobs = PRINT_JOBS.lock().unwrap();
-        storage_service::save_print_history(&jobs)?;
+        let mut jobs = PRINT_JOBS.lock().unwrap();
+        if let Err(error) = storage_service::save_print_history(&jobs) {
+            // A native service/GUI transition won the file lock. Restore the
+            // authoritative state so stale mutations cannot poison later jobs.
+            jobs.retain(|_, job| job.native.is_none());
+            crate::native_jobs::merge(&mut jobs)?;
+            return Err(error);
+        }
         HISTORY_DIRTY.store(false, Ordering::SeqCst);
     }
     Ok(())
@@ -41,6 +47,7 @@ where
     F: FnOnce(&mut PrintJob),
 {
     let mut jobs = PRINT_JOBS.lock().unwrap();
+    crate::native_jobs::refresh(&mut jobs, job_id)?;
     let job = jobs
         .get_mut(job_id)
         .ok_or_else(|| "Job not found".to_string())?;
@@ -50,7 +57,7 @@ where
     let result = job.clone();
     mark_dirty();
     drop(jobs);
-    let _ = save_if_dirty();
+    save_if_dirty()?;
 
     Ok(result)
 }
@@ -107,6 +114,8 @@ pub fn print_create_job(
         lpq_job_id: None,
         progress: None,
         submission: None,
+        native: None,
+        tracking: None,
     };
 
     let mut jobs = PRINT_JOBS.lock().unwrap();
@@ -123,15 +132,18 @@ pub fn print_create_job(
 /// Get all print jobs
 #[tauri::command]
 pub fn print_get_all_jobs() -> ApiResponse<Vec<PrintJob>> {
-    let jobs = PRINT_JOBS.lock().unwrap();
-    let all_jobs: Vec<PrintJob> = jobs.values().cloned().collect();
+    let mut jobs = PRINT_JOBS.lock().unwrap();
+    if let Err(error) = crate::native_jobs::merge(&mut jobs) { return ApiResponse::error(error); }
+    let mut all_jobs: Vec<PrintJob> = jobs.values().cloned().collect();
+    all_jobs.sort_by(PrintJob::newest_first);
     ApiResponse::success(all_jobs)
 }
 
 /// Get a specific print job by ID
 #[tauri::command]
 pub fn print_get_job(job_id: String) -> ApiResponse<PrintJob> {
-    let jobs = PRINT_JOBS.lock().unwrap();
+    let mut jobs = PRINT_JOBS.lock().unwrap();
+    if let Err(error) = crate::native_jobs::merge(&mut jobs) { return ApiResponse::error(error); }
     match jobs.get(&job_id) {
         Some(job) => ApiResponse::success(job.clone()),
         None => ApiResponse::error("Job not found".to_string()),
@@ -166,9 +178,10 @@ pub async fn print_cancel_job(job_id: String, ssh_config: SSHConfig) -> ApiRespo
     }
 }
 
-fn print_cancel_job_blocking(job_id: String, ssh_config: SSHConfig) -> ApiResponse<String> {
+pub(crate) fn print_cancel_job_blocking(job_id: String, ssh_config: SSHConfig) -> ApiResponse<String> {
     let remote_cancel = {
         let mut jobs = PRINT_JOBS.lock().unwrap();
+        if let Err(error) = crate::native_jobs::refresh(&mut jobs, &job_id) { return ApiResponse::error(error); }
         let job = match jobs.get_mut(&job_id) {
             Some(job) => job,
             None => return ApiResponse::error("Job not found".to_string()),
@@ -181,7 +194,7 @@ fn print_cancel_job_blocking(job_id: String, ssh_config: SSHConfig) -> ApiRespon
             }
             mark_dirty();
             drop(jobs);
-            let _ = save_if_dirty();
+            if let Err(error) = save_if_dirty() { return ApiResponse::error(error); }
             return ApiResponse::success("Preparation cancelled. No print command will be sent.".into());
         }
         match job.remote_cancellation(&SSHIdentity::from(&ssh_config)) {
@@ -249,7 +262,10 @@ pub fn print_delete_job(job_id: String) -> ApiResponse<String> {
         return ApiResponse::error("Cancel or resolve this active job before deleting its history".into());
     }
     match jobs.remove(&job_id) {
-        Some(_) => {
+        Some(job) => {
+            if job.native.is_some() {
+                if let Err(error) = crate::native_jobs::delete(&job_id) { jobs.insert(job_id, job); return ApiResponse::error(error); }
+            }
             mark_dirty();
             // Clean up backup
             if let Err(e) = storage_service::delete_pdf_backup(&job_id) {
@@ -265,6 +281,7 @@ pub fn print_delete_job(job_id: String) -> ApiResponse<String> {
 
 fn begin_submission(job_id: &str, config: &SSHConfig) -> Result<PrintJob, String> {
     let mut jobs = PRINT_JOBS.lock().map_err(|_| "Print job state unavailable")?;
+    crate::native_jobs::refresh(&mut jobs,job_id)?;
     let job = jobs.get_mut(job_id).ok_or("Job not found")?;
     if !matches!(job.status, PrintJobStatus::Pending | PrintJobStatus::Failed) {
         return Err("This job is already being submitted or has been submitted. Check its queue status before creating another job.".into());
@@ -279,12 +296,13 @@ fn begin_submission(job_id: &str, config: &SSHConfig) -> Result<PrintJob, String
     let result = job.clone();
     mark_dirty();
     drop(jobs);
-    let _ = save_if_dirty();
+    save_if_dirty()?;
     Ok(result)
 }
 
 fn advance_stage(job_id: &str, stage: PrintStage) -> Result<(), String> {
     let mut jobs = PRINT_JOBS.lock().map_err(|_| "Job state unavailable")?;
+    crate::native_jobs::refresh(&mut jobs,job_id)?;
     let job = jobs.get_mut(job_id).ok_or("Job not found")?;
     job.transition(stage)?;
     mark_dirty();
@@ -294,9 +312,15 @@ fn advance_stage(job_id: &str, stage: PrintStage) -> Result<(), String> {
 
 fn upload_progress(job_id: &str, sent: u64, total: u64) -> std::io::Result<()> {
     let mut jobs = PRINT_JOBS.lock().map_err(|_| std::io::Error::other("Job state unavailable"))?;
+    crate::native_jobs::refresh(&mut jobs,job_id).map_err(std::io::Error::other)?;
     let job = jobs.get_mut(job_id).ok_or_else(|| std::io::Error::other("Job not found"))?;
     if job.status == PrintJobStatus::Cancelled { return Err(std::io::Error::other("Upload cancelled")); }
+    let previous = job.progress.as_ref().map(|p|p.bytes_sent).unwrap_or(0);
     job.progress = Some(PrintProgress { stage: PrintStage::Uploading, bytes_sent: sent, total_bytes: total });
+    if job.native.is_some() && (sent == total || sent / 262144 != previous / 262144) {
+        job.updated_at=Utc::now();
+        crate::native_jobs::save(job).map_err(std::io::Error::other)?;
+    }
     Ok(())
 }
 
@@ -319,6 +343,7 @@ pub(crate) fn submit_job(job_id: String, ssh_config: SSHConfig) -> ApiResponse<S
     let file_path = job.file_path;
     let printer_name = job.printer;
     let settings = job.settings;
+    let native = job.native;
 
     // Verify input file exists
     if !std::path::Path::new(&file_path).exists() {
@@ -367,7 +392,7 @@ pub(crate) fn submit_job(job_id: String, ssh_config: SSHConfig) -> ApiResponse<S
     }
     let submit_result = match advance_stage(&job_id, PrintStage::Formatting) {
         Ok(()) => submit_print_job_ssh(&attempt, &printer_name, &remote_path, &settings,
-            || advance_stage(&job_id, PrintStage::Submitting)),
+            || advance_stage(&job_id, PrintStage::Submitting), native.as_ref()),
         Err(error) => {
             let _ = crate::ssh_service::ssh_execute_command(ssh_config.clone(), format!("rm -f {}", crate::ssh_service::shell_quote(&remote_path)));
             return ApiResponse::error(error);
@@ -408,6 +433,10 @@ pub(crate) fn submit_job(job_id: String, ssh_config: SSHConfig) -> ApiResponse<S
             ApiResponse::error(error)
         }
     }
+}
+
+pub(crate) fn attach_native(job_id: &str, info: NativePrintInfo) -> Result<(), String> {
+    update_job(job_id, |job| job.native = Some(info)).map(|_| ())
 }
 
 /// Parse the lpq job ID from lpr output
@@ -482,29 +511,36 @@ pub async fn print_check_active_jobs(ssh_config: SSHConfig) -> ApiResponse<Vec<S
     }
 }
 
-fn print_check_active_jobs_blocking(ssh_config: SSHConfig) -> ApiResponse<Vec<String>> {
+pub(crate) fn print_check_active_jobs_blocking(ssh_config: SSHConfig) -> ApiResponse<Vec<String>> {
     let account = SSHIdentity::from(&ssh_config);
-    let active: Vec<PrintJob> = PRINT_JOBS.lock().unwrap().values()
+    let mut jobs = PRINT_JOBS.lock().unwrap();
+    if let Err(error) = crate::native_jobs::merge(&mut jobs) { return ApiResponse::error(error); }
+    let active: Vec<PrintJob> = jobs.values()
         .filter(|job| matches!(job.status, PrintJobStatus::Queued | PrintJobStatus::Printing))
         .filter(|job| job.submission.as_ref().is_some_and(|attempt| attempt.account == account))
         .cloned().collect();
+    drop(jobs);
     let mut snapshots = HashMap::new();
     let mut completed = Vec::new();
+    let mut tracking_error = None;
     for job in active {
         let attempt = job.submission.as_ref().unwrap();
         let receipt = if job.lpq_job_id.is_none() || job.progress.as_ref().is_some_and(|p| p.stage == PrintStage::SubmissionUnknown) {
             crate::submission_receipt::read(attempt).ok().flatten()
         } else { None };
         let snapshot = snapshots.entry(job.printer.clone()).or_insert_with(||
-            crate::ssh_service::queue_snapshot_for(&account, &job.printer).ok());
-        let _ = update_job(&job.id, |current| {
+            crate::ssh_service::queue_snapshot_for(&account, &job.printer));
+        if let Err(error) = snapshot { tracking_error = Some(error.clone()); }
+        let changed = update_job(&job.id, |current| {
             if current.submission.as_ref().map(|a| &a.id) != Some(&attempt.id) { return; }
             if !matches!(current.status, PrintJobStatus::Queued | PrintJobStatus::Printing) { return; }
             if let Some(receipt) = &receipt { current.accept_receipt(receipt); }
-            if let Some(snapshot) = snapshot { current.observe_queue(snapshot); }
+            match snapshot { Ok(snapshot) => current.observe_queue(snapshot), Err(error) => current.tracking_failed(error.clone()) }
             if current.status == PrintJobStatus::Completed { completed.push(current.id.clone()); }
         });
+        if let Err(error) = changed { tracking_error = Some(error); }
     }
+    if let Some(error) = tracking_error { return ApiResponse::error(error); }
     ApiResponse::success(completed)
 }
 
@@ -574,14 +610,14 @@ mod tests {
             job_id: "123".to_string(),
             file: "notes.pdf".to_string(),
             total_size: Some("1024 bytes".to_string()),
-            raw_line: "active alice 123 notes.pdf 1024 bytes".to_string(),
+            raw_line: "active alice 123 notes.pdf 1024 bytes".to_string(), files: vec![], origin: None,
         };
 
         assert!(lpq_job_id_matches(&queue_job, "psts-123"));
     }
     #[test]
     fn queue_id_match_is_exact_not_a_substring() {
-        let row = PrintQueueJob { rank: "active".into(), owner: "alice".into(), job_id: "1234".into(), file: "notes-123.pdf".into(), total_size: None, raw_line: "active alice 1234 notes-123.pdf".into() };
+        let row = PrintQueueJob { rank: "active".into(), owner: "alice".into(), job_id: "1234".into(), file: "notes-123.pdf".into(), total_size: None, raw_line: "active alice 1234 notes-123.pdf".into(), files: vec![], origin: None };
         assert!(!lpq_job_id_matches(&row, "123"));
         assert!(lpq_job_id_matches(&row, "psts-1234"));
     }

@@ -15,6 +15,7 @@ license = {text = "MIT"}
 keywords = ["nus", "soc", "printing", "ssh", "pdf", "desktop-application"]
 dependencies = [
     "paramiko>=3.4",
+    "keyring>=24,<26",
     "packaging>=23",
     "rich>=13,<15",
     "questionary>=2,<3",
@@ -51,7 +52,7 @@ packages = ["print_at_soc"]
 include-package-data = true
 
 [tool.setuptools.package-data]
-print_at_soc = ["py.typed", "resources/*.ppd"]
+print_at_soc = ["py.typed"]
 
 [tool.setuptools.data-files]
 "." = ["print_at_soc.pth"]

@@ -256,7 +256,7 @@ pub(crate) fn ssh_check_printer_queue(
 
 pub(crate) fn queue_snapshot(printer: &str) -> Result<QueueSnapshot, String> {
     validate_print_queue_name(printer)?;
-    let output = execute_with_persistent_session(&format!("lpq -P {}", printer))
+    let output = execute_with_persistent_session(&format!("lpq -l -P {}", printer))
         .map_err(|error| format!("Failed to query queue: {}", error))?;
     Ok(crate::queue_status::parse(&output))
 }
@@ -414,6 +414,7 @@ pub fn submit_print_job_ssh(
     remote_file_path: &str,
     settings: &PrintSettings,
     before_submit: impl FnOnce() -> Result<(), String>,
+    native: Option<&NativePrintInfo>,
 ) -> Result<String, PrintSubmissionError> {
     // NUS SoC public queues use explicit suffixes documented by SOCprint:
     // - -dx: double-sided
@@ -422,6 +423,14 @@ pub fn submit_print_job_ssh(
     // Older app versions used base queues like psts/pstsb/pstsc, so keep those
     // as aliases while preferring explicit public queue names.
     // Validate the complete submission before doing any remote work.
+    if let Some(native) = native {
+        // CUPS already applied page ranges, orientation, scaling and n-up.
+        // Preserve the exact spool PDF; only physical device options remain.
+        let options=crate::native_service::physical_options(&native.options).map_err(PrintSubmissionError::preparation)?;
+        let command=build_lpr_command_with_options(printer,remote_file_path,settings,&options).map_err(PrintSubmissionError::preparation)?;
+        before_submit().map_err(PrintSubmissionError::preparation)?;
+        return crate::submission_receipt::submit(attempt, &command).map_err(PrintSubmissionError::submission);
+    }
     let scaled_path = format!("{}.scaled.pdf", remote_file_path);
     let lpr_command = build_lpr_command(printer, &scaled_path, settings).map_err(PrintSubmissionError::preparation)?;
     let (width_pts, height_pts) = print_page_dimensions(settings);
@@ -474,6 +483,10 @@ fn build_lpr_command(
     file_path: &str,
     settings: &PrintSettings,
 ) -> Result<String, String> {
+    build_lpr_command_with_options(printer,file_path,settings,&[])
+}
+
+fn build_lpr_command_with_options(printer:&str,file_path:&str,settings:&PrintSettings,options:&[(String,String)]) -> Result<String,String> {
     let queue = queue_for_duplex_mode(printer, matches!(settings.duplex, DuplexMode::Simplex));
     validate_print_queue_name(&queue)?;
     let sides = match settings.duplex {
@@ -485,6 +498,7 @@ fn build_lpr_command(
     if settings.copies > 1 {
         command.push_str(&format!(" '-#' {}", settings.copies));
     }
+    for (key,value) in options { command.push_str(&format!(" -o {}",shell_quote(&format!("{key}={value}")))); }
     command.push_str(&format!(" {}", shell_quote(file_path)));
     Ok(command)
 }
@@ -624,7 +638,7 @@ pub(crate) fn execute_for_account(account: &SSHIdentity, command: &str) -> Resul
 
 pub(crate) fn queue_snapshot_for(account: &SSHIdentity, printer: &str) -> Result<QueueSnapshot, String> {
     validate_print_queue_name(printer)?;
-    let output = execute_for_account(account, &format!("lpq -P {}", printer)).map_err(|e| e.to_string())?;
+    let output = execute_for_account(account, &format!("lpq -l -P {}", printer)).map_err(|e| e.to_string())?;
     Ok(crate::queue_status::parse(&output))
 }
 
@@ -776,6 +790,8 @@ fn parse_lpq_job_line(line: &str) -> Option<PrintQueueJob> {
         file,
         total_size,
         raw_line: trimmed.to_string(),
+        files: vec![],
+        origin: None,
     })
 }
 

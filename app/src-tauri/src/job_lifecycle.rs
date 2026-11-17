@@ -117,14 +117,19 @@ impl PrintJob {
     }
 
     pub(crate) fn resolve_review(&mut self, printed: bool) -> Result<(), String> {
-        if self.status != Status::Queued || self.lpq_job_id.is_some() {
-            return Err("Only submissions without a queue receipt can be resolved manually".into());
+        let unresolved = self.status == Status::Queued && self.lpq_job_id.is_none();
+        let departed = self.status == Status::Completed && self.progress.as_ref().is_none_or(|p| p.stage == Stage::LeftQueue);
+        if !unresolved && !departed {
+            return Err("Only unresolved submissions or jobs that left the queue can be confirmed".into());
         }
         self.status = if printed {
             Status::Completed
         } else {
             Status::Failed
         };
+        if printed {
+            self.progress = Some(PrintProgress { stage: Stage::OutputConfirmed, bytes_sent: 0, total_bytes: 0 });
+        }
         self.error = Some(if printed {
             "User confirmed the printed output after checking the queue."
         } else {
@@ -177,66 +182,60 @@ impl PrintJob {
     }
 
     pub(crate) fn observe_queue(&mut self, snapshot: &crate::types::QueueSnapshot) {
-        if !matches!(self.status, Status::Queued | Status::Printing) {
-            return;
-        }
-        // A unique attempt filename and owner can recover silent lpr receipts.
-        if self.lpq_job_id.is_none() {
-            if let Some(attempt) = &self.submission {
-                let names = [
-                    format!("{}.pdf", attempt.id),
-                    format!("{}.pdf.scaled.pdf", attempt.id),
-                ];
-                let candidates: Vec<_> = snapshot
-                    .jobs
-                    .iter()
-                    .filter(|row| {
-                        row.owner == attempt.account.username
-                            && std::path::Path::new(&row.file)
-                                .file_name()
-                                .and_then(|p| p.to_str())
-                                .is_some_and(|name| names.iter().any(|expected| expected == name))
-                    })
-                    .collect();
-                if candidates.len() == 1 {
-                    self.lpq_job_id = Some(candidates[0].job_id.clone());
-                    self.progress = Some(PrintProgress {
-                        stage: Stage::Accepted,
-                        bytes_sent: 0,
-                        total_bytes: 0,
-                    });
-                    self.error = None;
-                }
-            }
-        }
-        let Some(id) = &self.lpq_job_id else {
-            return;
-        };
-        match snapshot
-            .jobs
-            .iter()
-            .find(|row| {
-                crate::print_service::lpq_job_id_matches(row, id)
-                    && self.submission.as_ref().is_none_or(|attempt| row.owner == attempt.account.username)
+        if !matches!(self.status, Status::Queued | Status::Printing) { return; }
+        if self.tracking.as_ref().is_some_and(|t| snapshot.checked_at < t.checked_at) { return; }
+        let filename_matches = |row: &crate::types::PrintQueueJob| {
+            self.submission.as_ref().is_some_and(|attempt| {
+                let names = [format!("{}.pdf", attempt.id), format!("{}.pdf.scaled.pdf", attempt.id)];
+                row.owner == attempt.account.username && row.files.iter().chain(std::iter::once(&row.file))
+                    .any(|path| std::path::Path::new(path).file_name().and_then(|p| p.to_str())
+                        .is_some_and(|name| names.iter().any(|expected| expected == name)))
             })
-        {
-            Some(row) => {
-                self.status = if row.rank.eq_ignore_ascii_case("active") {
-                    Status::Printing
-                } else {
-                    Status::Queued
-                }
+        };
+        let matches = snapshot.jobs.iter().enumerate().filter(|(_, row)| {
+            match self.lpq_job_id.as_ref() {
+                Some(id) => crate::print_service::lpq_job_id_matches(row, id)
+                    && self.submission.as_ref().is_none_or(|attempt| row.owner == attempt.account.username)
+                    && (row.files.is_empty() || filename_matches(row)),
+                None => filename_matches(row),
             }
-            None if snapshot.jobs_complete => {
+        }).collect::<Vec<_>>();
+        let mut tracking = crate::types::JobTracking { checked_at: snapshot.checked_at,
+            queue_position: None, jobs_ahead: None, stale: !snapshot.jobs_complete,
+            error: (!snapshot.jobs_complete).then(|| "Queue response incomplete or printer unavailable".into()),
+            evidence: "unresolved".into(), device_message: None };
+        if matches.len() == 1 {
+            let (index, row) = matches[0];
+            self.lpq_job_id = Some(row.job_id.clone());
+            self.progress = Some(PrintProgress { stage: Stage::Accepted, bytes_sent: 0, total_bytes: 0 });
+            self.status = if row.rank == "active" { Status::Printing } else { Status::Queued };
+            tracking.queue_position = crate::queue_status::position(snapshot, index);
+            tracking.jobs_ahead = tracking.queue_position.map(|p| p - 1);
+            tracking.evidence = "queue_match".into();
+            // SoC's optional console panel is diagnostic, not a PDF progress counter.
+            tracking.device_message = snapshot.diagnostics.iter().find_map(|line| {
+                let fields = line.split_whitespace().collect::<Vec<_>>();
+                (fields.len() >= 4 && fields[0] == row.owner && fields[1].parse::<u32>().ok()
+                    == row.job_id.parse::<u32>().ok()).then(|| fields[3..].join(" "))
+            });
+        } else if matches.is_empty() && snapshot.jobs_complete && snapshot.checked_at >= self.updated_at {
+            let known_departure = self.lpq_job_id.is_some();
+            let accepted_empty = snapshot.jobs.is_empty() && self.progress.as_ref().is_some_and(|p| p.stage == Stage::Accepted);
+            if known_departure || accepted_empty {
                 self.status = Status::Completed;
-                self.progress = Some(PrintProgress {
-                    stage: Stage::LeftQueue,
-                    bytes_sent: 0,
-                    total_bytes: 0,
-                });
+                self.progress = Some(PrintProgress { stage: Stage::LeftQueue, bytes_sent: 0, total_bytes: 0 });
+                tracking.evidence = if known_departure { "queue_departure" } else { "empty_queue_after_acceptance" }.into();
             }
-            _ => {}
         }
+        self.tracking = Some(tracking);
+    }
+
+    pub(crate) fn tracking_failed(&mut self, error: String) {
+        let tracking = self.tracking.get_or_insert(crate::types::JobTracking {
+            checked_at: Utc::now(), queue_position: None, jobs_ahead: None,
+            stale: true, error: None, evidence: "unresolved".into(), device_message: None });
+        tracking.stale = true;
+        tracking.error = Some(error);
     }
 
     /// Called only when loading persisted jobs, before workers exist. Never
@@ -334,6 +333,47 @@ mod tests {
         assert_eq!(job.status, Status::Completed);
     }
 
+    #[test]
+    fn silent_acceptance_finishes_on_a_fresh_empty_queue_without_claiming_output() {
+        let mut accepted = job(Some(Stage::Accepted));
+        accepted.status = Status::Queued;
+        for response in ["", "printer offline\nno entries", "Rank Owner Job Files Total Size\nactive alice 42 other.pdf 100 bytes"] {
+            accepted.observe_queue(&crate::queue_status::parse(response));
+            assert_eq!(accepted.status, Status::Queued);
+        }
+        let mut stale = crate::queue_status::parse("no entries");
+        stale.checked_at = accepted.updated_at - chrono::Duration::seconds(1);
+        accepted.observe_queue(&stale);
+        assert_eq!(accepted.status, Status::Queued);
+        accepted.observe_queue(&crate::queue_status::parse("no entries"));
+        assert_eq!(accepted.status, Status::Completed);
+        assert_eq!(accepted.progress.as_ref().unwrap().stage, Stage::LeftQueue);
+        accepted.resolve_review(true).unwrap();
+        assert_eq!(accepted.progress.as_ref().unwrap().stage, Stage::OutputConfirmed);
+        assert!(accepted.resolve_review(false).is_err());
+        let mut unknown = job(Some(Stage::SubmissionUnknown));
+        unknown.status = Status::Queued;
+        unknown.observe_queue(&crate::queue_status::parse("no entries"));
+        assert_eq!(unknown.status, Status::Queued);
+    }
+
+    #[test]
+    fn live_long_queue_binds_silent_receipt_and_tracks_departure() {
+        let mut current = job(Some(Stage::Accepted));
+        current.status = Status::Queued;
+        current.submission = Some(crate::types::SubmissionAttempt { id: "unique-attempt".into(), account: crate::types::SSHIdentity { host: "stu".into(), port: 22, username: "alice".into() } });
+        current.observe_queue(&crate::queue_status::parse(include_str!("../tests/fixtures/soc-lpq-long.txt")));
+        assert_eq!(current.lpq_job_id.as_deref(), Some("3"));
+        assert_eq!(current.status, Status::Printing);
+        assert_eq!(current.tracking.as_ref().unwrap().jobs_ahead, Some(0));
+        assert!(current.tracking.as_ref().unwrap().device_message.as_ref().unwrap().contains("Printing page"));
+        current.tracking_failed("VPN disconnected".into());
+        assert_eq!(current.status, Status::Printing);
+        assert!(current.tracking.as_ref().unwrap().stale);
+        current.observe_queue(&crate::queue_status::parse("no entries"));
+        assert_eq!(current.status, Status::Completed);
+        assert_eq!(current.tracking.as_ref().unwrap().evidence, "queue_departure");
+    }
     #[test]
     fn recovered_receipt_distinguishes_rejection_from_accepted_job() {
         let mut accepted = job(Some(Stage::Submitting));

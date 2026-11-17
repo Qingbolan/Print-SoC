@@ -36,3 +36,8 @@ export function makeBookletSheets(pages: number[]) {
     back: [page(sheet * 2 + 1), page(padded - 2 - sheet * 2)],
   }))
 }
+
+/** Physical turning direction determines the duplex binding sent to the printer. */
+export function duplexForTurn(turn: TurnAxis, orientation: PrintSettings['orientation']): DuplexMode {
+  return (turn === 'vertical') === (orientation === 'Portrait') ? 'DuplexLongEdge' : 'DuplexShortEdge'
+}

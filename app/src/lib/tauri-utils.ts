@@ -330,16 +330,14 @@ export async function safeDialogOpen(options: {
 
   // If Tauri is not available, show error
   if (!isTauriAvailable()) {
-    console.error('Tauri dialog API not available')
-    return null
+    throw new Error('File selection requires the desktop app')
   }
 
   try {
     const { open } = await import('@tauri-apps/plugin-dialog')
     return await open(options)
   } catch (error) {
-    console.error('Error opening dialog:', error)
-    return null
+    throw new Error(`Cannot open the file picker: ${error instanceof Error ? error.message : String(error)}`)
   }
 }
 

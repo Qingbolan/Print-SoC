@@ -38,8 +38,7 @@ impl PasswordStore {
             .map_err(|_| "Could not save password in the system password store".into())
     }
 
-    fn save_replacing(&self, password: &str, previous: Option<&PasswordStore>) -> Result<(), String> {
-        let Some(previous) = previous else { return self.save(password); };
+    fn save_replacing(&self, password: &str, previous: Option<&PasswordStore>, commit: impl FnOnce() -> Result<(), String>) -> Result<(), String> {
         // Preserve both identities until the replacement has been written.
         let prior_value = match self.0.get_password() {
             Ok(value) => Some(value),
@@ -47,7 +46,7 @@ impl PasswordStore {
             Err(_) => return Err("Cannot read the replacement account's password store".into()),
         };
         self.save(password)?;
-        if let Err(error) = previous.delete() {
+        if let Err(error) = commit() {
             let rollback = match prior_value {
                 Some(value) => self.save(&value),
                 None => self.delete(),
@@ -56,6 +55,10 @@ impl PasswordStore {
                 "Password replacement could not be completed or rolled back. Remove the extra account entry in the system password manager before retrying.".into()
             });
         }
+        // The new shared identity is durable before retiring the old secret.
+        // If cleanup is denied, retain it for retry instead of invalidating the
+        // active identity. It cannot be selected by any shared-account reader.
+        if let Some(previous) = previous { previous.delete()?; }
         Ok(())
     }
 
@@ -81,7 +84,7 @@ pub async fn credential_save(config: SSHConfig, previous_config: Option<SSHConfi
             Some(previous) if account_key(&previous)? != account_key(&config)? => Some(PasswordStore(entry(&previous)?)),
             _ => None,
         };
-        PasswordStore(entry(&config)?).save_replacing(password, previous.as_ref())
+        PasswordStore(entry(&config)?).save_replacing(password, previous.as_ref(), || crate::account_service::save(&config))
     })
     .await;
     response(result)
@@ -90,7 +93,7 @@ pub async fn credential_save(config: SSHConfig, previous_config: Option<SSHConfi
 #[tauri::command]
 pub async fn credential_delete(config: SSHConfig) -> ApiResponse<bool> {
     let result =
-        tauri::async_runtime::spawn_blocking(move || PasswordStore(entry(&config)?).delete()).await;
+        tauri::async_runtime::spawn_blocking(move || { PasswordStore(entry(&config)?).delete()?; crate::account_service::remove(&config) }).await;
     response(result)
 }
 
@@ -149,12 +152,10 @@ mod tests {
         let new = PasswordStore(Entry::new_with_credential(Box::new(keyring::mock::MockCredential::default())));
         old.save("old-value").unwrap();
         new.save("existing-new-value").unwrap();
-        old.0.get_credential().downcast_ref::<keyring::mock::MockCredential>().unwrap()
-            .set_error(Error::Invalid("store".into(), "locked".into()));
-        assert!(new.save_replacing("replacement", Some(&old)).is_err());
+        assert!(new.save_replacing("replacement", Some(&old), || Err("profile write failed".into())).is_err());
         assert_eq!(old.load().unwrap(), "old-value");
         assert_eq!(new.load().unwrap(), "existing-new-value");
-        new.save_replacing("replacement", Some(&old)).unwrap();
+        new.save_replacing("replacement", Some(&old), || Ok(())).unwrap();
         assert!(old.load().is_err());
         assert_eq!(new.load().unwrap(), "replacement");
     }

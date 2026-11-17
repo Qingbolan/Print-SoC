@@ -149,6 +149,13 @@ export function JobDetailDialog({ job, open, onOpenChange }: JobDetailDialogProp
           </div>
         </DialogHeader>
 
+        {job.native && <div className="border-b border-border px-6 py-3 text-sm">
+          <p className="font-medium">System printer · CUPS #{job.native.cups_job_id}</p>
+          <p className="text-muted-foreground">This preview is the PDF rendered by your system print dialog. Page selection, rotation and pages per sheet have already been applied.</p>
+          <dl className="mt-2 flex flex-wrap gap-x-5 gap-y-1">
+            {Object.entries(job.native.options).map(([key, value]) => <div key={key} className="flex gap-1"><dt>{nativeOptionLabels[key] || key}:</dt><dd>{nativeValueLabels[value] || value}</dd></div>)}
+          </dl>
+        </div>}
         <div className="grid min-h-0 flex-1 overflow-hidden md:grid-cols-3">
           {/* PDF Preview */}
           <div className="flex min-w-0 flex-col overflow-hidden bg-muted/30 md:col-span-2">
@@ -223,7 +230,7 @@ export function JobDetailDialog({ job, open, onOpenChange }: JobDetailDialogProp
           <div className="overflow-y-auto bg-background">
             <div className="p-4 space-y-4">
               <JobProgress jobId={job.id} initialJob={job} />
-              <h3 className="text-sm font-semibold text-foreground">Print Settings</h3>
+              <h3 className="text-sm font-semibold text-foreground">{job.native ? 'Rendered document' : 'Print Settings'}</h3>
 
               {/* Settings list */}
               <div className="space-y-3">
@@ -335,4 +342,19 @@ function formatPageRange(pageRange: PrintJob['settings']['page_range']): string 
     default:
       return 'All'
   }
+}
+
+const nativeOptionLabels: Record<string, string> = {
+  'requested-copies': 'Requested copies', 'device-copies': 'Copies sent to printer', 'requested-collate': 'Requested collation',
+  'media-source': 'Paper tray', InputSlot: 'Paper tray', MediaType: 'Paper type', 'print-quality': 'Print quality', Resolution: 'Resolution', 'printer-resolution': 'Resolution', 'output-bin': 'Output tray',
+  media: 'Paper', PageSize: 'Paper', PageRegion: 'Paper', sides: 'Two-sided', Duplex: 'Two-sided',
+  'orientation-requested': 'Orientation', landscape: 'Landscape', 'number-up': 'Pages per sheet',
+  'number-up-layout': 'Page order', 'page-ranges': 'Selected pages', 'page-set': 'Odd/even pages',
+  'fit-to-page': 'Fit to paper', scaling: 'Scale (%)', 'print-color-mode': 'Colour', ColorModel: 'Colour',
+  collate: 'Collate copies', Collate: 'Collate copies', outputorder: 'Output order',
+}
+const nativeValueLabels: Record<string, string> = {
+  DuplexNoTumble: 'Long edge', DuplexTumble: 'Short edge', None: 'One-sided',
+  'two-sided-long-edge': 'Long edge', 'two-sided-short-edge': 'Short edge', 'one-sided': 'One-sided',
+  RGB: 'Colour', CMYK: 'Colour', Gray: 'Grayscale', monochrome: 'Grayscale', color: 'Colour',
 }

@@ -298,3 +298,20 @@ def test_windows_reinstall_registration_marker_is_runtime_state(service, monkeyp
     assert marker in [item.path for item in service.plan(purge=purge)]
     service.execute(purge=purge, non_interactive=True)
     assert not marker.exists()
+
+
+def test_shared_account_is_kept_or_purged_and_relay_is_always_stopped(service, monkeypatch):
+    from print_at_soc import native_driver
+    account = create(service.home / '.PrintAtSoC/account.json', '{}')
+    agent = create(native_driver.service_path(service.home, service.system), 'test fixture')
+    stop = Mock()
+    monkeypatch.setattr(native_driver, 'stop_service', stop)
+    retained = service.plan(purge=False)
+    assert any(item.kind == 'relay' and item.path == agent for item in retained)
+    assert account not in [item.path for item in retained]
+    service.execute(purge=False)
+    stop.assert_called_once_with(service.home, service.system)
+    assert account.exists()
+    assert account in [item.path for item in service.plan(purge=True)]
+    service.execute(purge=True)
+    assert not account.exists()

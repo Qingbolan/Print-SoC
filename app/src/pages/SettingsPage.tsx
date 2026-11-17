@@ -274,16 +274,15 @@ export default function SettingsPage() {
   )
   const serverType = savedCredentials?.serverType || (formData.host.includes('stf') ? 'stf' : 'stu')
   const integrationUsername = formData.username.trim()
-  const cliCommand = integrationStatus?.cli.command || 'print-soc'
+  const cliCommand = integrationStatus?.mcp_server.command || 'Print_at_SoC'
   const setupCommand = [
     shellQuote(cliCommand),
-    '--install-virtual-printer',
+    '--install-system-printer',
     '--host',
     shellQuote(formData.host || `${serverType}.comp.nus.edu.sg`),
     '--port',
     String(formData.port || 22),
     ...(integrationUsername ? ['--username', shellQuote(integrationUsername)] : []),
-    '--ask-password',
     '--printer',
     shellQuote(settings.defaultPrinter || 'psts-dx'),
   ].join(' ')
@@ -733,23 +732,13 @@ export default function SettingsPage() {
                               {integrationStatus.virtual_printer.configured ? <Check className="text-success" /> : <CircleAlert />}
                               Config
                             </span>
-                            <span>CLI: {integrationStatus.cli.available ? 'Detected' : 'Not installed'}</span>
+                            <span>Embedded Rust driver · no Python required</span>
                           </div>
                         )}
                       </div>
                       {integrationStatus?.virtual_printer.supported && (
                         <div className="flex shrink-0 flex-col gap-2 sm:items-end">
-                          {!integrationStatus.cli.available ? (
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="secondary"
-                              onClick={() => void copyIntegrationText('python3 -m pip install --user --upgrade print-at-soc', 'CLI install command')}
-                            >
-                              <Copy />
-                              Copy CLI install
-                            </Button>
-                          ) : !integrationUsername ? (
+                          {!integrationUsername ? (
                             <Button
                               type="button"
                               size="sm"
@@ -771,7 +760,7 @@ export default function SettingsPage() {
                               {printerSetupOpening ? 'Opening Terminal…' : virtualPrinterReady ? 'Repair system printer' : 'Add system printer'}
                             </Button>
                           )}
-                          {integrationStatus.cli.available && integrationUsername && (
+                          {integrationUsername && (
                             <Button type="button" size="sm" variant="ghost"
                               onClick={() => void copyIntegrationText(setupCommand, 'Setup command')}>
                               <Copy /> Copy setup command

@@ -1,0 +1,6 @@
+       Owner      Job  File           Status   Console-Panel-Message
+       alice   003  print-soc-veri printing Printing page 1/1, copy 1/1
+---------------------------------------------------------------------------
+
+alice: active                         [job 003stu1.comp.nus.edu.sg]
+	/tmp/unique-attempt.pdf.scaled.pdf 3049 bytes

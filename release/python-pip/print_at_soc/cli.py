@@ -77,7 +77,7 @@ Examples:
   print-soc printer list --username your-soc-id --ask-password
   print-soc job list --printer psts-dx --json
   print-soc quota show --json
-  print-soc --install-virtual-printer --username your-soc-id --ask-password --printer psts-dx
+  print-soc virtual-printer install --printer psts-dx
     """)
 
 

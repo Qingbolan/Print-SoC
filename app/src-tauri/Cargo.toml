@@ -1,6 +1,6 @@
 [package]
 name = "print_at_soc"
-version = "0.328.8"
+version = "0.375.5"
 description = "Print_at_SoC - Smart Printing for NUS SoC"
 authors = ["Silan Hu(silan.hu@u.nus.edu)"]
 license = "MIT"
@@ -27,7 +27,7 @@ serde_yaml = "0.9"
 regex = "1"
 walkdir = "2"
 # SSH and async
-ssh2 = "0.9"
+ssh2 = { version = "0.9", features = ["vendored-openssl"] }
 tokio = { version = "1", features = ["full"] }
 # PDF processing
 lopdf = "0.34"
@@ -40,6 +40,8 @@ dirs = "5"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "bmp"] }
 sha2 = "0.10"
 tempfile = "3"
+dialoguer = "0.11"
+indicatif = "0.17"
 url = "2"
 keyring = { version = "3.6", features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust", "vendored"] }
 

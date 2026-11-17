@@ -1,7 +1,7 @@
 import { usePrinterStore } from '@/store/printer-store'
 import { useEffect, useState } from 'react'
 import { getPrintJob, cancelPrintJob, resolveSubmission, linkJobAccount } from '@/lib/printer-api'
-import { jobStatusLabel, uploadPercent } from '@/lib/job-progress'
+import { jobStatusLabel, uploadPercent, queuePositionLabel } from '@/lib/job-progress'
 import type { PrintJob, SSHConfig } from '@/types/printer'
 import { Button } from '@/components/ui/button'
 import { usePrintCopy, formatBytes } from '@/lib/print-copy'
@@ -56,7 +56,7 @@ export function JobProgress({ jobId, initialJob, config }: { jobId: string; init
       else setError(result.error || 'Could not save your confirmation')
     } finally { setCancelling(false) }
   }
-  const note = job?.status === 'Completed' ? text.departed : job?.progress?.stage === 'SubmissionUnknown' ? text.uncertain : null
+  const note = job?.status === 'Completed' ? (job.progress?.stage === 'OutputConfirmed' ? text.confirmed : text.departed) : job?.progress?.stage === 'SubmissionUnknown' ? text.uncertain : null
   return <div className="space-y-3 py-2 text-sm">
     <div className="flex items-center justify-between gap-4">
       <p role="status" className="font-medium">{job ? jobStatusLabel(job, locale) : text.preparing}</p>
@@ -66,6 +66,8 @@ export function JobProgress({ jobId, initialJob, config }: { jobId: string; init
       <progress className="block h-1.5 w-full overflow-hidden rounded-full accent-primary [&::-webkit-progress-bar]:bg-muted [&::-webkit-progress-value]:bg-primary" max={100} value={percent} aria-label={text.upload} />
       <p className="text-xs tabular-nums text-muted-foreground">{formatBytes(job?.progress?.bytes_sent || 0)} / {formatBytes(job?.progress?.total_bytes || 0)}</p>
     </>}
+    {job && queuePositionLabel(job, locale) && <p className="text-xs text-muted-foreground">{queuePositionLabel(job, locale)}</p>}
+    {job?.tracking?.device_message && <p className="text-xs text-muted-foreground">{job.tracking.device_message}</p>}
     {job?.lpq_job_id && <p className="text-xs text-muted-foreground">{text.jobId} #{job.lpq_job_id}</p>}
     {note && <p className="text-xs leading-5 text-muted-foreground">{note}</p>}
     {job && !job.submission && ['Queued', 'Printing'].includes(job.status) && <div className="space-y-2 rounded-md border border-border p-3">
@@ -74,8 +76,8 @@ export function JobProgress({ jobId, initialJob, config }: { jobId: string; init
       <label className="flex items-start gap-2 text-xs"><input type="checkbox" checked={checked} onChange={event => setChecked(event.target.checked)} />{text.originalAccount}</label>
       <Button size="sm" variant="outline" disabled={!activeConfig || !checked || cancelling} onClick={linkAccount}>{text.linkAccount}</Button>
     </div>}
-    {job?.submission && job.status === 'Queued' && !job.lpq_job_id && <div className="space-y-2 rounded-md border border-border p-3">
-      <p className="text-xs leading-5">{text.unresolved}</p>
+    {job && ((job.status === 'Queued' && !job.lpq_job_id) || (job.status === 'Completed' && job.progress?.stage !== 'OutputConfirmed')) && <div className="space-y-2 rounded-md border border-border p-3">
+      <p className="text-xs leading-5">{job.status === 'Completed' ? text.departed : text.unresolved}</p>
       <label className="flex items-start gap-2 text-xs"><input type="checkbox" checked={checked} onChange={event => setChecked(event.target.checked)} />{text.checked}</label>
       <div className="flex flex-wrap gap-2">
         <Button size="sm" variant="outline" disabled={!checked || cancelling} onClick={() => resolve(true)}>{text.received}</Button>

@@ -97,8 +97,9 @@ print-soc self uninstall --purge --remove-cli
 
 Every uninstall shows the target inventory before confirmation. The removal
 scope is the managed desktop, its version/asset receipts and rollback/download
-files, and Print@SoC CUPS queues and backend. Purge additionally removes the
-forwarding configuration and copied key, app-specific settings, imported/cache
+files, and Print@SoC CUPS queues and backend. The user forwarding service and native CUPS connection token are removed in both modes.
+The shared account identity is retained with user data. Purge additionally removes the
+shared account identity, app-specific settings, imported/cache
 copies, PDF backups, history, WebView data, and credentials scoped to
 `tech.silan.PrintAtSoC.ssh`.
 

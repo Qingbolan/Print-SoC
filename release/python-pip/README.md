@@ -69,118 +69,46 @@ native-installer limits and the intentionally retained non-secret lock file.
 
 ## Virtual Printer
 
-macOS and Linux can install a CUPS virtual printer queue named `PrintAtSoC`.
-After installation, normal apps can print to `Print@SoC Virtual Printer`; the CUPS
-queue uses the bundled PDF driver (not a raw queue), and the CUPS
-backend forwards the spool file to the configured SoC SSH server and submits it
-with remote `lpr`. The default remote queue is `psts-dx`; use `--printer` to
-choose another SOCprint queue such as `psc008-dx` or `psts-sx`.
+On macOS/Linux, open **Settings → Advanced → Add system printer**. The desktop
+contains a standalone Rust CUPS backend and a Rust login-session print service.
+Python, Conda, pip, shell scripts, local SSH executables and Homebrew OpenSSL are
+not part of the system printing path. Save your shared account in Settings first.
+The native wizard offers interactive queue/paper/duplex choices, animated progress,
+a preview, administrator authentication and failure guidance.
 
-Install the Python package, configure SSH/default printer settings, and install
-the system queue:
+An optional Python CLI launcher can invoke the same embedded installer:
 
-```bash
-pip install print-at-soc
-print-soc --install-virtual-printer --username your-soc-id --ask-password --printer psts-dx
-```
-
-Configuration is stored in `~/.PrintAtSoC/virtual-printer.json` with mode `0600`.
-Use `--password-stdin` instead of `--ask-password` for scripted setup, or use
-`--key-path` for SSH key authentication. The default server is
-`stu.comp.nus.edu.sg`; pass `--server stf` for staff accounts.
-
-Start the interactive installer with:
-
-```bash
+```sh
 print-soc virtual-printer install
-```
-
-The terminal wizard offers arrow-key menus for the server, authentication,
-paper and sides; validates typed values; hides password input; and previews the
-account and destination before asking to install. Decline the confirmation to
-edit the settings or cancel before any system changes. Animated stage indicators run
-only while work is happening, and stop before password prompts. Ctrl+C exits
-cleanly. The result explains how to use the printer or shows stage-specific
-repair steps when setup fails. Re-running setup repairs an existing queue.
-
-```bash
-# Walk through setup without passwords, sudo or system changes:
 print-soc virtual-printer install --dry-run
-
-# Simple numbered prompts, without colors or animation:
 print-soc virtual-printer install --plain
-
-# Scripted installation: authenticate the administrator separately first.
-sudo -v
-print-soc virtual-printer install --non-interactive --username YOUR_SOC_ID --key-path ~/.ssh/id_ed25519
-```
-
-Scripts can provide a password through `--password-stdin` (one line) or the
-existing `PSOC_SSH_PASSWORD` environment variable. Avoid `--password` in shell
-history. Non-interactive mode never prompts, including for sudo; missing inputs
-produce an actionable error and nonzero exit code. Redirected output, `NO_COLOR`
-and `TERM=dumb` produce plain logs. `--yes` skips only the final confirmation;
-use `--non-interactive` to disable all prompts. Authentication sources are
-mutually exclusive. Exit status is `0` for success/declined review, `1` for a
-handled failure, `2` for invalid command arguments, and `130` for Ctrl+C/EOF.
-A successful installation verifies the local queue, not remote SSH connectivity
-or physical printing. Setup never automatically submits a test page.
-
-In the desktop app, open **Settings → Advanced → Add system printer**.
-Setup opens Terminal to request the SoC password and administrator authentication;
-return to the app and refresh integration status after installation completes.
-The same installer is available through the command above. Run it as your normal
-user: it requests `sudo` only for system changes. A working CUPS service and a
-system/Homebrew Python installed outside the home directory are required.
-
-The installer snapshots the backend and its installed dependencies into a
-root-owned system directory (`/Library/Application Support/PrintAtSoC/cups` on
-macOS, `/usr/local/lib/print-at-soc/cups` on Linux). It stores the forwarding
-configuration in `/etc/print-at-soc/virtual-printer.json` with mode `0600` and
-copies an explicitly configured SSH key there with the same permissions. This
-allows the CUPS service to run without access to a logged-in user's home or SSH
-agent. All local Print@SoC queues use this system forwarding account. Re-run the
-installer after upgrading the CLI to update the installed backend snapshot.
-The normal user configuration remains available for CLI commands; configuring
-an installed virtual printer also updates its system configuration.
-
-Useful virtual printer commands:
-
-```bash
-print-soc virtual-printer configure --server stu --username your-soc-id --ask-password --printer psts-dx
-print-soc virtual-printer install
 print-soc virtual-printer status
 print-soc virtual-printer uninstall
-
-# Backward-compatible flag forms remain available:
-print-soc --configure-virtual-printer --server stu --username your-soc-id --ask-password --printer psts-dx
-print-soc --install-virtual-printer
-print-soc --virtual-printer-status
-print-soc --uninstall-virtual-printer
 ```
 
-Run cleanup before uninstalling the Python package:
+The standalone backend is embedded at build time and installed as a root-owned
+executable. Its only connection configuration is a private token in
+`/etc/print-at-soc/native.conf`. The Rust login service reads the shared account
+and OS keyring, saves the spool PDF, and submits through the desktop's existing
+job state machine and remote receipt mechanism. System jobs appear in GUI history
+with their source, effective settings, original native options and PDF preview,
+including when the GUI was closed when the job arrived.
 
-```bash
-print-soc --uninstall-virtual-printer
-pip uninstall print-at-soc
-```
+Page selection, orientation, scaling and n-up already rendered into the CUPS PDF
+are not applied twice. Copies, paper, duplex and supported physical colour/collate
+options are forwarded explicitly. Unsupported physical settings fail with an
+error. Submission acknowledgment is not proof of physical output.
 
-`pip uninstall` only removes Python package files. It does not know about CUPS
-queues, backend files, or Print@SoC config created outside package metadata.
+Stay logged in with an unlocked credential store and NUS/VPN connectivity while
+printing. Installer previews and registration checks never print a test page.
+Repair refuses queues with pending jobs. Uninstall removes native runtime/service
+and connection tokens; account/history are retained unless the full uninstall
+wizard explicitly purges user data. Original documents are never removed.
 
-Windows virtual printer support is not installed by this command. Windows needs
-the modern Print Support App/MSIX virtual printer path rather than a CUPS
-backend.
-
-Start the MCP server over stdio:
-
-```bash
-print-soc mcp
-psoc mcp
-```
-
-MCP mode requires the desktop binary to already be installed. Run `print-soc --install` first if needed.
+The first native repair replaces the former Python backend and removes its
+runtime and credential snapshots. Update the desktop before using the native
+installer through an older CLI. Windows system-driver support remains separate
+from CUPS; desktop printing is available there.
 
 ## MCP Environment Variables
 
@@ -222,17 +150,15 @@ PSOC_SSH_KEY_PASSPHRASE=optional-passphrase
 - Clean up uploaded print files when a remote print command fails.
 
 The desktop application is downloaded separately from GitHub Releases. This
-Python package update does not replace the desktop release.
+Python package update does not replace the desktop release or its embedded native driver.
 
 ### macOS raw-queue installation error
 
 If an older installation reports `Raw queues are no longer supported on macOS`,
-upgrade the Python package and reinstall the queue:
-
-```bash
-python -m pip install --upgrade print-at-soc
-python -m print_at_soc virtual-printer install --username your-soc-id --ask-password
-```
+update the desktop application, then open **Settings → Advanced → Add / repair
+system printer**. The desktop contains the Rust installer and PDF PPD; no Python
+installation is required. Optional CLI users can invoke `print-soc virtual-printer
+install` after updating their desktop application.
 
 The installer now registers the packaged PDF PPD on both macOS and Linux. A4/A3
 and duplex choices from the print dialog are forwarded to the SoC submission.

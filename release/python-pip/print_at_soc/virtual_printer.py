@@ -38,7 +38,6 @@ SYSTEM_CONFIG_DIR = Path("/etc/print-at-soc")
 SYSTEM_CONFIG_PATH = SYSTEM_CONFIG_DIR / CONFIG_FILE_NAME
 RUNTIME_DIR = Path("/Library/Application Support/PrintAtSoC/cups") if platform.system() == "Darwin" else Path("/usr/local/lib/print-at-soc/cups")
 STATUS_PATH = SYSTEM_CONFIG_DIR / "status.json"
-PDF_DRIVER_PATH = Path(__file__).resolve().parent / "resources" / "printatsoc.ppd"
 
 DEFAULT_CONFIG: Dict[str, Any] = {
     "ssh": {
@@ -150,29 +149,18 @@ def _env_config() -> Dict[str, Any]:
     return result
 
 
-def load_config(job_user: str = "", explicit_path: Optional[str] = None) -> Dict[str, Any]:
+def load_config(job_user: str = "", explicit_path: Optional[str] = None, resolve_credentials: bool = True) -> Dict[str, Any]:
     config = json.loads(json.dumps(DEFAULT_CONFIG))
 
-    candidates: List[Path] = []
-    if SYSTEM_CONFIG_PATH.exists() and os.access(SYSTEM_CONFIG_PATH, os.R_OK):
-        candidates.append(SYSTEM_CONFIG_PATH)
-
-    job_home = _home_for_user(job_user)
-    if job_home:
-        candidates.append(user_config_path(job_home))
-
-    current_user_path = user_config_path()
-    if not job_user and current_user_path not in candidates:
-        candidates.append(current_user_path)
-
+    # Printing preferences may remain local; account identity has one owner.
+    saved = _read_json(user_config_path())
+    config["print"] = _merge_dict(config["print"], saved.get("print", {}))
+    from .account import AccountStore
+    store = AccountStore()
+    if store.path.exists():
+        config["ssh"] = store.ssh() if resolve_credentials else {**config["ssh"], **{k: store.identity()[k] for k in ("host", "port", "username")}}
     if explicit_path:
-        explicit = Path(explicit_path).expanduser()
-        if explicit not in candidates:
-            candidates.append(explicit)
-
-    for path in candidates:
-        config = _merge_dict(config, _read_json(path))
-
+        config = _merge_dict(config, _read_json(Path(explicit_path).expanduser()))
     config = _merge_dict(config, _env_config())
     return config
 
@@ -393,15 +381,6 @@ def _validate_print_config(config: Dict[str, Any]) -> None:
         raise RuntimeError("SSH port must be between 1 and 65535")
 
 
-def _validate_backend_config(config: Dict[str, Any]) -> None:
-    _validate_print_config(config)
-    ssh = config["ssh"]
-    if not ssh.get("password") and not ssh.get("key_path"):
-        raise RuntimeError("CUPS cannot use your login SSH agent. Supply --ask-password or --key-path")
-    if ssh.get("key_path") and not Path(ssh["key_path"]).expanduser().is_file():
-        raise RuntimeError("SSH private key does not exist")
-
-
 def submit_file_print_job(
     file_path: str,
     *,
@@ -448,7 +427,8 @@ def submit_file_print_job(
         scale_command = ""
         print_file = remote_path
 
-    lpr_parts = ["lpr", "-P", actual_queue]
+    sides = {"simplex": "one-sided", "duplex-long-edge": "two-sided-long-edge", "duplex-short-edge": "two-sided-short-edge"}[_normalize_duplex(duplex)]
+    lpr_parts = ["lpr", "-P", actual_queue, "-o", "sides=" + sides]
     if copies > 1:
         lpr_parts.extend(["-#", str(copies)])
     if title:
@@ -521,46 +501,6 @@ def _authorize_system_changes(*, dry_run: bool = False) -> None:
         raise RuntimeError("Administrator authentication failed; no printer changes were made")
 
 
-def _install_runtime(*, dry_run: bool = False) -> str:
-    from .cups_runtime import CupsRuntime
-    runtime = CupsRuntime()
-    destination = RUNTIME_DIR / uuid.uuid4().hex
-    if not dry_run:
-        with tempfile.TemporaryDirectory(prefix="print-soc-runtime-") as tmp:
-            stage = Path(tmp) / "runtime"
-            stage.mkdir()
-            runtime.stage(stage)
-            # Verify the isolated imports before changing the system.
-            environment = dict(os.environ, PYTHONPATH=str(stage))
-            environment.pop("PYTHONHOME", None)
-            subprocess.run([str(runtime.python), "-S", "-c", "import paramiko; import print_at_soc.virtual_printer"],
-                           env=environment, cwd=tmp, check=True, capture_output=True)
-            _run_command(_sudo_prefix() + ["mkdir", "-p", str(RUNTIME_DIR)])
-            _run_command(_sudo_prefix() + ["cp", "-R", str(stage), str(destination)])
-            _run_command(_sudo_prefix() + ["chown", "-R", "root", str(destination)])
-            _run_command(_sudo_prefix() + ["chmod", "-R", "go-w", str(destination)])
-    else:
-        print(f"# install isolated CUPS runtime under {RUNTIME_DIR}")
-    return runtime.wrapper(destination)
-
-
-def _write_backend_config(config: Dict[str, Any], *, dry_run: bool = False) -> None:
-    _validate_backend_config(config)
-    config = _merge_dict({}, config)
-    ssh = dict(config["ssh"])
-    config["ssh"] = ssh
-    key = ssh.get("key_path")
-    if key:
-        source = Path(key).expanduser()
-        content = source.read_text(encoding="utf-8")
-        _run_command(_sudo_prefix() + ["mkdir", "-p", str(SYSTEM_CONFIG_DIR)], dry_run=dry_run)
-        destination = SYSTEM_CONFIG_DIR / "ssh_key"
-        _install_file(content, destination, mode="0600", dry_run=dry_run)
-        ssh["key_path"] = str(destination)
-    _write_config(config, system=True, dry_run=dry_run)
-    _install_file(json.dumps({"configured": True}) + "\n", STATUS_PATH, mode="0644", dry_run=dry_run)
-
-
 def _sudo_prefix() -> List[str]:
     if hasattr(os, "geteuid") and os.geteuid() == 0:
         return []
@@ -578,56 +518,8 @@ def _run_command(cmd: List[str], *, dry_run: bool = False, check: bool = True) -
     return result
 
 
-def _install_file(
-    content: str,
-    destination: Path,
-    *,
-    mode: str,
-    owner: str = "root",
-    group: Optional[str] = None,
-    dry_run: bool = False,
-) -> None:
-    group = group or ("wheel" if platform.system() == "Darwin" else "root")
-    if dry_run:
-        print(f"# write {destination} ({mode}, {owner}:{group})")
-        return
-
-    with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as tmp:
-        tmp.write(content)
-        tmp_path = Path(tmp.name)
-    try:
-        install_cmd = shutil.which("install") or "/usr/bin/install"
-        cmd = _sudo_prefix() + [
-            install_cmd,
-            "-o",
-            owner,
-            "-g",
-            group,
-            "-m",
-            mode,
-            str(tmp_path),
-            str(destination),
-        ]
-        result = _run_command(cmd, check=False)
-        if result.returncode != 0:
-            raise RuntimeError((result.stderr or result.stdout).strip())
-    finally:
-        try:
-            tmp_path.unlink()
-        except Exception:
-            pass
-
-
-def _write_config(config: Dict[str, Any], *, system: bool = False, dry_run: bool = False) -> Path:
-    content = json.dumps(config, indent=2, sort_keys=True) + "\n"
-    if system:
-        if dry_run:
-            print(f"# create {SYSTEM_CONFIG_DIR}")
-        else:
-            _run_command(_sudo_prefix() + ["mkdir", "-p", str(SYSTEM_CONFIG_DIR)], check=True)
-        _install_file(content, SYSTEM_CONFIG_PATH, mode="0600", dry_run=dry_run)
-        return SYSTEM_CONFIG_PATH
-
+def _write_config(config: Dict[str, Any], *, dry_run: bool = False) -> Path:
+    content = json.dumps({"print": config.get("print", {})}, indent=2) + "\n"
     path = user_config_path()
     if dry_run:
         print(f"# write {path} (0600)")
@@ -647,7 +539,9 @@ def _write_config(config: Dict[str, Any], *, system: bool = False, dry_run: bool
 
 
 def _build_config_from_args(args: argparse.Namespace) -> Dict[str, Any]:
-    config = load_config(explicit_path=getattr(args, "config", None))
+    explicit_secret = any(getattr(args, name, None) for name in ("password", "ask_password", "password_stdin", "key_path"))
+    dry_run = getattr(args, "dry_run", False)
+    config = load_config(explicit_path=getattr(args, "config", None), resolve_credentials=not (explicit_secret or dry_run))
     ssh_cfg = dict(config.get("ssh", {}))
     print_cfg = dict(config.get("print", {}))
 
@@ -668,10 +562,10 @@ def _build_config_from_args(args: argparse.Namespace) -> Dict[str, Any]:
         if value is not None:
             ssh_cfg[field] = value
 
-    if getattr(args, "ask_password", False):
+    if getattr(args, "ask_password", False) and not dry_run:
         ssh_cfg["password"] = getpass.getpass("SoC SSH password: ")
 
-    if getattr(args, "password_stdin", False):
+    if getattr(args, "password_stdin", False) and not dry_run:
         ssh_cfg["password"] = sys.stdin.readline().rstrip("\n")
 
     port = getattr(args, "port", None)
@@ -724,19 +618,29 @@ def configure_virtual_printer(argv: List[str]) -> int:
     parser.add_argument("--dry-run", action="store_true", help="Show actions without changing files")
     args = parser.parse_args(argv)
 
+    from .account import AccountStore
+    account = AccountStore()
+    account.identity()  # Never migrate legacy CLI credentials.
     config = _build_config_from_args(args)
     _validate_print_config(config)
+    explicit_password = args.password is not None or args.ask_password or args.password_stdin
+    if args.key_path or args.key_passphrase:
+        raise RuntimeError('The shared desktop account uses the OS password store; SSH keys are supported only for individual CLI jobs.')
+    if explicit_password and not args.dry_run:
+        account.save(config['ssh'], config['ssh']['password'])
+    elif any(str(config['ssh'][key]) != str(account.identity()[key]) for key in ('host', 'port', 'username')):
+        raise RuntimeError('Changing the shared account requires an explicit password; use --ask-password.')
     if args.system or backend_path().exists():
-        _authorize_system_changes(dry_run=args.dry_run)
-        _write_backend_config(config, dry_run=args.dry_run)
+        from .native_driver import launch
+        return launch('--install-system-printer', ['--printer', config['print']['printer'], '--paper-size', config['print']['paper_size'], '--duplex', _normalize_duplex(config['print']['duplex'])] + (['--dry-run'] if args.dry_run else []))
     path = SYSTEM_CONFIG_PATH if args.system else _write_config(config, dry_run=args.dry_run)
     print(f"Virtual printer config written: {path}")
     return 0
 
 
 def install_virtual_printer(argv: List[str]) -> int:
-    from .printer_installation import run_installation
-    return run_installation(argv)
+    from .native_driver import launch
+    return launch('--install-system-printer', argv)
 
 
 def _cups_devices() -> Dict[str, str]:
@@ -756,72 +660,13 @@ def _cups_devices() -> Dict[str, str]:
 
 
 def uninstall_virtual_printer(argv: List[str]) -> int:
-    parser = argparse.ArgumentParser(prog="print-soc --uninstall-virtual-printer")
-    parser.add_argument("--name", default=PRINTER_NAME, help=f"CUPS queue name (default: {PRINTER_NAME})")
-    parser.add_argument("--keep-config", action="store_true", help="Keep virtual printer config files")
-    parser.add_argument("--dry-run", action="store_true", help="Show actions without changing the system")
-    args = parser.parse_args(argv)
-
-    if platform.system() not in {"Darwin", "Linux"}:
-        print("Virtual printer auto-uninstall currently supports macOS and Linux CUPS only.", file=sys.stderr)
-        return 2
-
-    validate_queue_name(args.name)
-    devices = _cups_devices()
-    uri = devices.get(args.name)
-    if uri and not uri.startswith(BACKEND_NAME + ":"):
-        raise RuntimeError(f"Queue {args.name} is not a Print@SoC printer")
-    _authorize_system_changes(dry_run=args.dry_run)
-    if uri:
-        lpadmin = shutil.which("lpadmin")
-        if not lpadmin:
-            raise RuntimeError("lpadmin was not found")
-        _run_command(_sudo_prefix() + [lpadmin, "-x", args.name], dry_run=args.dry_run)
-    if any(name != args.name and uri.startswith(BACKEND_NAME + ":") for name, uri in devices.items()):
-        print(f"Removed queue {args.name}; shared backend retained for other Print@SoC queues")
-        return 0
-    _run_command(_sudo_prefix() + ["rm", "-f", str(backend_path())], dry_run=args.dry_run)
-    _run_command(_sudo_prefix() + ["rm", "-rf", str(RUNTIME_DIR)], dry_run=args.dry_run)
-    if not args.keep_config:
-        for path in (SYSTEM_CONFIG_PATH, STATUS_PATH, SYSTEM_CONFIG_DIR / "ssh_key"):
-            _run_command(_sudo_prefix() + ["rm", "-f", str(path)], dry_run=args.dry_run)
-        _run_command(_sudo_prefix() + ["rmdir", str(SYSTEM_CONFIG_DIR)], dry_run=args.dry_run, check=False)
-        path = user_config_path()
-        if args.dry_run:
-            print(f"# remove {path}")
-        elif path.exists():
-            path.unlink()
-
-    print(f"Removed virtual printer queue/backend for: {args.name}")
-    return 0
+    from .native_driver import launch
+    return launch('--uninstall-system-printer', argv)
 
 
 def virtual_printer_status(argv: List[str]) -> int:
-    parser = argparse.ArgumentParser(prog="print-soc --virtual-printer-status")
-    parser.add_argument("--name", default=PRINTER_NAME, help=f"CUPS queue name (default: {PRINTER_NAME})")
-    args = parser.parse_args(argv)
-
-    print(f"Platform: {platform.system()}")
-    destination = backend_path()
-    print(f"Backend path: {destination}")
-    print(f"Backend installed: {'yes' if destination.exists() else 'no'}")
-    ready = SYSTEM_CONFIG_PATH.exists() and _read_json(STATUS_PATH).get("configured") is True
-    print(f"Forwarding configured: {'yes' if ready else 'no (run install or configure)'}")
-    print(f"System config: {SYSTEM_CONFIG_PATH} ({'present' if SYSTEM_CONFIG_PATH.exists() else 'missing'})")
-    current_config = user_config_path()
-    print(f"User config: {current_config} ({'present' if current_config.exists() else 'missing'})")
-
-    lpstat = shutil.which("lpstat")
-    if not lpstat:
-        print("lpstat: not found")
-        return 0
-
-    for cmd in ([lpstat, "-p", args.name], [lpstat, "-v", args.name]):
-        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
-        output = (result.stdout or result.stderr).strip()
-        if output:
-            print(output)
-    return 0
+    from .native_driver import launch
+    return launch('--native-printer-status', argv)
 
 
 def print_file_cli(argv: List[str]) -> int:
@@ -852,65 +697,10 @@ def print_file_cli(argv: List[str]) -> int:
     return 0
 
 
-def _copy_stdin_to_temp() -> str:
-    tmp = tempfile.NamedTemporaryFile(prefix="print-at-soc-cups-", suffix=".prn", delete=False)
-    try:
-        with tmp:
-            shutil.copyfileobj(sys.stdin.buffer, tmp)
-        return tmp.name
-    except Exception:
-        try:
-            Path(tmp.name).unlink()
-        except Exception:
-            pass
-        raise
-
-
-def backend_main(argv: List[str]) -> int:
-    if not argv:
-        print(f'direct {BACKEND_URI} "Print@SoC" "{DISPLAY_NAME}"')
-        return 0
-
-    if len(argv) < 5:
-        print("ERROR: printatsoc backend expects: job user title copies options [file]", file=sys.stderr)
-        return 1
-
-    _job_id, job_user, title, copies, options = argv[:5]
-    filename = argv[5] if len(argv) > 5 else ""
-    temp_file = ""
-
-    try:
-        if not filename:
-            temp_file = _copy_stdin_to_temp()
-            filename = temp_file
-
-        # CUPS runs independently of login sessions and cannot read macOS homes.
-        config = _merge_dict(DEFAULT_CONFIG, _read_json(SYSTEM_CONFIG_PATH))
-        print(f"INFO: submitting {title or filename} through Print@SoC", file=sys.stderr)
-        output = submit_file_print_job(
-            filename,
-            config=config,
-            copies=_coerce_copies(copies),
-            title=title,
-            cups_options=options,
-        )
-        print(f"INFO: {output}", file=sys.stderr)
-        return 0
-    except Exception as exc:
-        print(f"ERROR: Print@SoC virtual printer failed: {exc}", file=sys.stderr)
-        return 1
-    finally:
-        if temp_file:
-            try:
-                Path(temp_file).unlink()
-            except Exception:
-                pass
-
-
 def main() -> int:
     args = sys.argv[1:]
     if args and args[0] == "backend":
-        return backend_main(args[1:])
+        raise RuntimeError("The CUPS backend is the embedded Rust executable; repair the system printer from the desktop app.")
     if args and args[0] == "print":
         return print_file_cli(args[1:])
     print("Use print_at_soc.cli entry points for user-facing commands.", file=sys.stderr)

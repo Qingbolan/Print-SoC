@@ -59,6 +59,44 @@ pub struct PrintJob {
     pub progress: Option<PrintProgress>,
     #[serde(default)]
     pub submission: Option<SubmissionAttempt>,
+    #[serde(default)]
+    pub native: Option<NativePrintInfo>,
+    #[serde(default)]
+    pub tracking: Option<JobTracking>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NativePrintInfo {
+    pub cups_job_id: String,
+    pub options: std::collections::BTreeMap<String, String>,
+}
+impl PrintJob {
+    /// History follows submission time; later status refreshes never reorder it.
+    pub fn newest_first(a: &Self, b: &Self) -> std::cmp::Ordering {
+        b.created_at.cmp(&a.created_at).then_with(|| a.id.cmp(&b.id))
+    }
+}
+
+#[cfg(test)]
+mod history_tests {
+    use super::*;
+    #[test]
+    fn unordered_history_is_newest_first_with_stable_ties() {
+        let job = |id: &str, seconds| PrintJob {
+            id: id.into(), name: "test".into(), file_path: "test.pdf".into(), printer: "psts".into(),
+            settings: PrintSettings { copies: 1, duplex: DuplexMode::Simplex, orientation: Orientation::Portrait,
+                page_range: PageRange::All, pages_per_sheet: 1, booklet: false, paper_size: PaperSize::A4 },
+            status: PrintJobStatus::Completed, created_at: DateTime::from_timestamp(seconds, 0).unwrap(),
+            updated_at: Utc::now(), error: None, lpq_job_id: None, progress: None, submission: None, native: None, tracking: None,
+        };
+        let mut jobs = vec![job("old", 100), job("b", 300), job("middle", 200), job("a", 300)];
+        jobs.sort_by(PrintJob::newest_first);
+        assert_eq!(jobs.iter().map(|job| job.id.as_str()).collect::<Vec<_>>(), vec!["a", "b", "middle", "old"]);
+        let stored = serde_json::to_vec(&jobs).unwrap();
+        let restored: Vec<PrintJob> = serde_json::from_slice(&stored).unwrap();
+        assert_eq!(restored.first().unwrap().id, "a");
+        assert_eq!(restored.last().unwrap().id, "old");
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -111,6 +149,17 @@ pub enum PrintJobStatus {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JobTracking {
+    pub checked_at: DateTime<Utc>,
+    pub queue_position: Option<u32>,
+    pub jobs_ahead: Option<u32>,
+    pub stale: bool,
+    pub error: Option<String>,
+    pub evidence: String,
+    pub device_message: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PrintQueueJob {
     pub rank: String,
     pub owner: String,
@@ -118,6 +167,10 @@ pub struct PrintQueueJob {
     pub file: String,
     pub total_size: Option<String>,
     pub raw_line: String,
+    #[serde(default)]
+    pub files: Vec<String>,
+    #[serde(default)]
+    pub origin: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -140,7 +193,7 @@ pub struct QueueSnapshot {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub enum PrintStage { Preparing, Uploading, Formatting, Submitting, Accepted, SubmissionUnknown, LeftQueue }
+pub enum PrintStage { Preparing, Uploading, Formatting, Submitting, Accepted, SubmissionUnknown, LeftQueue, OutputConfirmed }
 
 impl PrintStage {
     pub fn cancellable(&self) -> bool {

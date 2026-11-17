@@ -8,6 +8,7 @@ export function jobStatusLabel(job: PrintJob, locale: 'en' | 'zh' = 'en'): strin
     Processing: '处理中', 'Preparing document': '准备文档', Uploading: '上传中',
     'Preparing to print': '准备打印', Submitting: '提交中',
     'Check submission': '请确认提交结果', Queued: '排队中', Submitted: '已提交', Pending: '待提交',
+    'Awaiting confirmation': '等待确认', 'Output confirmed': '已完成（已确认出纸）',
   }
   return translated[label] || label
 }
@@ -15,7 +16,7 @@ export function jobStatusLabel(job: PrintJob, locale: 'en' | 'zh' = 'en'): strin
 function jobLabel(job: PrintJob): string {
   if (job.status === 'Cancelled') return 'Cancelled'
   if (job.status === 'Failed') return 'Failed'
-  if (job.status === 'Completed') return 'No longer queued'
+  if (job.status === 'Completed') return job.progress?.stage === 'OutputConfirmed' ? 'Output confirmed' : 'No longer queued'
   if (job.status === 'Printing') return 'Processing'
   switch (job.progress?.stage) {
     case 'Preparing': return 'Preparing document'
@@ -23,7 +24,7 @@ function jobLabel(job: PrintJob): string {
     case 'Formatting': return 'Preparing to print'
     case 'Submitting': return 'Submitting'
     case 'SubmissionUnknown': return 'Check submission'
-    case 'Accepted': return job.lpq_job_id ? 'Queued' : 'Submitted'
+    case 'Accepted': return job.lpq_job_id ? 'Queued' : 'Awaiting confirmation'
     case 'LeftQueue': return 'No longer queued'
     default: return job.status
   }
@@ -33,4 +34,15 @@ export function uploadPercent(job: PrintJob): number | undefined {
   const progress = job.progress
   if (job.status !== 'Uploading' || progress?.stage !== 'Uploading' || progress.total_bytes <= 0) return undefined
   return Math.min(100, Math.max(0, Math.floor(progress.bytes_sent / progress.total_bytes * 100)))
+}
+
+export function queuePositionLabel(job: PrintJob, locale: 'en' | 'zh' = 'en', now = Date.now()): string | undefined {
+  if (!['Queued', 'Printing'].includes(job.status)) return undefined
+  const tracking = job.tracking
+  if (!tracking) return locale === 'zh' ? '正在查询队列位置' : 'Checking queue position'
+  if (tracking.stale || now - Date.parse(tracking.checked_at) > 15000) {
+    return locale === 'zh' ? '队列状态待刷新' : 'Queue status needs refresh'
+  }
+  if (tracking.jobs_ahead == null) return locale === 'zh' ? '暂时无法确定排队位置' : 'Queue position unavailable'
+  return locale === 'zh' ? `前面还有 ${tracking.jobs_ahead} 个任务` : `${tracking.jobs_ahead} job${tracking.jobs_ahead === 1 ? '' : 's'} ahead`
 }

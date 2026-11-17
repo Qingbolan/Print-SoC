@@ -115,11 +115,12 @@ fn virtual_printer_registered() -> bool {
 fn virtual_printer_configured() -> bool {
     // The root-only forwarding configuration is deliberately unreadable by the
     // desktop user. Only the installer writes this non-secret validation receipt.
-    Path::new("/etc/print-at-soc/virtual-printer.json").exists()
+    Path::new(crate::native_wire::CONFIG).exists()
         && std::fs::read_to_string("/etc/print-at-soc/status.json")
             .ok()
             .and_then(|text| serde_json::from_str::<Value>(&text).ok())
-            .and_then(|value| value.get("configured").and_then(Value::as_bool))
+            .map(|value| value.get("configured").and_then(Value::as_bool) == Some(true)
+                && value.get("account_source").and_then(Value::as_str) == Some("native-rust-v1"))
             == Some(true)
 }
 
@@ -137,11 +138,9 @@ pub fn integration_add_virtual_printer(
     if username.trim().is_empty() || host.trim().is_empty() || port == 0 {
         return ApiResponse::error("Enter your SSH account, host and port first".to_string());
     }
-    let Some(cli) = find_cli() else {
-        return ApiResponse::error("Install the print-at-soc Python CLI first".to_string());
-    };
+    let cli = match env::var_os("APPIMAGE").map(PathBuf::from).map(Ok).unwrap_or_else(env::current_exe) { Ok(path) => path, Err(error) => return ApiResponse::error(error.to_string()) };
     let command = format!(
-        "{} --install-virtual-printer --username {} --host {} --port {} --printer {} --ask-password",
+        "{} --install-system-printer --username {} --host {} --port {} --printer {}",
         shell_argument(&cli.to_string_lossy()), shell_argument(&username),
         shell_argument(&host), port, shell_argument(&printer),
     );
@@ -241,7 +240,7 @@ pub fn integration_get_status() -> ApiResponse<IntegrationStatus> {
             detail: if cli_path.is_some() {
                 "Print@SoC CLI bridge detected.".to_string()
             } else {
-                "Install the print-at-soc CLI before registering the virtual printer.".to_string()
+                "Optional CLI launcher is not installed; native printer setup is built into this desktop app.".to_string()
             },
         },
         virtual_printer: VirtualPrinterStatus {

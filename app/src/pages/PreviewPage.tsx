@@ -2,7 +2,7 @@ import { requireReadyDocument, type QueuedDocument } from '@/lib/document-state'
 import { JobProgress } from '@/components/jobs/JobProgress'
 import { useNativeFileDrop } from '@/hooks/useNativeFileDrop'
 import { PdfSheet } from '@/components/preview/PdfSheet'
-import { makeSheets, makeBookletSheets, bindingAxis, backRotation, type TurnAxis } from '@/lib/print-preview'
+import { makeSheets, makeBookletSheets, duplexForTurn, bindingAxis, backRotation, type TurnAxis } from '@/lib/print-preview'
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useNavigate, useLocation, useParams } from 'react-router-dom'
 import { usePrinterStore } from '@/store/printer-store'
@@ -202,6 +202,7 @@ export default function ModernPreviewPage() {
   const pagesOnCurrentSheet = currentPhysicalSheet
     ? (viewingBack ? currentPhysicalSheet.back : currentPhysicalSheet.front) : []
   const selectedBindingAxis = bindingAxis(settings.duplex, settings.orientation)
+  useEffect(() => { setTurnAxis(selectedBindingAxis) }, [selectedBindingAxis])
 
   // Get paper dimensions (width/height ratio)
   const paperDimensions = useMemo(() => {
@@ -848,7 +849,11 @@ export default function ModernPreviewPage() {
               {settings.duplex !== 'Simplex' && (
                 <div className="flex flex-wrap items-center gap-2 px-4 py-2 text-xs text-muted-foreground">
                   <label htmlFor="preview-turn">Turn the paper</label>
-                  <select id="preview-turn" className="rounded border border-border bg-background px-2 py-1" value={turnAxis} onChange={e => setTurnAxis(e.target.value as TurnAxis)}>
+                  <select id="preview-turn" className="rounded border border-border bg-background px-2 py-1" value={turnAxis} onChange={e => {
+                    const turn = e.target.value as TurnAxis
+                    setTurnAxis(turn)
+                    setSettings(previous => ({ ...previous, duplex: duplexForTurn(turn, previous.orientation) }))
+                  }}>
                     <option value="vertical">Left to right (book)</option>
                     <option value="horizontal">Top to bottom (calendar)</option>
                   </select>

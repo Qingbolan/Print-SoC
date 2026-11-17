@@ -1,505 +1,297 @@
-# Print@SoC
+<p align="center">
+  <img src="app/public/logo-app-icon.png" width="88" alt="Print@SoC icon" />
+</p>
 
-> This project began as an experimental solution to simplify printing for NUS School of Computing students. It has evolved into **Print@SoC**, a secure, zero-configuration cross-platform and easy-to-use printing tool designed for NUS students and staff.
+<h1 align="center">Print@SoC</h1>
 
----
+<p align="center"><strong>Your documents. Your SoC printers. One desktop workspace.</strong></p>
+<p align="center">Preview documents, choose a printer, and follow your jobs through NUS School of Computing’s SSH printing service.</p>
 
-## Interface
+<p align="center">
+  <a href="https://github.com/Qingbolan/Print-SoC/releases/latest">Download</a> ·
+  <a href="#features">Features</a> ·
+  <a href="#one-command-system-printer-setup">System printer setup</a> ·
+  <a href="#watch-it-in-action">Demo</a> ·
+  <a href="#first-print">First print</a> ·
+  <a href="docs/usage.md">User guide</a> ·
+  <a href="https://github.com/Qingbolan/Print-SoC/issues">Report an issue</a>
+</p>
 
-![Print@SoC desktop workbench](app/screenshots/readme/home-desktop.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="app/screenshots/readme/preview-native-dark.jpg" />
+  <source media="(prefers-color-scheme: light)" srcset="app/screenshots/readme/preview-native-light.jpg" />
+  <img src="app/screenshots/readme/preview-native-dark.jpg" alt="Real macOS Print@SoC window showing a two-page PDF preview, A4 paper, long-edge duplex and printer selection" width="100%" />
+</picture>
 
-The interface uses a responsive workbench layout: document submission and recent
-activity share the available desktop workspace, while mobile views stack tasks in
-their natural order. Connection details remain in Settings and print options are
-confirmed in Preview, keeping Home focused on the next print job.
+<p align="center"><sub>Actual macOS desktop capture · local development build · sample PDF opened through Browse Files.</sub></p>
 
----
+**Preview before you print.** Review the page, choose your binding edge, and keep the printer settings in view. [Try the sample PDF](docs/examples/print-guide.pdf) or [inspect the screenshot provenance](app/screenshots/readme/CAPTURES.md).
 
-## Problem Statement
+<details>
+<summary>See the reverse-side preview</summary>
 
-### The Challenge with Official SoC Printing Configuration
+![Actual desktop preview of the second page on the reverse side](app/screenshots/readme/preview-native-back.jpg)
 
-While NUS School of Computing provides comprehensive printing infrastructure with printers across COM1, COM2, COM3, and other buildings, the official setup process presents significant challenges:
+The same two-page document, viewed from the back. This is a preview, not proof of physical duplex output.
 
-#### Traditional Setup Process (Official Documentation)
+</details>
 
-For macOS users, the official configuration requires:
+This project began as an experimental solution to simplify printing for NUS School of Computing students. Its central question remains practical: **can an existing SoC account provide a consistent printing workflow across personal computers, without configuring every campus printer locally?**
 
-1. Open System Settings → Printers & Scanners
-2. Click "Add Printer"
-3. Select IP Printer
-4. Enter printer address: `print.comp.nus.edu.sg`
-5. Select protocol: IPP (Internet Printing Protocol)
-6. Enter queue name (e.g., `psts-dx`)
-7. Download and install printer drivers (PPD files)
-8. Configure paper size and choose Single-sided, Flip on long edge, or Flip on short edge. Long edge suits portrait book-style reading; short edge suits landscape book-style reading. Changing orientation preserves the selected binding edge.
-9. ...15+ additional steps
-
-#### Critical Issues
-
-- Documentation written in 2015 for macOS 10.10, incompatible with modern macOS Ventura/Sonoma
-- Outdated drivers that fail on newer operating systems
-- Complex 15+ step configuration process prone to errors
-- Each printer requires separate configuration
-- Difficult troubleshooting when setup fails
-- Platform-specific instructions (different for Windows, macOS, Linux)
-
-#### Real Student Experience
-
-> "I just wanted to print my assignment, but spent 2 hours configuring the printer and still failed."
-
-**Setup Time:** 1-3 hours
-**Success Rate:** ~60%
-
----
-
-## Solution: Print@SoC
-
-### Core Innovation
-
-Instead of configuring local printer drivers, Print@SoC leverages SSH + `lpr` to bypass configuration complexity entirely.
-
-#### Architecture Comparison
-
-**Traditional Approach:**
-```
-macOS → Printer Driver → IPP Protocol → SoC Print Server → Printer
-        ❌ Complex      ❌ Outdated    ❌ Poor compatibility
-```
-
-**Print@SoC Approach:**
-```
-Any Device → Print@SoC App/CLI → SSH → stu/stf Server → lpr → Printer
-            ✅ Zero config      ✅ Automatic   ✅ Cross-platform
-```
-
-#### Key Insight
-
-SoC students already have SSH credentials for accessing university servers and submitting assignments. Why not use the same SSH access for printing, eliminating local driver configuration entirely?
-
-### User Experience
-
-**With Print@SoC:**
-
-1. Open Print@SoC
-2. Log in with SoC credentials
-3. Upload PDF file
-4. Select printer queue
-5. Click Print
-
-**Setup Time:** 2 minutes
-**Success Rate:** 95%+
-
----
-
-## How It Works
-
-### Technical Architecture
-
-```
-┌─────────────────────────────────────────┐
-│      SoC Print Server                   │
-│   (print.comp.nus.edu.sg)               │
-│                                         │
-│  ┌─────────────────────────────────┐   │
-│  │  CUPS (Print Queue Manager)     │   │
-│  │  - psc008-dx / psc008-sx        │   │
-│  │  - psc011-dx / psc011-sx        │   │
-│  │  - psts-dx  / psts-sx           │   │
-│  └─────────────────────────────────┘   │
-│           ▲                             │
-│           │ Accepts lpr commands        │
-└───────────┼─────────────────────────────┘
-            │
-    ┌───────┴───────┐
-    │               │
-    │ Method 1      │ Method 2
-    │ IPP Protocol  │ SSH + lpr
-    │ (Config req.) │ (Zero config)
-    │               │
-┌───▼──┐      ┌────▼─────┐
-│Local │      │stu/stf   │
-│Print │      │Server    │
-│Setup │      │(SSH)     │
-└──────┘      └──────────┘
-```
-
-### Behind the Scenes
-
-When you upload `assignment.pdf`:
-
-```bash
-# 1. Upload file to server
-scp assignment.pdf stu.comp.nus.edu.sg:~/temp/
-
-# 2. Submit print job via lpr
-ssh stu.comp.nus.edu.sg "lpr -P psts-dx -o sides=two-sided-long-edge ~/temp/assignment.pdf"
-
-# 3. Check print queue status
-ssh stu.comp.nus.edu.sg "lpq -P psts-dx"
-
-# 4. Cleanup temporary file
-ssh stu.comp.nus.edu.sg "rm ~/temp/assignment.pdf"
-```
-
-All of this happens automatically - users simply upload and print.
-
-Binding is passed explicitly with the [CUPS `sides` option](https://www.cups.org/doc/man-lpr.html): `one-sided`, `two-sided-long-edge`, or `two-sided-short-edge`. The remote `lpr` and printer queue must support this option. The app does not silently retry with a different binding mode. The selected edge is also retained for n-up and booklet jobs; select short-edge binding for a landscape booklet.
-
-Print@SoC defaults to `psts-dx`, one of the common public SOCprint queues in
-COM1 Level 1. The student-facing default list follows SOCprint's common public
-queues: `psc008-dx`, `psc008-sx`, `psc011-dx`, `psc011-sx`, `psts-dx`,
-`psts-sx`, `pstb-dx`, `pstb-sx`, `pstc-dx`, and `pstc-sx`. After SSH
-connection, the app also asks the selected SoC Unix server for `/etc/printcap`
-and filters the visible queues against that live list.
-
-### Why This Works
-
-- ✅ `stu.comp.nus.edu.sg` and `stf.comp.nus.edu.sg` are within the campus network
-- ✅ These servers have direct access to the print server
-- ✅ Students already have SSH credentials
-- ✅ The `lpr` command is available on these servers
-
----
-
-## Key Advantages
-
-| Dimension | Traditional Setup | Print@SoC |
-|-----------|------------------|-----------|
-| **Configuration** | 15+ manual steps | Zero configuration (credentials only) |
-| **OS Compatibility** | Poor (outdated drivers) | Excellent (SSH-based) |
-| **Cross-platform** | Different setup per OS | Identical across all platforms |
-| **Maintenance** | High (reconfigure after OS updates) | Low (stable SSH) |
-| **Troubleshooting** | Difficult (driver? network? config?) | Simple (clear SSH error messages) |
-| **Learning Curve** | Steep (IPP/CUPS knowledge required) | Minimal (web interface) |
-
----
-
-## Target Users
-
-### Primary Audience
-
-**Students (Undergraduate & Graduate)**
-- Need to print assignments, lecture notes, and papers
-- Familiar with SSH (Computer Science background)
-- Want hassle-free printing without driver configuration
-
-**Faculty & Staff**
-- Use personal macOS/Windows computers
-- Need to print course materials and exams
-- Require quick and reliable printing
-
----
+[Problem statement](#problem-statement) · [Design rationale](#solution-printsoc) · [Install](#install) · [Architecture](#how-it-works) · [Development](#development)
 
 ## Features
 
-- **Zero Configuration:** No driver installation or printer setup required
-- **Cross-Platform:** Works on macOS, Windows, Linux - any device with a browser
-- **Secure:** Uses your existing SoC SSH credentials
-- **Booklet Mode:** Automatic page arrangement for booklet printing
-- **PDF Optimization:** Smart layout optimization for better print quality
-- **Queue Management:** View and manage your print jobs
-- **Multi-Printer Support:** Easy access to all SoC printer queues
-- **CLI Aliases:** Launch with `print-at-soc`, `print-soc`, or `psoc`
-- **MCP Server:** Start a local stdio MCP server with `print-soc mcp` or `psoc mcp`
+- **One-command virtual printer setup:** run `print-soc virtual-printer install` to add Print@SoC to the macOS/Linux system printer list through an interactive Rust wizard. Print from your application's normal Print dialog.
+- **Preview before submission:** import PDFs, images and Office documents, inspect the prepared pages, and review front/back layout with the print settings alongside.
+- **Paper and layout controls:** choose copies, paper size, orientation, duplex binding, n-up or booklet layout. Conversion and advanced-layout dependencies are listed below.
+- **One account across entry points:** desktop and native printing use the shared SoC account and operating-system credential store.
+- **Job tracking and history:** inspect desktop and system-originated jobs, see the number of jobs ahead when queue evidence is available, and distinguish queue departure from confirmed paper output.
+- **Guided maintenance:** interactive installation, update checks, download verification, recovery and an uninstall preview with data-retention choices.
+- **CLI and MCP access:** launch and inspect the application from the terminal, or integrate the bundled stdio MCP server with a compatible client.
+- **Light and dark themes:** use the same document workspace in either appearance, with English and Chinese interface options.
 
----
+### One-command system printer setup
 
-## Technical Stack
-
-- **Desktop Backend:** Tauri + Rust
-- **SSH Integration:** `ssh2` for secure connections
-- **PDF Processing:** Rust PDF tooling for layout optimization
-- **Frontend:** React with modern UI components
-- **Authentication:** SSH password is kept in memory for the active session; “remember account” stores only server and username
-
----
-
-## Getting Started
-
-### Prerequisites
-
-- NUS SoC account credentials
-- Access to NUS campus network (on-campus or VPN)
-
-### Installation
-
-Download the latest release for your platform from the [Releases](../../releases) page:
-
-- **macOS Apple Silicon:** `Print_at_SoC_macos_aarch64.app.tar.gz`
-- **macOS Intel:** `Print_at_SoC_macos_x86_64.app.tar.gz`
-- **Windows:** `Print_at_SoC_windows_x86_64_setup.exe`
-- **Linux:** `Print_at_SoC_linux_x86_64.AppImage`
-
-Or install a CLI wrapper:
-
-```bash
-npm install -g print-at-soc
-print-soc
-
-pip install print-at-soc
-psoc
-```
-
-### Updates and uninstall
-
-```bash
-print-soc self update --check
-print-soc self update
-print-soc self update --auto apply
-print-soc self update --rollback
-print-soc self uninstall --dry-run
-print-soc self uninstall --purge --remove-cli
-```
-
-Updates verify downloads before replacing the desktop and retain a previous
-version for rollback. Normal CLI desktop launches check daily (notification by
-default); automatic installation is opt-in on macOS/Linux. The uninstall wizard
-previews owned components and lets you retain data or purge app data and saved
-credentials. Use `--plain` for simple text, or `--non-interactive --yes` in scripts.
-Python/npm package upgrades and CUPS service refreshes remain separate from
-desktop updates. See [maintenance and recovery details](docs/maintenance.md), including Windows
-native-installer limits and the intentionally retained non-secret lock file.
-
-### Virtual Printer
-
-The Python CLI can install a macOS/Linux CUPS virtual printer queue. Apps print
-to `Print@SoC Virtual Printer`, and the backend forwards the spool file through
-SoC SSH to the configured remote `lpr` queue. The default remote queue is
-`psts-dx`; pass `--printer` to choose another SOCprint queue.
-
-```bash
-pip install print-at-soc
-print-soc --install-virtual-printer --username your-soc-id --ask-password --printer psts-dx
-```
-
-Start the interactive installer with:
-
-```bash
+```sh
 print-soc virtual-printer install
 ```
 
-The terminal wizard offers arrow-key menus for the server, authentication,
-paper and sides; validates typed values; hides password input; and previews the
-account and destination before asking to install. Decline the confirmation to
-edit the settings or cancel before any system changes. Animated stage indicators run
-only while work is happening, and stop before password prompts. Ctrl+C exits
-cleanly. The result explains how to use the printer or shows stage-specific
-repair steps when setup fails. Re-running setup repairs an existing queue.
+**On macOS/Linux, after installing the CLI and a desktop build with the Rust driver, save your SoC account in the desktop first.** This command opens a guided installer: choose the destination queue, paper and duplex defaults, review the proposed changes, and authenticate locally when administrator access is required. It registers the local CUPS printer, installs the Rust backend and configures the user-session service.
 
-```bash
-# Walk through setup without passwords, sudo or system changes:
+After setup, select **PrintAtSoC** in another application's Print dialog. The Rust service submits through your shared SoC account and retains the job PDF for GUI history and preview. Keep your login session, credential store and SoC network connection available while printing. The native print-processing path does not depend on Python.
+
+```sh
+# Inspect the plan without installing or printing:
 print-soc virtual-printer install --dry-run
 
-# Simple numbered prompts, without colors or animation:
-print-soc virtual-printer install --plain
-
-# Scripted installation: authenticate the administrator separately first.
-sudo -v
-print-soc virtual-printer install --non-interactive --username YOUR_SOC_ID --key-path ~/.ssh/id_ed25519
+# Check the installed integration:
+print-soc virtual-printer status
 ```
 
-Scripts can provide a password through `--password-stdin` (one line) or the
-existing `PSOC_SSH_PASSWORD` environment variable. Avoid `--password` in shell
-history. Non-interactive mode never prompts, including for sudo; missing inputs
-produce an actionable error and nonzero exit code. Redirected output, `NO_COLOR`
-and `TERM=dumb` produce plain logs. `--yes` skips only the final confirmation;
-use `--non-interactive` to disable all prompts. Authentication sources are
-mutually exclusive. Exit status is `0` for success/declined review, `1` for a
-handled failure, `2` for invalid command arguments, and `130` for Ctrl+C/EOF.
-A successful installation verifies the local queue, not remote SSH connectivity
-or physical printing. Setup never automatically submits a test page.
+This is one command to start guided configuration, not a promise of unattended installation without credentials or administrator authorization. The CUPS installer does not provide a Windows system driver. [Full setup and removal guide](docs/usage.md#virtual-printer).
 
-In the desktop app, open **Settings → Advanced → Add system printer**.
-Setup opens Terminal to request the SoC password and administrator authentication;
-return to the app and refresh integration status after installation completes.
-The same installer is available through the command above. Run it as your normal
-user: it requests `sudo` only for system changes. A working CUPS service and a
-system/Homebrew Python installed outside the home directory are required.
+## Watch it in action
 
-The installer snapshots the backend and its installed dependencies into a
-root-owned system directory (`/Library/Application Support/PrintAtSoC/cups` on
-macOS, `/usr/local/lib/print-at-soc/cups` on Linux). It stores the forwarding
-configuration in `/etc/print-at-soc/virtual-printer.json` with mode `0600` and
-copies an explicitly configured SSH key there with the same permissions. This
-allows the CUPS service to run without access to a logged-in user's home or SSH
-agent. All local Print@SoC queues use this system forwarding account. Re-run the
-installer after upgrading the CLI to update the installed backend snapshot.
-The normal user configuration remains available for CLI commands; configuring
-an installed virtual printer also updates its system configuration.
+[![Word's native Print dialog with Print@SoC Virtual Printer selected](app/screenshots/readme/word-native-print.jpg)](app/screenshots/readme/word-native-print.mp4)
 
-Useful maintenance commands:
+**[Watch the real Word printing recording (MP4)](app/screenshots/readme/word-native-print.mp4)** · [Open the Word sample](docs/examples/word-print-demo.rtf)
 
-```bash
-print-soc --configure-virtual-printer --server stu --username your-soc-id --ask-password --printer psts-dx
-print-soc --virtual-printer-status
-print-soc --uninstall-virtual-printer
+Recorded on macOS with a public two-page sample: open Word's Print dialog, select **Print@SoC Virtual Printer**, review copies and page controls, then click Print. This is a continuous screen recording at original speed, trimmed to remove the recording toolbar at the end. It does not show driver installation or changing duplex binding. A separate live test verified A4 short-edge duplex output; see the [validation record](docs/repair-validation-2026-11-17.md).
+
+## Problem Statement
+
+### The challenge with local printer configuration
+
+A student trying to print an assignment needs to make several independent choices: which printer is accessible, which queue reaches it, how to authenticate, and how to express paper and duplex settings. A conventional network-printer setup exposes these choices through operating-system-specific configuration screens and printer drivers.
+
+The configuration work typically includes selecting a network endpoint and protocol, identifying a queue, choosing a driver or printer description, and setting defaults. These details matter, but they are separate from the user's immediate task: reviewing a document and getting the intended pages onto paper. The exact setup varies by operating system and queue; there is no single step count or measured failure rate claimed here.
+
+Three concrete use cases motivated Print@SoC:
+
+- **An assignment from a personal laptop:** the user wants to preview a PDF and choose a nearby accessible printer without creating a separate local printer entry for every destination.
+- **Slides or documents from another application:** the user wants familiar Print-dialog controls, with the resulting PDF and effective settings visible in the same job history.
+- **An apparently stalled submission:** the user needs to distinguish a failed upload, a queued job and a job that has left the server queue before deciding whether to retry.
+
+The third case makes observability part of the printing problem. A successful submission command is useful evidence, but it does not establish that the document has physically printed. Retrying on that assumption can produce duplicate output.
+
+## Solution: Print@SoC
+
+### Core idea
+
+SoC users already have an account for accessing university Unix services. Print@SoC uses that authenticated SSH connection to submit documents through the server's existing `lpr` interface and inspect its queues. The university infrastructure continues to own queue access and printer delivery; the application owns document preparation, submission tracking and the user interface.
+
+### Architecture comparison
+
+```text
+Conventional network-printer setup
+  Application → OS print system + printer configuration
+              → campus print service → physical printer
+
+Print@SoC document workflow
+  Document → desktop preview + preparation
+           → authenticated SSH → SoC Unix server → lpr → physical printer
+
+Optional Print@SoC system-printer workflow
+  Application → OS print dialog → local CUPS + Rust backend
+              → Rust service → authenticated SSH → SoC lpr → physical printer
 ```
 
-Run `print-soc --uninstall-virtual-printer` before `pip uninstall print-at-soc`.
-`pip uninstall` removes Python files only; it does not remove CUPS queues,
-backend files, or Print@SoC configuration created outside pip metadata.
+The direct document workflow avoids per-destination local driver setup. The optional system printer addresses a different need: printing from applications that already render their own documents. It adds a local integration point while retaining the shared submission and history model.
 
-Windows virtual printer support is separate because Windows uses the modern
-Print Support App/MSIX virtual printer architecture rather than CUPS backends.
+### Why this approach fits the use case
 
-### MCP Server
+| Design choice | What it gives the user | Remaining constraint |
+| --- | --- | --- |
+| Reuse SoC SSH authentication | One account for the desktop and native print service | The account must be authorized and the server reachable. |
+| Submit through the server's print commands | Select a remote queue without configuring each printer locally | Queue capabilities and access restrictions remain server-specific. |
+| Prepare a PDF before submission | Inspect the document that will be sent | Office conversion and advanced layout need additional local tools. |
+| Share a job lifecycle across entry points | Inspect system-originated and desktop jobs in one workspace | A queue observation cannot prove physical output. |
+| Use a standalone Rust CUPS backend | System printing does not depend on the user's Python environment | CUPS integration applies to macOS/Linux and needs installation. |
 
-The desktop binary includes a stdio MCP server. Open **Settings → Advanced** to
-run a handshake test and copy a client configuration that points to the exact
-installed executable. The same page reports the CLI, CUPS queue, backend,
-configuration file, and loaded Tauri plugins without assuming they are present.
-After installing the Python CLI, the server is also available through either CLI alias:
+The goal is to reduce the configuration required for a concrete print task while making the remaining dependencies and uncertain outcomes visible. It does not require replacing the university's printing infrastructure or claiming that every printer implements the same options.
 
-```bash
-print-soc mcp
-psoc mcp
+## Install
+
+You need a **SoC account** and network access to your SoC Unix server, through the campus network or NUS VPN as appropriate. This is an independent community project, not an official NUS service.
+
+### Desktop
+
+Choose the installer for your machine from [GitHub Releases](https://github.com/Qingbolan/Print-SoC/releases/latest).
+
+| Platform | Download |
+| --- | --- |
+| macOS | Apple Silicon or Intel application archive |
+| Windows | x86-64 setup executable |
+| Linux | x86-64 AppImage |
+
+The release page is the authority for available assets. This README describes the current source tree; changes under development may not yet be in the published desktop or package launchers.
+
+### Command line
+
+Choose **one** launcher. Both expose `print-soc`, `print-at-soc`, and `psoc`.
+
+```sh
+# Python launcher (Python 3.8+)
+python3 -m pip install print-at-soc
+print-soc --install
+print-soc
 ```
 
-The MCP server exposes SSH connection, printer queue, quota, and PDF print submission tools. `submit_pdf_print_job` requires `confirm=true` because it sends a real print job.
+```sh
+# npm launcher (Node.js 14.14+)
+npm install -g print-at-soc
+print-soc --install
+print-soc
+```
 
-An installable Codex plugin scaffold is included at `plugins/print-soc`. It
-registers `print-soc mcp` and provides guarded printing instructions. Validate it
-from the Codex plugin-creator skill before distribution; the target machine must
-have the `print-soc` CLI on `PATH`.
+The launchers install the desktop separately. npm’s maintenance wizard also requires Python 3.8+ with `venv`; the Rust system-printing path does not. See [installation, update and recovery details](docs/maintenance.md).
 
-### First-Time Setup
+## First print
 
-1. Launch Print@SoC
-2. Select your preferred print server (`stu` or `stf`)
-3. Enter your SoC username and password
-4. Start printing
+1. Open Print@SoC and select your SoC server, such as `stu` or `stf`.
+2. Connect with your SoC account. Saving the password in the operating system’s credential store is optional.
+3. Choose **Browse Files** or drop a document into the workspace.
+4. Review the converted PDF, choose an accessible printer, and check paper size, copies and binding edge.
+5. Submit once, then follow the job in **Jobs**. History is ordered newest first.
 
----
+The printer catalogue is filtered against the connected server’s queues. A listed printer may still have room-access restrictions. Check the [printer catalogue sources](docs/printer-catalog-sources.md) before choosing an unfamiliar location.
+
+## What you can do
+
+| Task | Support and requirements |
+| --- | --- |
+| Preview and print PDF | Imported documents are retained as local copies; preview and submission use the same prepared PDF. |
+| Print images | Static PNG, JPEG, WebP and BMP; transparency is composited onto white paper. |
+| Print slides and Office files | PPT/PPTX/ODP, DOC/DOCX/ODT and XLS/XLSX/ODS, plus RTF/TXT/CSV, require local LibreOffice. Review conversion before printing. |
+| Arrange pages | Page selection, n-up and booklet layout require `pdfjam` with TeX Live. |
+| Print from another application | Optional macOS/Linux CUPS printer with a standalone Rust backend and user-session service. See [system printer setup](docs/usage.md#virtual-printer). |
+| Track jobs | Queue association uses `lpq -l`, the account and the unique submitted filename; fresh, complete snapshots provide the number of jobs ahead. |
+| Automate | CLI launchers and a bundled stdio MCP server; real print submission requires explicit confirmation. |
+
+Long-edge and short-edge choices are retained in job settings. Physical binding depends on the remote queue and its `lpr` implementation. A live macOS test through Word, the installed Rust driver and `psc111` verified A4 short-edge duplex output, with the user confirming the physical result. The system job appeared in GUI history and preview, and queue tracking advanced from printing to left queue. This result is specific to that printer and environment. See the [live validation record](docs/repair-validation-2026-11-17.md). See the [interface investigation and live test record](docs/soc-print-interface-investigation-2026-11-17.md).
+
+### What the job status means
+
+- **Submitted / awaiting confirmation:** the submission was accepted, but its outcome is not yet established.
+- **Queued / printing:** the job was matched in the remote queue. A reliable snapshot can show how many jobs are ahead; stale or unavailable information is identified explicitly.
+- **Left queue:** the job is no longer in a successfully queried queue. This does **not** prove that paper physically emerged.
+- **Output confirmed:** the user has confirmed the physical output.
+
+A failed query does not mark a job completed. An interrupted submission that may already have reached the server is reconciled instead of automatically printed again.
+
+## Updates and removal
+
+```sh
+print-soc self update --check
+print-soc self update
+print-soc self update --rollback
+print-soc self uninstall --dry-run
+print-soc self uninstall
+```
+
+The uninstall wizard previews owned components and offers data retention or cleanup. Updates verify downloads and retain a previous installation for recovery. macOS/Linux support opt-in installation on CLI launch; Windows uses its native installer and has different rollback limits.
+
+CLI launch-time checks are not a background updater. Opening the desktop directly does not invoke that check. Python/npm package upgrades and installed CUPS service refreshes are separate operations. Read the [maintenance guide](docs/maintenance.md) for automatic-update settings, recovery and purge options.
+
+## Accounts and privacy
+
+The desktop and native printing service share one account identity. When enabled, saved passwords live in macOS Keychain, Windows Credential Manager or Linux Secret Service; they are not stored in the account JSON or returned to the webview. A locked credential store produces an error rather than a plaintext fallback.
+
+Documents are converted locally, then transferred to the selected SoC server for printing. Imported PDFs and job history remain locally for preview and recovery. Review [account storage and document handling](docs/usage.md) before using a shared computer.
+
+## How it works
+
+```text
+Desktop document → local PDF preparation ──────────────┐
+                                                       ├→ Rust print service → SSH → SoC lpr → printer
+Application Print → local CUPS → Rust backend → PDF ───┘
+                                                                   ↑
+                                                   queue tracking via lpq -l
+```
+
+The React interface and Rust backend are packaged with Tauri. The optional CUPS integration uses a standalone Rust executable and a login-session service; it does not require Python in the printing path. Windows system-driver integration is not provided by this CUPS installer.
+
+### Behind the scenes
+
+For a document such as `assignment.pdf`, the workflow has four responsibilities:
+
+1. **Prepare:** retain a local copy, convert supported input formats to PDF, and apply requested layout transformations before submission. Native CUPS output may already contain page selection, orientation and n-up; those transformations must not be applied twice.
+2. **Submit:** transfer the prepared document under a unique attempt filename and invoke the selected server queue through SSH. A receipt records submission progress so an interrupted operation can be reconciled without blindly resending it.
+3. **Observe:** inspect `lpq -l`, associate the account and unique filename with a queue job, and retain its remote identifier. A complete, fresh queue snapshot can establish how many jobs precede it; a failed or partial query cannot.
+4. **Reconcile:** update local history from the available evidence. Queue departure and user-confirmed paper output remain distinct outcomes.
+
+For context, the remote command interface used in the documented SoC investigation is:
+
+```sh
+# On the SoC Unix server; submitting consumes a real print job.
+# Replace both placeholders with an accessible queue and a prepared PDF.
+lpr -P <queue> <prepared-document.pdf>
+
+# Read the queue, including long-format job and filename information.
+lpq -l -P <queue>
+```
+
+These commands explain the server boundary; the application also manages credentials, file transfer, local persistence and interrupted submissions. They are not a replacement installation script.
+
+### Implementation boundaries
+
+The desktop interface handles document selection, preview and settings. Rust owns SSH access, document preparation and the job lifecycle. The native CUPS backend accepts the OS-rendered document and passes it to a user-session service, which uses the shared account and persists system jobs for the GUI. Package launchers handle distribution and maintenance separately from the native printing path.
+
+This separation serves a specific recovery requirement: closing the GUI must not make a system-originated job disappear from history, and a desktop restart must not turn an uncertain submission into an automatic duplicate print.
+
+The remote SoC tools are not assumed to be CUPS-compatible simply because their commands share names. Protocol details, queue matching and observed limitations are recorded in the [printing interface investigation](docs/soc-print-interface-investigation-2026-11-17.md).
 
 ## Development
 
-### Project Structure
+Install Node.js/npm, Rust and the [Tauri platform prerequisites](https://v2.tauri.app/start/prerequisites/). Read [VERSIONING.md](VERSIONING.md) and install the pinned Tide CLI before building: `scripts/version.py` owns every version projection.
 
-```
-Print-SoC/
-├── app/                  # Tauri desktop application
-│   ├── src/              # React frontend
-│   ├── src-tauri/        # Rust backend and bundled MCP server
-│   ├── public/           # Static assets
-│   └── package.json      # Frontend scripts and dependencies
-├── plugins/print-soc/    # Codex plugin and MCP registration
-└── release/              # CLI packages and release assets
-```
-
-### Building from Source
-
-```bash
-# Clone repository
+```sh
 git clone https://github.com/Qingbolan/Print-SoC.git
-cd Print-SoC
-
-# Install dependencies
-cd app
-npm install
-
-# Run the desktop app in development
+cd Print-SoC/app
+npm ci
 npm run tauri:dev
+```
 
-# Run frontend and design checks
+```sh
+# From app/
 npm run check
-
-# Build desktop packages
+cargo test --manifest-path src-tauri/Cargo.toml --lib
 npm run tauri:build
 ```
 
----
+| Location | Responsibility |
+| --- | --- |
+| [app/src](app/src) | React workspace, preview, settings and job views |
+| [app/src-tauri/src](app/src-tauri/src) | Rust document pipeline, SSH, job lifecycle and native integration |
+| [release](release) | Python/npm launchers and distribution tooling |
+| [plugins/print-soc](plugins/print-soc) | Codex plugin scaffold and MCP registration |
+| [VERSIONING.md](VERSIONING.md) | Tide versions and shared release receipts |
 
-## Roadmap
+## Help and contributing
 
-- [ ] Support for additional print options (color, stapling, etc.)
-- [ ] Print history and cost tracking
-- [ ] Batch printing support
-- [ ] Mobile app version
-- [ ] Integration with LumiNUS for direct assignment printing
+Start with the [user guide](docs/usage.md) and [maintenance guide](docs/maintenance.md). For a bug, [open an issue](https://github.com/Qingbolan/Print-SoC/issues) with your OS, app version, reproduction steps and expected result. Remove passwords, tokens and private document content from logs or screenshots.
 
----
+Contributions should include focused checks and explain any effect on real printing. Hardware claims should state the printer, submitted settings and observed paper output. See [AGENTS.md](AGENTS.md) for repository instructions.
 
-## Contributing
-
-Contributions are welcome! This project aims to improve the printing experience for the entire SoC community.
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/improvement`)
-3. Commit your changes (`git commit -am 'Add new feature'`)
-4. Push to the branch (`git push origin feature/improvement`)
-5. Open a Pull Request
-
----
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
----
-
-## Acknowledgments
-
-Built with the needs of NUS School of Computing students in mind. Special thanks to all early testers who provided valuable feedback.
-
-**Print@SoC** - Because printing should be simple.
-
-## Versioning and releases
-
-All versions are generated by Tide. See [VERSIONING.md](VERSIONING.md) for local
-builds, CI receipts, and the coordinated desktop/PyPI/npm release process.
-
-### Remembering your login password
-
-On the desktop login screen, select **Remember account and save password securely**.
-After a successful SSH login, the password is stored in macOS Keychain, Windows
-Credential Manager, or the Linux Secret Service. On later launches, press Connect
-without re-entering it. Enter a new password to replace the saved one after a
-successful login. Browser storage contains only the account identity and a saved
-status flag; the backend reads saved passwords without returning them to the webview.
-
-Clearing the saved account or logging out deletes its saved password. Unchecking
-the option uses the typed password for this session without accessing the system
-password store; existing saved credentials remain until explicitly cleared.
-If the system password store is locked or unavailable, the app reports the error
-and does not fall back to storing passwords in a file. Existing remembered accounts
-need one successful password login to opt into secure password storage.
-
-### Importing documents and images
-
-The desktop workbench and preview accept PDF, static PNG/JPEG/WebP/BMP images,
-and DOC/DOCX/ODT, PPT/PPTX/ODP, XLS/XLSX/ODS, RTF, TXT and CSV documents.
-Images convert locally with transparency composited onto white paper and EXIF
-orientation respected. Office/text formats require LibreOffice (detected in the
-standard macOS/Windows installation or as `soffice` on PATH). Fonts and pagination
-may differ from the originating application; review the converted PDF before printing.
-
-Preview and printing use the same converted PDF. Conversions are reused by content
-hash in the application's `imports` directory so saved drafts remain available.
-Conversion inputs are limited to 128 MB and static images to 40 megapixels.
-Animated images and unrecognized formats are rejected with an explanation. For
-other applications or formats, use their native Print → Save as PDF. No claim is
-made to render arbitrary binary files.
-
-macOS controls Keychain authorization prompts. Selecting **Always Allow** grants
-this app access to that item; rebuilding an unsigned development binary may cause
-macOS to request authorization again. The app retains credentials only in memory
-for active SSH reconnects and clears them on disconnect, reducing repeated reads.
-New accounts do not save passwords unless the checkbox is selected.
-
-### Layout and interrupted submissions
-
-Page selection, n-up and booklet layout require `pdfjam` with TeX Live on the
-local desktop. Booklet mode arranges pages for folding, adds blank pages when
-needed, and starts with landscape/short-edge duplex settings. Review both sides
-before printing. A missing layout tool stops the job before upload.
-
-Imported PDFs are kept as immutable local copies, including when the source is
-already a PDF. Moving or editing the original after import does not change the
-previewed document. A document must finish preparation before it can be submitted.
-
-After a restart, interrupted preparation can be retried. A job that may already
-have reached the printer is checked against its original account and receipt;
-it is never automatically printed again. If a queue ID cannot be recovered,
-check the queue and the physical output before using the manual confirmation
-controls in job details. Confirmation updates history only.
+Package license texts: [Python distribution](release/python-pip/LICENSE) · [npm distribution](release/node.js-npm/LICENSE).

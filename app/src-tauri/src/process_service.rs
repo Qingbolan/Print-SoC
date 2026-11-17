@@ -53,6 +53,23 @@ impl Drop for ConverterProcess {
     }
 }
 
+/// GUI launches do not inherit a terminal's shell initialization.
+/// Give converters a deterministic search path, including their subprocesses.
+pub(crate) fn converter_command(name: &str) -> Command {
+    let mut directories: Vec<std::path::PathBuf> = std::env::var_os("PATH")
+        .map(|value| std::env::split_paths(&value).collect()).unwrap_or_default();
+    #[cfg(unix)]
+    for directory in ["/opt/homebrew/bin", "/usr/local/bin", "/Library/TeX/texbin", "/usr/bin", "/bin"] {
+        let path = std::path::PathBuf::from(directory);
+        if !directories.contains(&path) { directories.push(path); }
+    }
+    let executable = directories.iter().map(|dir| dir.join(name)).find(|path| path.is_file())
+        .unwrap_or_else(|| name.into());
+    let mut command = Command::new(executable);
+    if let Ok(path) = std::env::join_paths(directories) { command.env("PATH", path); }
+    command
+}
+
 pub(crate) struct ProcessResult {
     pub status: ExitStatus,
     pub diagnostic: String,

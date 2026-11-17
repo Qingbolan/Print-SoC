@@ -1,3 +1,8 @@
+mod native_wire;
+mod native_jobs;
+mod native_service;
+mod native_install;
+mod account_service;
 // Module declarations
 mod credential_service;
 mod document_service;
@@ -32,6 +37,7 @@ use ssh_service::{
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    if let Some(code) = native_service::dispatch(&args) { std::process::exit(code); }
     if mcp_server::is_mcp_command(&args) {
         let exit_code = match mcp_server::run_stdio() {
             Ok(()) => 0,
@@ -54,6 +60,7 @@ pub fn run() {
             exit_app,
             check_network_connectivity,
             app_open_devtools,
+            account_service::account_current,
             credential_service::credential_save,
             credential_service::credential_delete,
             // SSH operations

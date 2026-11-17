@@ -11,6 +11,8 @@ export type ConnectionStatus =
 
 export interface SavedCredentials {
   serverType: 'stu' | 'stf'
+  host?: string
+  port?: number
   username: string
   rememberMe: boolean
   passwordSaved?: boolean
@@ -31,6 +33,9 @@ interface PrinterState {
 
   // Saved login identity. Secrets are intentionally never persisted here.
   savedCredentials: SavedCredentials | null
+  accountAutoLogin: boolean
+  accountMigrated: boolean
+  setSharedAccount: (account: SavedCredentials | null) => void
   setSavedCredentials: (credentials: SavedCredentials | null) => void
   clearSavedCredentials: () => void
 
@@ -112,7 +117,7 @@ const DEFAULT_PRINTER_FILTER: PrinterFilter = {
 type PersistedPrinterState = Partial<
   Pick<
     PrinterState,
-    'selectedPrinter' | 'savedCredentials' | 'settings' | 'draftJobs' | 'userLocation' | 'printerFilter'
+    'selectedPrinter' | 'savedCredentials' | 'accountAutoLogin' | 'settings' | 'draftJobs' | 'userLocation' | 'printerFilter'
   >
 >
 
@@ -142,6 +147,7 @@ function sanitizePersistedState(value: unknown): PersistedPrinterState {
   return {
     selectedPrinter: (value.selectedPrinter as Printer | null | undefined) ?? null,
     savedCredentials: sanitizeSavedCredentials(value.savedCredentials),
+    accountAutoLogin: typeof value.accountAutoLogin === 'boolean' ? value.accountAutoLogin : sanitizeSavedCredentials(value.savedCredentials)?.rememberMe !== false,
     settings: isRecord(value.settings)
       ? {
           ...DEFAULT_SETTINGS,
@@ -175,8 +181,11 @@ export const usePrinterStore: UseBoundStore<StoreApi<PrinterState>> = create<Pri
 
       // Saved Credentials
       savedCredentials: null,
-      setSavedCredentials: (credentials: SavedCredentials | null) => set({ savedCredentials: credentials }),
-      clearSavedCredentials: () => set({ savedCredentials: null }),
+      accountMigrated: false,
+      accountAutoLogin: true,
+      setSharedAccount: (account) => set(state => ({ savedCredentials: account ? { ...account, rememberMe: state.accountAutoLogin } : null, accountMigrated: true })),
+      setSavedCredentials: (credentials: SavedCredentials | null) => set({ savedCredentials: credentials, accountAutoLogin: credentials?.rememberMe ?? false }),
+      clearSavedCredentials: () => set({ savedCredentials: null, accountAutoLogin: false }),
 
       // App Settings
       settings: DEFAULT_SETTINGS,
@@ -297,6 +306,7 @@ export const usePrinterStore: UseBoundStore<StoreApi<PrinterState>> = create<Pri
       // Logout
       logout: () =>
         set({
+          accountAutoLogin: false,
           sshConfig: null,
           savedCredentials: null,
           connectionStatus: { type: 'disconnected' },
@@ -310,7 +320,8 @@ export const usePrinterStore: UseBoundStore<StoreApi<PrinterState>> = create<Pri
       version: 2,
       partialize: (state) => ({
         selectedPrinter: state.selectedPrinter,
-        savedCredentials: state.savedCredentials,
+        savedCredentials: state.accountMigrated ? null : state.savedCredentials,
+        accountAutoLogin: state.accountAutoLogin,
         settings: state.settings,
         draftJobs: state.draftJobs,
         userLocation: state.userLocation,
