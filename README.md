@@ -5,7 +5,6 @@
 <h1 align="center">Print@SoC</h1>
 
 <p align="center"><strong>Print your assignment. Skip the per-printer setup.</strong></p>
-<p align="center">Open a document, check the preview, and choose a SoC printer.<br />Print@SoC handles submission through the university’s SSH service, so you don’t have to configure each campus printer on your laptop.</p>
 <p align="center"><strong>Prefer printing from Word?</strong> On macOS and Linux, run <code>print-soc virtual-printer install</code><br />to add a Print@SoC printer through a guided setup. <a href="#one-command-system-printer-setup">Setup requirements →</a></p>
 
 <p align="center">
