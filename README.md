@@ -48,6 +48,8 @@ Printing over SSH gave me another way in, but I still ran into problems. When I 
 
 That’s why I started Print@SoC. I wanted to see the page before sending it, print the files I actually had, and find my previous jobs afterward. The school’s servers could already do the printing; I wanted the steps around it to be easier.
 
+I’m now a PhD student, and I still see new students arriving at SoC and struggling with the same printer setup. I remember how frustrating that was when I first arrived. I hope sharing this project helps them spend less time figuring out how to print and get on with what they came here to do.
+
 The app brings document preparation, preview, printer selection and history together. You can print from it without setting up each campus printer locally. If you prefer Word’s own Print dialog, the optional virtual printer gives you that route too, with one command to start its setup.
 
 [Why I built this](#why-i-built-this) · [Problem statement](#problem-statement) · [Design rationale](#solution-printsoc) · [Install](#install) · [Architecture](#how-it-works) · [Development](#development)
