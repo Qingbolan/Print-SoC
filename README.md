@@ -4,8 +4,9 @@
 
 <h1 align="center">Print@SoC</h1>
 
-<p align="center"><strong>Print to NUS SoC printers from your own laptop—with one SoC account.</strong></p>
-<p align="center">Preview your documents, choose a campus printer, and see how many jobs are ahead.<br />On macOS and Linux, one guided setup also brings SoC printing to Word and other apps’ Print dialogs.</p>
+<p align="center"><strong>Print your assignment. Skip the per-printer setup.</strong></p>
+<p align="center">Open a document, check the preview, and choose a SoC printer.<br />Print@SoC handles submission through the university’s SSH service, so you don’t have to configure each campus printer on your laptop.</p>
+<p align="center"><strong>Prefer printing from Word?</strong> On macOS and Linux, run <code>print-soc virtual-printer install</code><br />to add a Print@SoC printer through a guided setup. <a href="#one-command-system-printer-setup">Setup requirements →</a></p>
 
 <p align="center">
   <a href="https://pypi.org/project/print-at-soc/"><img src="https://img.shields.io/pypi/v/print-at-soc?style=flat-square&amp;logo=pypi&amp;logoColor=white&amp;label=PyPI" alt="Latest published PyPI version" /></a>
@@ -40,9 +41,17 @@ The same two-page document, viewed from the back. This is a preview, not proof o
 
 </details>
 
-This project began as an experimental solution to simplify printing for NUS School of Computing students. Its central question remains practical: **can an existing SoC account provide a consistent printing workflow across personal computers, without configuring every campus printer locally?**
+## Why I built this
 
-[Problem statement](#problem-statement) · [Design rationale](#solution-printsoc) · [Install](#install) · [Architecture](#how-it-works) · [Development](#development)
+I started my master’s at NUS in 2025. One of the things I struggled with as a new student was getting the SoC printers to work from my Mac. Installing and configuring the drivers took more effort than I expected for something as ordinary as printing a document.
+
+Printing over SSH gave me another way in, but I still ran into problems. When I printed my ICA Student’s Pass (STP) documents, the content came out so enlarged that parts of the pages were cut off. Files that weren’t PDFs meant extra conversion steps before I could submit them. And when I needed to check something I’d printed earlier, I had no convenient history to return to.
+
+That’s why I started Print@SoC. I wanted to see the page before sending it, print the files I actually had, and find my previous jobs afterward. The school’s servers could already do the printing; I wanted the steps around it to be easier.
+
+The app brings document preparation, preview, printer selection and history together. You can print from it without setting up each campus printer locally. If you prefer Word’s own Print dialog, the optional virtual printer gives you that route too, with one command to start its setup.
+
+[Why I built this](#why-i-built-this) · [Problem statement](#problem-statement) · [Design rationale](#solution-printsoc) · [Install](#install) · [Architecture](#how-it-works) · [Development](#development)
 
 ## Features
 
