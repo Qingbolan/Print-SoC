@@ -467,6 +467,30 @@ pub fn install(args: &[String]) -> Result<(), String> {
     println!("[4/4] Native system printer ready. Use Command/Ctrl+P → Print@SoC Virtual Printer.\nJobs and spool-PDF previews appear in desktop Print history. Stay logged in and connected to NUS/VPN.\nRemote/physical printing is not tested by installation. Rerun setup to repair; use --uninstall-system-printer to remove.");
     Ok(())
 }
+/// Read-only inspection shared by CLI and agents; never return the service token.
+pub(crate) fn inspect() -> Result<serde_json::Value, String> {
+    let path = config_path()?;
+    let config = if path.exists() {
+        Some(serde_json::from_slice::<ServiceConfig>(&fs::read(path).map_err(|e|e.to_string())?).map_err(|e|e.to_string())?)
+    } else { None };
+    let mut result = serde_json::json!({"configured":config.is_some(),"service_running":config.as_ref().is_some_and(health),"backend_installed":cfg!(unix) && Path::new(backend_path()).is_file(),"local_queues":[]});
+    if let Some(config) = config {
+        result["printer"] = serde_json::json!(config.printer);
+        result["paper_size"] = serde_json::json!(config.paper);
+        result["duplex"] = serde_json::json!(config.duplex);
+    }
+    if cfg!(unix) {
+        match checked(Command::new("lpstat").arg("-v")) {
+            Ok(output) => result["local_queues"] = serde_json::json!(output.lines().filter_map(|line| {
+                let (name, uri) = line.split_once(": ")?;
+                uri.starts_with("printatsoc:").then(||name.rsplit(' ').next().unwrap_or(name).to_string())
+            }).collect::<Vec<_>>()),
+            Err(error) if error.contains("No destinations added") => {},
+            Err(error) => result["inspection_error"] = serde_json::json!(error),
+        }
+    }
+    Ok(result)
+}
 pub fn status() -> Result<(), String> {
     let config: ServiceConfig =
         serde_json::from_slice(&fs::read(config_path()?).map_err(|e| e.to_string())?)

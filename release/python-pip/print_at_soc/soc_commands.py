@@ -28,7 +28,7 @@ from .virtual_printer import (
 
 
 PRINTCAP_COMMAND = (
-    "awk -F'[:|]' '/^p/ { print $1 }' /etc/printcap | sort -u"
+    "awk -F'[:|]' '/^[pc]/ { print $1 }' /etc/printcap | sort -u"
 )
 PUSAGE_COMMAND = (
     "if command -v pusage >/dev/null 2>&1; then pusage; else /usr/local/bin/pusage; fi"

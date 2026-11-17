@@ -198,7 +198,7 @@ pub fn ssh_upload_file(
 /// List print queues from /etc/printcap via SSH (uses persistent connection).
 pub(crate) fn ssh_list_print_queues(config: SSHConfig) -> ApiResponse<Vec<String>> {
     // Mirrors SOCprint's /etc/printcap discovery while stripping optional aliases.
-    let command = "awk -F'[:|]' '/^p/ { print $1 }' /etc/printcap | sort -u";
+    let command = "awk -F'[:|]' '/^[pc]/ { print $1 }' /etc/printcap | sort -u";
 
     let output = match execute_command_for(Some(&SSHIdentity::from(&config)), command, false, COMMAND_TIMEOUT_MS) {
         Ok(output) => output,
@@ -443,11 +443,11 @@ pub fn submit_print_job_ssh(
     // -dPDFFitPage: scale content to fit page
     // -dFIXEDMEDIA: force output page size
     let scale_command = format!(
-        "umask 077; gs -sDEVICE=pdfwrite -dPDFFitPage -dFIXEDMEDIA -dAutoRotatePages=/None \
+        "umask 077; gs -sDEVICE=pdfwrite {} -dFIXEDMEDIA -dAutoRotatePages=/None \
          -dDEVICEWIDTHPOINTS={} -dDEVICEHEIGHTPOINTS={} \
          -dCompatibilityLevel=1.4 -dNOPAUSE -dBATCH -dQUIET \
          -sOutputFile={} {}",
-        width_pts, height_pts, scaled_path_arg, remote_file_arg
+        if settings.scaling == ScalingMode::Fit { "-dPDFFitPage" } else { "" }, width_pts, height_pts, scaled_path_arg, remote_file_arg
     );
 
     eprintln!(
@@ -495,6 +495,11 @@ fn build_lpr_command_with_options(printer:&str,file_path:&str,settings:&PrintSet
         DuplexMode::DuplexShortEdge => "two-sided-short-edge",
     };
     let mut command = format!("lpr -P {} -o sides={}", queue, sides);
+    match settings.color_mode {
+        ColorMode::Auto => {},
+        ColorMode::Monochrome => command.push_str(" -o print-color-mode=monochrome"),
+        ColorMode::Color => command.push_str(" -o print-color-mode=color"),
+    }
     if settings.copies > 1 {
         command.push_str(&format!(" '-#' {}", settings.copies));
     }
@@ -1013,6 +1018,7 @@ Queue: no printable jobs in queue
 
     fn duplex_test_settings(duplex: DuplexMode, orientation: Orientation) -> PrintSettings {
         PrintSettings {
+            color_mode: ColorMode::Auto, scaling: ScalingMode::Fit,
             copies: 2,
             duplex,
             orientation,

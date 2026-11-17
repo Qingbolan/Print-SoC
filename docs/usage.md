@@ -61,12 +61,12 @@ print-soc mcp
 psoc mcp
 ```
 
-The MCP server exposes SSH connection, printer queue, quota, and PDF print submission tools. `submit_pdf_print_job` requires `confirm=true` because it sends a real print job.
+The MCP server exposes printer selection, document conversion and preview, native setup, submission, shared history, tracking and cancellation. Use `prepare_print_job` to review a durable job, then `submit_print_job` with `confirm=true` for an authorized print.
 
-An installable Codex plugin scaffold is included at [`plugins/print-soc`](../plugins/print-soc). It
-registers `print-soc mcp` and provides guarded printing instructions. Validate it
-from the Codex plugin-creator skill before distribution; the target machine must
-have the `print-soc` CLI on `PATH`.
+The bundled [print-soc skill](../plugins/print-soc/skills/print-soc/SKILL.md)
+covers the wider workflow using CLI, desktop and MCP. See [agent setup](agents.md)
+for Codex/Claude Code installation, a ready-to-copy prompt and MCP configuration.
+MCP `connect_ssh {}` opens its own SSH session using the saved desktop account, without exposing the password.
 
 ## Remembering your login password
 

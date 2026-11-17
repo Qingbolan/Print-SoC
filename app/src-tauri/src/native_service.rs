@@ -219,6 +219,7 @@ fn settings(
     };
     physical_options(options)?;
     Ok(PrintSettings {
+        color_mode: ColorMode::Auto, scaling: ScalingMode::Fit,
         copies,
         duplex,
         orientation: if dimensions.0 > dimensions.1 {
@@ -337,45 +338,7 @@ fn handle(
         return Err("Incomplete PDF spool file".into());
     }
     pdf.flush().map_err(|e| e.to_string())?;
-    let path = pdf.path().to_string_lossy().to_string();
-    let info = crate::pdf_service::get_pdf_info_internal(&path).map_err(|e| e.to_string())?;
-    let mut prefix = Vec::new();
-    std::fs::File::open(&path)
-        .map_err(|e| e.to_string())?
-        .take(4096)
-        .read_to_end(&mut prefix)
-        .map_err(|e| e.to_string())?;
-    let copies = device_copies(&prefix, copies, &mut options)?;
-    let settings = settings(
-        copies,
-        &options,
-        (info.page_size.0 as f64, info.page_size.1 as f64),
-    )?;
-    let created =
-        crate::print_service::print_create_job(title, path, config.printer.clone(), settings);
-    let job = created.data.ok_or_else(|| {
-        created
-            .error
-            .unwrap_or("Could not record native print job".into())
-    })?;
-    crate::print_service::attach_native(
-        &job.id,
-        NativePrintInfo {
-            cups_job_id,
-            options,
-        },
-    )?;
-    if job.file_path == pdf.path().to_string_lossy() {
-        let error =
-            "Cannot retain the system spool PDF. Free application storage before printing again."
-                .to_string();
-        crate::print_service::print_update_job_status(
-            job.id,
-            PrintJobStatus::Failed,
-            Some(error.clone()),
-        );
-        return Err(error);
-    }
+    let job = prepare_spool(pdf.path(), title, cups_job_id, copies, options, config)?;
     let config = match account() {
         Ok(config) => config,
         Err(error) => {
@@ -434,6 +397,40 @@ fn handle(
             .unwrap_or("Submission result unknown; check job history".into())
     })
 }
+/// Retain the native spool document before starting any remote submission.
+pub(crate) fn prepare_spool(pdf: &std::path::Path, title: String, cups_job_id: String,
+    copies: u32, mut options: BTreeMap<String,String>, config: &ServiceConfig) -> Result<PrintJob,String> {
+    let path = pdf.to_string_lossy().to_string();
+    let info = crate::pdf_service::get_pdf_info_internal(&path).map_err(|e| e.to_string())?;
+    let mut prefix = Vec::new();
+    std::fs::File::open(&path)
+        .map_err(|e| e.to_string())?
+        .take(4096)
+        .read_to_end(&mut prefix)
+        .map_err(|e| e.to_string())?;
+    let copies = device_copies(&prefix, copies, &mut options)?;
+    let settings = settings(
+        copies,
+        &options,
+        (info.page_size.0 as f64, info.page_size.1 as f64),
+    )?;
+    let created =
+        crate::print_service::print_create_job(title, path, config.printer.clone(), settings);
+    let job = created.data.ok_or_else(|| {
+        created
+            .error
+            .unwrap_or("Could not record native print job".into())
+    })?;
+    crate::print_service::attach_native(
+        &job.id,
+        NativePrintInfo {
+            cups_job_id,
+            options,
+        },
+    )?;
+    crate::print_service::print_get_job(job.id).data.ok_or("Native record unavailable".into())
+}
+
 pub fn health(config: &ServiceConfig) -> bool {
     let Ok(mut stream) = TcpStream::connect_timeout(
         &format!("127.0.0.1:{}", config.port).parse().unwrap(),
@@ -448,12 +445,12 @@ pub fn health(config: &ServiceConfig) -> bool {
     wire::line(&mut BufReader::new(stream)).is_ok_and(|line| line == "OK 7265616479")
 }
 fn run() -> Result<(), String> {
-    crate::native_jobs::enter_service();
     let config: ServiceConfig =
         serde_json::from_slice(&std::fs::read(config_path()?).map_err(|e| e.to_string())?)
             .map_err(|e| e.to_string())?;
     let listener = TcpListener::bind(("127.0.0.1", config.port)).map_err(|e| e.to_string())?;
     let engine = std::sync::Arc::new(std::sync::Mutex::new(()));
+
     // The login service owns tracking even when the desktop window is closed.
     let monitor_engine = engine.clone();
     std::thread::spawn(move || loop {

@@ -1,23 +1,25 @@
 {
   "name": "print-soc",
-  "version": "0.375.5",
-  "description": "Connect Codex to NUS School of Computing print queues through Print@SoC.",
+  "version": "0.376.8",
+  "description": "Help agents configure NUS SoC printing, choose printers and track authorized jobs.",
   "author": {
     "name": "Silan Hu"
   },
   "skills": "./skills/",
   "interface": {
     "displayName": "Print@SoC",
-    "shortDescription": "Inspect and submit NUS SoC print jobs.",
-    "longDescription": "Connect to the Print@SoC MCP server to inspect queues and quota, then submit confirmed PDF print jobs through NUS SoC SSH.",
+    "shortDescription": "Set up SoC printing, choose printers and track jobs.",
+    "longDescription": "Use the print-soc skill with the CLI, desktop and MCP to configure system printing, find accessible queues, prepare documents and settings, and track authorized print jobs.",
     "developerName": "Silan Hu",
     "category": "Productivity",
     "capabilities": [
       "MCP server",
-      "Print queue management",
-      "PDF printing"
+      "Printing setup guidance",
+      "Printer selection",
+      "PDF printing",
+      "Job inspection"
     ],
-    "defaultPrompt": "Help me inspect NUS SoC printers or prepare a confirmed PDF print job with Print@SoC."
+    "defaultPrompt": "Use the print-soc skill to set up SoC printing, find an accessible printer and prepare my document and settings before printing."
   },
   "mcpServers": "./.mcp.json"
 }

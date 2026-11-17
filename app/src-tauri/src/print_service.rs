@@ -33,8 +33,8 @@ pub fn save_if_dirty() -> Result<(), String> {
         if let Err(error) = storage_service::save_print_history(&jobs) {
             // A native service/GUI transition won the file lock. Restore the
             // authoritative state so stale mutations cannot poison later jobs.
-            jobs.retain(|_, job| job.native.is_none());
-            crate::native_jobs::merge(&mut jobs)?;
+            jobs.clear();
+            crate::job_store::merge(&mut jobs)?;
             return Err(error);
         }
         HISTORY_DIRTY.store(false, Ordering::SeqCst);
@@ -47,7 +47,7 @@ where
     F: FnOnce(&mut PrintJob),
 {
     let mut jobs = PRINT_JOBS.lock().unwrap();
-    crate::native_jobs::refresh(&mut jobs, job_id)?;
+    crate::job_store::refresh(&mut jobs, job_id)?;
     let job = jobs
         .get_mut(job_id)
         .ok_or_else(|| "Job not found".to_string())?;
@@ -90,16 +90,12 @@ pub fn print_create_job(
     }
     let job_id = Uuid::new_v4().to_string();
 
-    // Backup the PDF file
-    let backup_result = storage_service::backup_pdf_file(&job_id, &file_path);
-    if let Err(e) = &backup_result {
-        eprintln!("[Print] Warning: Failed to backup PDF: {}", e);
-        // Continue anyway, the original file will be used
-    }
-    let durable_file_path = backup_result
-        .as_ref()
-        .map(|path| path.to_string_lossy().to_string())
-        .unwrap_or(file_path);
+    // A prepared job is a durable snapshot: later edits to the source must not
+    // change what the user reviewed or what another process submits.
+    let durable_file_path = match storage_service::backup_pdf_file(&job_id, &file_path) {
+        Ok(path) => path.to_string_lossy().into_owned(),
+        Err(error) => return ApiResponse::error(format!("Cannot retain document for printing: {error}")),
+    };
 
     let job = PrintJob {
         id: job_id.clone(),
@@ -124,7 +120,7 @@ pub fn print_create_job(
 
     // Try to save immediately (non-blocking)
     drop(jobs);
-    let _ = save_if_dirty();
+    if let Err(error) = save_if_dirty() { return ApiResponse::error(error); }
 
     ApiResponse::success(job)
 }
@@ -133,7 +129,7 @@ pub fn print_create_job(
 #[tauri::command]
 pub fn print_get_all_jobs() -> ApiResponse<Vec<PrintJob>> {
     let mut jobs = PRINT_JOBS.lock().unwrap();
-    if let Err(error) = crate::native_jobs::merge(&mut jobs) { return ApiResponse::error(error); }
+    if let Err(error) = crate::job_store::merge(&mut jobs) { return ApiResponse::error(error); }
     let mut all_jobs: Vec<PrintJob> = jobs.values().cloned().collect();
     all_jobs.sort_by(PrintJob::newest_first);
     ApiResponse::success(all_jobs)
@@ -143,7 +139,7 @@ pub fn print_get_all_jobs() -> ApiResponse<Vec<PrintJob>> {
 #[tauri::command]
 pub fn print_get_job(job_id: String) -> ApiResponse<PrintJob> {
     let mut jobs = PRINT_JOBS.lock().unwrap();
-    if let Err(error) = crate::native_jobs::merge(&mut jobs) { return ApiResponse::error(error); }
+    if let Err(error) = crate::job_store::merge(&mut jobs) { return ApiResponse::error(error); }
     match jobs.get(&job_id) {
         Some(job) => ApiResponse::success(job.clone()),
         None => ApiResponse::error("Job not found".to_string()),
@@ -181,7 +177,7 @@ pub async fn print_cancel_job(job_id: String, ssh_config: SSHConfig) -> ApiRespo
 pub(crate) fn print_cancel_job_blocking(job_id: String, ssh_config: SSHConfig) -> ApiResponse<String> {
     let remote_cancel = {
         let mut jobs = PRINT_JOBS.lock().unwrap();
-        if let Err(error) = crate::native_jobs::refresh(&mut jobs, &job_id) { return ApiResponse::error(error); }
+        if let Err(error) = crate::job_store::refresh(&mut jobs, &job_id) { return ApiResponse::error(error); }
         let job = match jobs.get_mut(&job_id) {
             Some(job) => job,
             None => return ApiResponse::error("Job not found".to_string()),
@@ -227,6 +223,7 @@ pub(crate) fn print_cancel_job_blocking(job_id: String, ssh_config: SSHConfig) -
 #[tauri::command]
 pub fn print_link_job_account(job_id: String, ssh_config: SSHConfig) -> ApiResponse<PrintJob> {
     let mut jobs = PRINT_JOBS.lock().unwrap();
+    if let Err(error) = crate::job_store::refresh(&mut jobs, &job_id) { return ApiResponse::error(error); }
     let Some(job) = jobs.get_mut(&job_id) else { return ApiResponse::error("Job not found".into()); };
     if let Err(error) = job.adopt_account(SSHIdentity::from(&ssh_config)) { return ApiResponse::error(error); }
     let result = job.clone();
@@ -243,6 +240,7 @@ pub fn print_link_job_account(job_id: String, ssh_config: SSHConfig) -> ApiRespo
 #[tauri::command]
 pub fn print_resolve_submission(job_id: String, printed: bool) -> ApiResponse<PrintJob> {
     let mut jobs = PRINT_JOBS.lock().unwrap();
+    if let Err(error) = crate::job_store::refresh(&mut jobs, &job_id) { return ApiResponse::error(error); }
     let Some(job) = jobs.get_mut(&job_id) else { return ApiResponse::error("Job not found".into()); };
     if let Err(error) = job.resolve_review(printed) { return ApiResponse::error(error); }
     let result = job.clone();
@@ -258,14 +256,13 @@ pub fn print_resolve_submission(job_id: String, printed: bool) -> ApiResponse<Pr
 #[tauri::command]
 pub fn print_delete_job(job_id: String) -> ApiResponse<String> {
     let mut jobs = PRINT_JOBS.lock().unwrap();
+    if let Err(error) = crate::job_store::refresh(&mut jobs, &job_id) { return ApiResponse::error(error); }
     if jobs.get(&job_id).is_some_and(|job| !job.can_delete()) {
         return ApiResponse::error("Cancel or resolve this active job before deleting its history".into());
     }
     match jobs.remove(&job_id) {
         Some(job) => {
-            if job.native.is_some() {
-                if let Err(error) = crate::native_jobs::delete(&job_id) { jobs.insert(job_id, job); return ApiResponse::error(error); }
-            }
+            if let Err(error) = crate::job_store::delete(&job_id) { jobs.insert(job_id, job); return ApiResponse::error(error); }
             mark_dirty();
             // Clean up backup
             if let Err(e) = storage_service::delete_pdf_backup(&job_id) {
@@ -281,7 +278,7 @@ pub fn print_delete_job(job_id: String) -> ApiResponse<String> {
 
 fn begin_submission(job_id: &str, config: &SSHConfig) -> Result<PrintJob, String> {
     let mut jobs = PRINT_JOBS.lock().map_err(|_| "Print job state unavailable")?;
-    crate::native_jobs::refresh(&mut jobs,job_id)?;
+    crate::job_store::refresh(&mut jobs,job_id)?;
     let job = jobs.get_mut(job_id).ok_or("Job not found")?;
     if !matches!(job.status, PrintJobStatus::Pending | PrintJobStatus::Failed) {
         return Err("This job is already being submitted or has been submitted. Check its queue status before creating another job.".into());
@@ -302,7 +299,7 @@ fn begin_submission(job_id: &str, config: &SSHConfig) -> Result<PrintJob, String
 
 fn advance_stage(job_id: &str, stage: PrintStage) -> Result<(), String> {
     let mut jobs = PRINT_JOBS.lock().map_err(|_| "Job state unavailable")?;
-    crate::native_jobs::refresh(&mut jobs,job_id)?;
+    crate::job_store::refresh(&mut jobs,job_id)?;
     let job = jobs.get_mut(job_id).ok_or("Job not found")?;
     job.transition(stage)?;
     mark_dirty();
@@ -312,14 +309,14 @@ fn advance_stage(job_id: &str, stage: PrintStage) -> Result<(), String> {
 
 fn upload_progress(job_id: &str, sent: u64, total: u64) -> std::io::Result<()> {
     let mut jobs = PRINT_JOBS.lock().map_err(|_| std::io::Error::other("Job state unavailable"))?;
-    crate::native_jobs::refresh(&mut jobs,job_id).map_err(std::io::Error::other)?;
+    crate::job_store::refresh(&mut jobs,job_id).map_err(std::io::Error::other)?;
     let job = jobs.get_mut(job_id).ok_or_else(|| std::io::Error::other("Job not found"))?;
     if job.status == PrintJobStatus::Cancelled { return Err(std::io::Error::other("Upload cancelled")); }
     let previous = job.progress.as_ref().map(|p|p.bytes_sent).unwrap_or(0);
     job.progress = Some(PrintProgress { stage: PrintStage::Uploading, bytes_sent: sent, total_bytes: total });
-    if job.native.is_some() && (sent == total || sent / 262144 != previous / 262144) {
+    if sent == total || sent / 262144 != previous / 262144 {
         job.updated_at=Utc::now();
-        crate::native_jobs::save(job).map_err(std::io::Error::other)?;
+        crate::job_store::save(job).map_err(std::io::Error::other)?;
     }
     Ok(())
 }
@@ -334,16 +331,19 @@ pub async fn print_submit_job(job_id: String, ssh_config: SSHConfig) -> ApiRespo
 }
 
 pub(crate) fn submit_job(job_id: String, ssh_config: SSHConfig) -> ApiResponse<String> {
+    let _lease = match crate::job_store::acquire_submission(&job_id) {
+        Ok(lease) => lease, Err(error) => return ApiResponse::error(error),
+    };
     let job = match begin_submission(&job_id, &ssh_config) {
         Ok(job) => job,
         Err(error) => return ApiResponse::error(error),
     };
 
     let attempt = job.submission.clone().expect("begin_submission creates an attempt");
-    let file_path = job.file_path;
-    let printer_name = job.printer;
-    let settings = job.settings;
-    let native = job.native;
+    let file_path = job.file_path.clone();
+    let printer_name = job.printer.clone();
+    let settings = job.settings.clone();
+    let native = job.native.clone();
 
     // Verify input file exists
     if !std::path::Path::new(&file_path).exists() {
@@ -354,36 +354,26 @@ pub(crate) fn submit_job(job_id: String, ssh_config: SSHConfig) -> ApiResponse<S
 
     eprintln!("[Print] Processing job {} with file: {}", job_id, file_path);
 
-    // Use original file directly - scaling will be done on server
-    let base_file_path = file_path.clone();
-
-    // Apply the selected layout before upload; never silently submit the original on failure.
-    let processed_file_path = if settings.pages_per_sheet > 1 || settings.booklet || !matches!(settings.page_range, PageRange::All) {
-        let output_path = std::env::temp_dir().join(format!("layout_{}.pdf", job_id));
-        let output_str = output_path.to_string_lossy().to_string();
-        if let Err(error) = crate::pdf_service::create_print_layout_cancellable(&base_file_path, &output_str, &settings, || {
-            PRINT_JOBS.lock().map(|jobs| jobs.get(&job_id).is_none_or(|job| job.status == PrintJobStatus::Cancelled)).unwrap_or(true)
+    // Reuse the reviewed artifact exactly. Advanced layouts created without an
+    // agent also publish to this same cache; native spool PDFs are already laid out.
+    let cached = crate::pdf_service::job_layout_path(&job_id).is_ok_and(|path|path.exists());
+    let processed_file_path = if native.is_none() && (cached || settings.pages_per_sheet > 1 || settings.booklet || !matches!(settings.page_range, PageRange::All)) {
+        match crate::pdf_service::retained_layout(&job, || {
+            PRINT_JOBS.lock().map(|jobs|jobs.get(&job_id).is_none_or(|job|job.status == PrintJobStatus::Cancelled)).unwrap_or(true)
         }) {
-            let _ = std::fs::remove_file(&output_path);
-            let message = format!("PDF layout failed: {}", error);
-            fail_job(&job_id, message.clone());
-            return ApiResponse::error(message);
+            Ok(path) => path,
+            Err(error) => { fail_job(&job_id,error.clone()); return ApiResponse::error(error); }
         }
-        output_str
-    } else {
-        base_file_path.clone()
-    };
+    } else { file_path.clone() };
 
     // Generate remote file path using job_id (UUID, always safe)
     let remote_path = format!("/tmp/{}.pdf", attempt.id);
     if let Err(error) = advance_stage(&job_id, PrintStage::Uploading) {
-        if processed_file_path != base_file_path { let _ = std::fs::remove_file(&processed_file_path); }
         return ApiResponse::error(error);
     }
     let upload_result = crate::ssh_service::upload_with_progress(
         &attempt.account, &processed_file_path, &remote_path, &mut |sent, total| upload_progress(&job_id, sent, total),
     );
-    if processed_file_path != base_file_path { let _ = std::fs::remove_file(&processed_file_path); }
     if let Err(error) = upload_result {
         let message = error.to_string();
         fail_job(&job_id, message.clone());
@@ -514,7 +504,7 @@ pub async fn print_check_active_jobs(ssh_config: SSHConfig) -> ApiResponse<Vec<S
 pub(crate) fn print_check_active_jobs_blocking(ssh_config: SSHConfig) -> ApiResponse<Vec<String>> {
     let account = SSHIdentity::from(&ssh_config);
     let mut jobs = PRINT_JOBS.lock().unwrap();
-    if let Err(error) = crate::native_jobs::merge(&mut jobs) { return ApiResponse::error(error); }
+    if let Err(error) = crate::job_store::merge(&mut jobs) { return ApiResponse::error(error); }
     let active: Vec<PrintJob> = jobs.values()
         .filter(|job| matches!(job.status, PrintJobStatus::Queued | PrintJobStatus::Printing))
         .filter(|job| job.submission.as_ref().is_some_and(|attempt| attempt.account == account))

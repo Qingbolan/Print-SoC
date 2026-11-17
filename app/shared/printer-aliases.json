@@ -1,0 +1,13 @@
+{
+  "pstsb": "pstb-dx",
+  "pstsb-dx": "pstb-dx",
+  "pstsb-sx": "pstb-sx",
+  "pstsc": "pstc-dx",
+  "pstsc-dx": "pstc-dx",
+  "pstsc-sx": "pstc-sx",
+  "psc008": "psc008-dx",
+  "psc011": "psc011-dx",
+  "psts": "psts-dx",
+  "pstb": "pstb-dx",
+  "pstc": "pstc-dx"
+}

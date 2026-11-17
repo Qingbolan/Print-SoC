@@ -57,22 +57,37 @@ impl Drop for ConverterProcess {
 /// Give converters a deterministic search path, including their subprocesses.
 pub(crate) fn converter_command(name: &str) -> Command {
     let mut directories: Vec<std::path::PathBuf> = std::env::var_os("PATH")
-        .map(|value| std::env::split_paths(&value).collect()).unwrap_or_default();
+        .map(|value| std::env::split_paths(&value).collect())
+        .unwrap_or_default();
     #[cfg(unix)]
-    for directory in ["/opt/homebrew/bin", "/usr/local/bin", "/Library/TeX/texbin", "/usr/bin", "/bin"] {
+    for directory in [
+        "/opt/homebrew/bin",
+        "/usr/local/bin",
+        "/Library/TeX/texbin",
+        "/usr/bin",
+        "/bin",
+    ] {
         let path = std::path::PathBuf::from(directory);
-        if !directories.contains(&path) { directories.push(path); }
+        if !directories.contains(&path) {
+            directories.push(path);
+        }
     }
-    let executable = directories.iter().map(|dir| dir.join(name)).find(|path| path.is_file())
+    let executable = directories
+        .iter()
+        .map(|dir| dir.join(name))
+        .find(|path| path.is_file())
         .unwrap_or_else(|| name.into());
     let mut command = Command::new(executable);
-    if let Ok(path) = std::env::join_paths(directories) { command.env("PATH", path); }
+    if let Ok(path) = std::env::join_paths(directories) {
+        command.env("PATH", path);
+    }
     command
 }
 
 pub(crate) struct ProcessResult {
     pub status: ExitStatus,
     pub diagnostic: String,
+    pub output: String,
 }
 
 pub(crate) fn run(
@@ -80,13 +95,35 @@ pub(crate) fn run(
     timeout: Duration,
     cancelled: impl Fn() -> bool,
 ) -> Result<ProcessResult, String> {
+    execute(command, timeout, cancelled, false)
+}
+
+/// Capture installer output without allowing it onto the MCP protocol stream.
+pub(crate) fn run_capture(
+    command: &mut Command,
+    timeout: Duration,
+    cancelled: impl Fn() -> bool,
+) -> Result<ProcessResult, String> {
+    execute(command, timeout, cancelled, true)
+}
+fn execute(
+    command: &mut Command,
+    timeout: Duration,
+    cancelled: impl Fn() -> bool,
+    capture: bool,
+) -> Result<ProcessResult, String> {
     if cancelled() {
         return Err("Document preparation cancelled".into());
     }
     let mut diagnostic = tempfile::tempfile().map_err(|e| e.to_string())?;
+    let mut output = tempfile::tempfile().map_err(|e| e.to_string())?;
     command
         .stdin(Stdio::null())
-        .stdout(Stdio::null())
+        .stdout(if capture {
+            Stdio::from(output.try_clone().map_err(|e| e.to_string())?)
+        } else {
+            Stdio::null()
+        })
         .stderr(diagnostic.try_clone().map_err(|e| e.to_string())?);
     let mut process = ConverterProcess::spawn(command).map_err(|e| e.to_string())?;
     let started = Instant::now();
@@ -106,7 +143,14 @@ pub(crate) fn run(
                 .take(64 * 1024)
                 .read_to_end(&mut bytes)
                 .map_err(|e| e.to_string())?;
+            output.seek(SeekFrom::Start(0)).map_err(|e| e.to_string())?;
+            let mut captured = Vec::new();
+            output
+                .take(64 * 1024)
+                .read_to_end(&mut captured)
+                .map_err(|e| e.to_string())?;
             return Ok(ProcessResult {
+                output: String::from_utf8_lossy(&captured).into_owned(),
                 status,
                 diagnostic: String::from_utf8_lossy(&bytes).into_owned(),
             });
@@ -125,6 +169,17 @@ pub(crate) fn run(
 mod tests {
     use super::*;
     #[test]
+    fn capture_keeps_protocol_output_separate_and_bounded() {
+        let result = run_capture(
+            Command::new("sh").args(["-c", "echo plan; echo warning >&2"]),
+            Duration::from_secs(5),
+            || false,
+        )
+        .unwrap();
+        assert_eq!(result.output, "plan\n");
+        assert_eq!(result.diagnostic, "warning\n");
+    }
+    #[test]
     fn noisy_failure_does_not_block_and_diagnostics_are_bounded() {
         let result = run(Command::new("sh").args(["-c", "i=0; while [ $i -lt 10000 ]; do echo 'diagnostic-line' >&2; i=$((i+1)); done; exit 3"]), Duration::from_secs(10), || false).unwrap();
         assert_eq!(result.status.code(), Some(3));
@@ -142,15 +197,27 @@ mod tests {
         let error = run(
             Command::new("sh").args(["-c", &script]),
             Duration::from_secs(10),
-            || std::fs::read_to_string(&ready)
-                .ok().and_then(|value| value.trim().parse::<u32>().ok()).is_some(),
-        ).err().expect("ready descendant must trigger cancellation");
+            || {
+                std::fs::read_to_string(&ready)
+                    .ok()
+                    .and_then(|value| value.trim().parse::<u32>().ok())
+                    .is_some()
+            },
+        )
+        .err()
+        .expect("ready descendant must trigger cancellation");
         assert!(error.contains("cancelled"), "{error}");
-        let pid = std::fs::read_to_string(&ready).unwrap().trim().parse::<i32>().unwrap();
+        let pid = std::fs::read_to_string(&ready)
+            .unwrap()
+            .trim()
+            .parse::<i32>()
+            .unwrap();
         let deadline = Instant::now() + Duration::from_secs(5);
         loop {
-            let output = Command::new("ps").args(["-o", "stat=", "-p", &pid.to_string()])
-                .output().unwrap();
+            let output = Command::new("ps")
+                .args(["-o", "stat=", "-p", &pid.to_string()])
+                .output()
+                .unwrap();
             let state = String::from_utf8_lossy(&output.stdout);
             // A zombie is terminated and awaits the OS reaper.
             if state.trim().is_empty() || state.trim().starts_with('Z') {
@@ -158,7 +225,9 @@ mod tests {
             }
             if Instant::now() >= deadline {
                 // Clean up the fixture even when group termination regresses.
-                unsafe { libc::kill(pid, libc::SIGKILL); }
+                unsafe {
+                    libc::kill(pid, libc::SIGKILL);
+                }
                 panic!("descendant {pid} survived cancellation: {state}");
             }
             std::thread::sleep(Duration::from_millis(10));

@@ -167,6 +167,7 @@ pub fn create_booklet_pdf_internal(
     _output_path: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     create_print_layout(input_path, _output_path, &PrintSettings {
+        color_mode: ColorMode::Auto, scaling: ScalingMode::Fit,
         copies: 1, duplex: DuplexMode::DuplexShortEdge, orientation: Orientation::Landscape,
         page_range: PageRange::All, pages_per_sheet: 2, booklet: true, paper_size: PaperSize::A4,
     })
@@ -174,6 +175,7 @@ pub fn create_booklet_pdf_internal(
 
 pub fn create_nup_pdf_internal(input_path: &str, output_path: &str, pages_per_sheet: u32) -> Result<(), Box<dyn std::error::Error>> {
     create_print_layout(input_path, output_path, &PrintSettings {
+        color_mode: ColorMode::Auto, scaling: ScalingMode::Fit,
         copies: 1, duplex: DuplexMode::Simplex, orientation: Orientation::Portrait,
         page_range: PageRange::All, pages_per_sheet, booklet: false, paper_size: PaperSize::A4,
     })
@@ -193,7 +195,7 @@ fn layout_arguments(settings: &PrintSettings) -> Result<Vec<String>, String> {
         match settings.orientation { Orientation::Portrait => "--no-landscape", Orientation::Landscape => "--landscape" }.into(),
         "--delta".into(), "0pt 0pt".into(), "--offset".into(), "0pt 0pt".into(),
         "--frame".into(), "false".into(), "--scale".into(), "1".into(),
-        "--noautoscale".into(), "false".into(), "--quiet".into(),
+        "--noautoscale".into(), if settings.scaling == ScalingMode::ActualSize { "true" } else { "false" }.into(), "--quiet".into(),
     ])
 }
 
@@ -202,6 +204,28 @@ pub(crate) fn validate_print_settings(settings: &PrintSettings, page_count: u32)
     layout_arguments(settings)?;
     selected_pages(&settings.page_range, page_count)?;
     Ok(())
+}
+
+pub(crate) fn job_layout_path(id: &str) -> Result<std::path::PathBuf,String> {
+    uuid::Uuid::parse_str(id).map_err(|_| "Invalid job ID")?;
+    Ok(crate::storage_service::get_app_data_dir().ok_or("Application data unavailable")?
+        .join("previews").join(format!("{id}.pdf")))
+}
+
+/// Publish a single retained layout used both for agent review and submission.
+pub(crate) fn retained_layout(job: &PrintJob, cancelled: impl Fn() -> bool) -> Result<String,String> {
+    if job.native.is_some() { return Ok(job.file_path.clone()); }
+    let path = job_layout_path(&job.id)?;
+    let directory = path.parent().ok_or("Invalid preview directory")?;
+    std::fs::create_dir_all(directory).map_err(|e|e.to_string())?;
+    if !path.exists() {
+        let temp = tempfile::Builder::new().suffix(".pdf").tempfile_in(directory).map_err(|e|e.to_string())?;
+        create_print_layout_cancellable(&job.file_path, &temp.path().to_string_lossy(), &job.settings, cancelled).map_err(|e|e.to_string())?;
+        temp.persist(&path).map_err(|e|e.to_string())?;
+    }
+    let path = path.to_string_lossy().into_owned();
+    get_pdf_info_internal(&path).map_err(|e|e.to_string())?;
+    Ok(path)
 }
 
 pub fn create_print_layout(input_path: &str, output_path: &str, settings: &PrintSettings) -> Result<(), Box<dyn std::error::Error>> {
@@ -347,6 +371,7 @@ mod preview_tests {
         let output = dir.join("layout.pdf");
         fixture(19).save(&input).unwrap();
         let settings = PrintSettings {
+            color_mode: ColorMode::Auto, scaling: ScalingMode::Fit,
             copies: 1, duplex: DuplexMode::DuplexShortEdge, orientation: Orientation::Landscape,
             page_range: PageRange::All, pages_per_sheet: 9, booklet: false, paper_size: PaperSize::A4,
         };

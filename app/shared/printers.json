@@ -1,0 +1,2482 @@
+[
+  {
+    "id": "psc008-dx",
+    "name": "psc008-dx",
+    "queue_name": "psc008-dx",
+    "location": {
+      "building": "COM1",
+      "room": "Basement (outside Programming Lab 3)",
+      "floor": "B1"
+    },
+    "model": "LEXMARK MS821DN",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psc008",
+    "variant": "dx",
+    "has_banner": true,
+    "access_level": "public"
+  },
+  {
+    "id": "psc008-sx",
+    "name": "psc008-sx",
+    "queue_name": "psc008-sx",
+    "location": {
+      "building": "COM1",
+      "room": "Basement (outside Programming Lab 3)",
+      "floor": "B1"
+    },
+    "model": "LEXMARK MS821DN",
+    "supports_duplex": false,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psc008",
+    "variant": "sx",
+    "has_banner": true,
+    "access_level": "public"
+  },
+  {
+    "id": "psc011-dx",
+    "name": "psc011-dx",
+    "queue_name": "psc011-dx",
+    "location": {
+      "building": "COM1",
+      "room": "Basement",
+      "floor": "B1"
+    },
+    "model": "LEXMARK MS821DN",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psc011",
+    "variant": "dx",
+    "has_banner": true,
+    "access_level": "public"
+  },
+  {
+    "id": "psc011-sx",
+    "name": "psc011-sx",
+    "queue_name": "psc011-sx",
+    "location": {
+      "building": "COM1",
+      "room": "Basement",
+      "floor": "B1"
+    },
+    "model": "LEXMARK MS821DN",
+    "supports_duplex": false,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psc011",
+    "variant": "sx",
+    "has_banner": true,
+    "access_level": "public"
+  },
+  {
+    "id": "psts-dx",
+    "name": "psts-dx",
+    "queue_name": "psts-dx",
+    "location": {
+      "building": "COM1",
+      "room": "Level 1, in front of Tech Services",
+      "floor": "1"
+    },
+    "model": "LEXMARK MS821DN",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psts",
+    "variant": "dx",
+    "has_banner": true,
+    "access_level": "public"
+  },
+  {
+    "id": "psts-sx",
+    "name": "psts-sx",
+    "queue_name": "psts-sx",
+    "location": {
+      "building": "COM1",
+      "room": "Level 1, in front of Tech Services",
+      "floor": "1"
+    },
+    "model": "LEXMARK MS821DN",
+    "supports_duplex": false,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psts",
+    "variant": "sx",
+    "has_banner": true,
+    "access_level": "public"
+  },
+  {
+    "id": "pstb-dx",
+    "name": "pstb-dx",
+    "queue_name": "pstb-dx",
+    "location": {
+      "building": "COM1",
+      "room": "Level 1, in front of Tech Services",
+      "floor": "1"
+    },
+    "model": "LEXMARK MS821DN",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "pstb",
+    "variant": "dx",
+    "has_banner": true,
+    "access_level": "public"
+  },
+  {
+    "id": "pstb-sx",
+    "name": "pstb-sx",
+    "queue_name": "pstb-sx",
+    "location": {
+      "building": "COM1",
+      "room": "Level 1, in front of Tech Services",
+      "floor": "1"
+    },
+    "model": "LEXMARK MS821DN",
+    "supports_duplex": false,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "pstb",
+    "variant": "sx",
+    "has_banner": true,
+    "access_level": "public"
+  },
+  {
+    "id": "pstc-dx",
+    "name": "pstc-dx",
+    "queue_name": "pstc-dx",
+    "location": {
+      "building": "COM1",
+      "room": "Level 1, in front of Tech Services",
+      "floor": "1"
+    },
+    "model": "LEXMARK MS821DN",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "pstc",
+    "variant": "dx",
+    "has_banner": true,
+    "access_level": "public"
+  },
+  {
+    "id": "pstc-sx",
+    "name": "pstc-sx",
+    "queue_name": "pstc-sx",
+    "location": {
+      "building": "COM1",
+      "room": "Level 1, in front of Tech Services",
+      "floor": "1"
+    },
+    "model": "LEXMARK MS821DN",
+    "supports_duplex": false,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "pstc",
+    "variant": "sx",
+    "has_banner": true,
+    "access_level": "public"
+  },
+  {
+    "id": "cptsc-main",
+    "name": "cptsc",
+    "queue_name": "cptsc",
+    "location": {
+      "building": "COM1",
+      "room": "01-06, Technical Services",
+      "floor": "1"
+    },
+    "model": "LEXMARK CS921DE",
+    "supports_duplex": true,
+    "supports_color": true,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "cptsc",
+    "variant": "main",
+    "has_banner": false,
+    "access_level": "public"
+  },
+  {
+    "id": "cptsc-dx",
+    "name": "cptsc-dx",
+    "queue_name": "cptsc-dx",
+    "location": {
+      "building": "COM1",
+      "room": "01-06, Technical Services",
+      "floor": "1"
+    },
+    "model": "LEXMARK CS921DE",
+    "supports_duplex": true,
+    "supports_color": true,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "cptsc",
+    "variant": "dx",
+    "has_banner": false,
+    "access_level": "public"
+  },
+  {
+    "id": "cptsc-a3-main",
+    "name": "cptsc-a3",
+    "queue_name": "cptsc-a3",
+    "location": {
+      "building": "COM1",
+      "room": "01-06, Technical Services",
+      "floor": "1"
+    },
+    "model": "LEXMARK CS921DE",
+    "supports_duplex": true,
+    "supports_color": true,
+    "supported_paper_sizes": [
+      "A3"
+    ],
+    "group_id": "cptsc-a3",
+    "variant": "main",
+    "has_banner": false,
+    "access_level": "public"
+  },
+  {
+    "id": "cptsc-a3-dx",
+    "name": "cptsc-a3-dx",
+    "queue_name": "cptsc-a3-dx",
+    "location": {
+      "building": "COM1",
+      "room": "01-06, Technical Services",
+      "floor": "1"
+    },
+    "model": "LEXMARK CS921DE",
+    "supports_duplex": true,
+    "supports_color": true,
+    "supported_paper_sizes": [
+      "A3"
+    ],
+    "group_id": "cptsc-a3",
+    "variant": "dx",
+    "has_banner": false,
+    "access_level": "public"
+  },
+  {
+    "id": "pse124-main",
+    "name": "pse124",
+    "queue_name": "pse124",
+    "location": {
+      "building": "COM3",
+      "room": "01-24, Printer Room",
+      "floor": "1"
+    },
+    "model": "LEXMARK MS810",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "pse124",
+    "variant": "main",
+    "has_banner": true,
+    "access_level": "public"
+  },
+  {
+    "id": "pse124-sx",
+    "name": "pse124-sx",
+    "queue_name": "pse124-sx",
+    "location": {
+      "building": "COM3",
+      "room": "01-24, Printer Room",
+      "floor": "1"
+    },
+    "model": "LEXMARK MS810",
+    "supports_duplex": false,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "pse124",
+    "variant": "sx",
+    "has_banner": true,
+    "access_level": "public"
+  },
+  {
+    "id": "psf204-main",
+    "name": "psf204",
+    "queue_name": "psf204",
+    "location": {
+      "building": "COM4",
+      "room": "Printer Area (corridor)",
+      "floor": "2"
+    },
+    "model": "LEXMARK MS810",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psf204",
+    "variant": "main",
+    "has_banner": true,
+    "access_level": "public"
+  },
+  {
+    "id": "psf204-sx",
+    "name": "psf204-sx",
+    "queue_name": "psf204-sx",
+    "location": {
+      "building": "COM4",
+      "room": "Printer Area (corridor)",
+      "floor": "2"
+    },
+    "model": "LEXMARK MS810",
+    "supports_duplex": false,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psf204",
+    "variant": "sx",
+    "has_banner": true,
+    "access_level": "public"
+  },
+  {
+    "id": "psc106-main",
+    "name": "psc106",
+    "queue_name": "psc106",
+    "location": {
+      "building": "COM1",
+      "room": "01-06, Technical Services",
+      "floor": "1"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psc106",
+    "variant": "main",
+    "has_banner": true,
+    "access_level": "staff"
+  },
+  {
+    "id": "psc106-sx",
+    "name": "psc106-sx",
+    "queue_name": "psc106-sx",
+    "location": {
+      "building": "COM1",
+      "room": "01-06, Technical Services",
+      "floor": "1"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": false,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psc106",
+    "variant": "sx",
+    "has_banner": true,
+    "access_level": "staff"
+  },
+  {
+    "id": "psc106-nb",
+    "name": "psc106-nb",
+    "queue_name": "psc106-nb",
+    "location": {
+      "building": "COM1",
+      "room": "01-06, Technical Services",
+      "floor": "1"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psc106",
+    "variant": "nb",
+    "has_banner": true,
+    "access_level": "staff"
+  },
+  {
+    "id": "cpc313-main",
+    "name": "cpc313",
+    "queue_name": "cpc313",
+    "location": {
+      "building": "COM1",
+      "room": "03-13, Mail Room",
+      "floor": "3"
+    },
+    "model": "LEXMARK CS521DN",
+    "supports_duplex": true,
+    "supports_color": true,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "cpc313",
+    "variant": "main",
+    "has_banner": false,
+    "access_level": "staff"
+  },
+  {
+    "id": "cpc313-dx",
+    "name": "cpc313-dx",
+    "queue_name": "cpc313-dx",
+    "location": {
+      "building": "COM1",
+      "room": "03-13, Mail Room",
+      "floor": "3"
+    },
+    "model": "LEXMARK CS521DN",
+    "supports_duplex": true,
+    "supports_color": true,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "cpc313",
+    "variant": "dx",
+    "has_banner": false,
+    "access_level": "staff"
+  },
+  {
+    "id": "psc313-main",
+    "name": "psc313",
+    "queue_name": "psc313",
+    "location": {
+      "building": "COM1",
+      "room": "03-13, Mail Room",
+      "floor": "3"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psc313",
+    "variant": "main",
+    "has_banner": true,
+    "access_level": "staff"
+  },
+  {
+    "id": "psc313-sx",
+    "name": "psc313-sx",
+    "queue_name": "psc313-sx",
+    "location": {
+      "building": "COM1",
+      "room": "03-13, Mail Room",
+      "floor": "3"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": false,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psc313",
+    "variant": "sx",
+    "has_banner": true,
+    "access_level": "staff"
+  },
+  {
+    "id": "psc313-nb",
+    "name": "psc313-nb",
+    "queue_name": "psc313-nb",
+    "location": {
+      "building": "COM1",
+      "room": "03-13, Mail Room",
+      "floor": "3"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psc313",
+    "variant": "nb",
+    "has_banner": true,
+    "access_level": "staff"
+  },
+  {
+    "id": "psgob-main",
+    "name": "psgob",
+    "queue_name": "psgob",
+    "location": {
+      "building": "COM1",
+      "room": "03-68, Dean's Office",
+      "floor": "3"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psgob",
+    "variant": "main",
+    "has_banner": true,
+    "access_level": "staff"
+  },
+  {
+    "id": "psgob-sx",
+    "name": "psgob-sx",
+    "queue_name": "psgob-sx",
+    "location": {
+      "building": "COM1",
+      "room": "03-68, Dean's Office",
+      "floor": "3"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": false,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psgob",
+    "variant": "sx",
+    "has_banner": true,
+    "access_level": "staff"
+  },
+  {
+    "id": "psgoc-main",
+    "name": "psgoc",
+    "queue_name": "psgoc",
+    "location": {
+      "building": "COM1",
+      "room": "03-38, Equipment Room",
+      "floor": "3"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psgoc",
+    "variant": "main",
+    "has_banner": true,
+    "access_level": "staff"
+  },
+  {
+    "id": "psgoc-sx",
+    "name": "psgoc-sx",
+    "queue_name": "psgoc-sx",
+    "location": {
+      "building": "COM1",
+      "room": "03-38, Equipment Room",
+      "floor": "3"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": false,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psgoc",
+    "variant": "sx",
+    "has_banner": true,
+    "access_level": "staff"
+  },
+  {
+    "id": "cpgoc-main",
+    "name": "cpgoc",
+    "queue_name": "cpgoc",
+    "location": {
+      "building": "COM1",
+      "room": "03-38, Equipment Room",
+      "floor": "3"
+    },
+    "model": "LEXMARK C950",
+    "supports_duplex": true,
+    "supports_color": true,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "cpgoc",
+    "variant": "main",
+    "has_banner": false,
+    "access_level": "staff"
+  },
+  {
+    "id": "cpgoc-dx",
+    "name": "cpgoc-dx",
+    "queue_name": "cpgoc-dx",
+    "location": {
+      "building": "COM1",
+      "room": "03-38, Equipment Room",
+      "floor": "3"
+    },
+    "model": "LEXMARK C950",
+    "supports_duplex": true,
+    "supports_color": true,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "cpgoc",
+    "variant": "dx",
+    "has_banner": false,
+    "access_level": "staff"
+  },
+  {
+    "id": "cpgoc-a3-main",
+    "name": "cpgoc-a3",
+    "queue_name": "cpgoc-a3",
+    "location": {
+      "building": "COM1",
+      "room": "03-38, Equipment Room",
+      "floor": "3"
+    },
+    "model": "LEXMARK C950",
+    "supports_duplex": true,
+    "supports_color": true,
+    "supported_paper_sizes": [
+      "A3"
+    ],
+    "group_id": "cpgoc-a3",
+    "variant": "main",
+    "has_banner": false,
+    "access_level": "staff"
+  },
+  {
+    "id": "psd238-main",
+    "name": "psd238",
+    "queue_name": "psd238",
+    "location": {
+      "building": "COM2",
+      "room": "02-38, Equipment Room",
+      "floor": "2"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psd238",
+    "variant": "main",
+    "has_banner": true,
+    "access_level": "staff"
+  },
+  {
+    "id": "psd238-sx",
+    "name": "psd238-sx",
+    "queue_name": "psd238-sx",
+    "location": {
+      "building": "COM2",
+      "room": "02-38, Equipment Room",
+      "floor": "2"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": false,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psd238",
+    "variant": "sx",
+    "has_banner": true,
+    "access_level": "staff"
+  },
+  {
+    "id": "psd238-nb",
+    "name": "psd238-nb",
+    "queue_name": "psd238-nb",
+    "location": {
+      "building": "COM2",
+      "room": "02-38, Equipment Room",
+      "floor": "2"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psd238",
+    "variant": "nb",
+    "has_banner": true,
+    "access_level": "staff"
+  },
+  {
+    "id": "psd263-main",
+    "name": "psd263",
+    "queue_name": "psd263",
+    "location": {
+      "building": "COM2",
+      "room": "02-63, Equipment Room",
+      "floor": "2"
+    },
+    "model": "LEXMARK MS821DN",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psd263",
+    "variant": "main",
+    "has_banner": true,
+    "access_level": "staff"
+  },
+  {
+    "id": "psd263-sx",
+    "name": "psd263-sx",
+    "queue_name": "psd263-sx",
+    "location": {
+      "building": "COM2",
+      "room": "02-63, Equipment Room",
+      "floor": "2"
+    },
+    "model": "LEXMARK MS821DN",
+    "supports_duplex": false,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psd263",
+    "variant": "sx",
+    "has_banner": true,
+    "access_level": "staff"
+  },
+  {
+    "id": "psd263-nb",
+    "name": "psd263-nb",
+    "queue_name": "psd263-nb",
+    "location": {
+      "building": "COM2",
+      "room": "02-63, Equipment Room",
+      "floor": "2"
+    },
+    "model": "LEXMARK MS821DN",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psd263",
+    "variant": "nb",
+    "has_banner": true,
+    "access_level": "staff"
+  },
+  {
+    "id": "cpd313-main",
+    "name": "cpd313",
+    "queue_name": "cpd313",
+    "location": {
+      "building": "COM2",
+      "room": "03-13, Equipment Room",
+      "floor": "3"
+    },
+    "model": "LEXMARK C950",
+    "supports_duplex": true,
+    "supports_color": true,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "cpd313",
+    "variant": "main",
+    "has_banner": false,
+    "access_level": "staff"
+  },
+  {
+    "id": "cpd313-dx",
+    "name": "cpd313-dx",
+    "queue_name": "cpd313-dx",
+    "location": {
+      "building": "COM2",
+      "room": "03-13, Equipment Room",
+      "floor": "3"
+    },
+    "model": "LEXMARK C950",
+    "supports_duplex": true,
+    "supports_color": true,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "cpd313",
+    "variant": "dx",
+    "has_banner": false,
+    "access_level": "staff"
+  },
+  {
+    "id": "psd313-main",
+    "name": "psd313",
+    "queue_name": "psd313",
+    "location": {
+      "building": "COM2",
+      "room": "03-13, Equipment Room",
+      "floor": "3"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psd313",
+    "variant": "main",
+    "has_banner": true,
+    "access_level": "staff"
+  },
+  {
+    "id": "psd313-sx",
+    "name": "psd313-sx",
+    "queue_name": "psd313-sx",
+    "location": {
+      "building": "COM2",
+      "room": "03-13, Equipment Room",
+      "floor": "3"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": false,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psd313",
+    "variant": "sx",
+    "has_banner": true,
+    "access_level": "staff"
+  },
+  {
+    "id": "psd313-nb",
+    "name": "psd313-nb",
+    "queue_name": "psd313-nb",
+    "location": {
+      "building": "COM2",
+      "room": "03-13, Equipment Room",
+      "floor": "3"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psd313",
+    "variant": "nb",
+    "has_banner": true,
+    "access_level": "staff"
+  },
+  {
+    "id": "psd405-main",
+    "name": "psd405",
+    "queue_name": "psd405",
+    "location": {
+      "building": "COM2",
+      "room": "04-05, Equipment Room",
+      "floor": "4"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psd405",
+    "variant": "main",
+    "has_banner": true,
+    "access_level": "staff"
+  },
+  {
+    "id": "psd405-sx",
+    "name": "psd405-sx",
+    "queue_name": "psd405-sx",
+    "location": {
+      "building": "COM2",
+      "room": "04-05, Equipment Room",
+      "floor": "4"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": false,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psd405",
+    "variant": "sx",
+    "has_banner": true,
+    "access_level": "staff"
+  },
+  {
+    "id": "psd405-nb",
+    "name": "psd405-nb",
+    "queue_name": "psd405-nb",
+    "location": {
+      "building": "COM2",
+      "room": "04-05, Equipment Room",
+      "floor": "4"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psd405",
+    "variant": "nb",
+    "has_banner": true,
+    "access_level": "staff"
+  },
+  {
+    "id": "pse202-main",
+    "name": "pse202",
+    "queue_name": "pse202",
+    "location": {
+      "building": "COM3",
+      "room": "02-02, Staff Equipment Room",
+      "floor": "2"
+    },
+    "model": "LEXMARK MS821DN",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "pse202",
+    "variant": "main",
+    "has_banner": true,
+    "access_level": "staff"
+  },
+  {
+    "id": "pse202-sx",
+    "name": "pse202-sx",
+    "queue_name": "pse202-sx",
+    "location": {
+      "building": "COM3",
+      "room": "02-02, Staff Equipment Room",
+      "floor": "2"
+    },
+    "model": "LEXMARK MS821DN",
+    "supports_duplex": false,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "pse202",
+    "variant": "sx",
+    "has_banner": true,
+    "access_level": "staff"
+  },
+  {
+    "id": "pse017-main",
+    "name": "pse017",
+    "queue_name": "pse017",
+    "location": {
+      "building": "COM3",
+      "room": "B1-17, Staff Equipment Room",
+      "floor": "B1"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "pse017",
+    "variant": "main",
+    "has_banner": true,
+    "access_level": "staff"
+  },
+  {
+    "id": "pse017-sx",
+    "name": "pse017-sx",
+    "queue_name": "pse017-sx",
+    "location": {
+      "building": "COM3",
+      "room": "B1-17, Staff Equipment Room",
+      "floor": "B1"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": false,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "pse017",
+    "variant": "sx",
+    "has_banner": true,
+    "access_level": "staff"
+  },
+  {
+    "id": "cpa518-main",
+    "name": "cpa518",
+    "queue_name": "cpa518",
+    "location": {
+      "building": "AS6",
+      "room": "05-18, Staff Equipment Room",
+      "floor": "5"
+    },
+    "model": "LEXMARK CS521DN",
+    "supports_duplex": true,
+    "supports_color": true,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "cpa518",
+    "variant": "main",
+    "has_banner": false,
+    "access_level": "staff"
+  },
+  {
+    "id": "cpa518-dx",
+    "name": "cpa518-dx",
+    "queue_name": "cpa518-dx",
+    "location": {
+      "building": "AS6",
+      "room": "05-18, Staff Equipment Room",
+      "floor": "5"
+    },
+    "model": "LEXMARK CS521DN",
+    "supports_duplex": true,
+    "supports_color": true,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "cpa518",
+    "variant": "dx",
+    "has_banner": false,
+    "access_level": "staff"
+  },
+  {
+    "id": "psa427-main",
+    "name": "psa427",
+    "queue_name": "psa427",
+    "location": {
+      "building": "AS6",
+      "room": "04-27, TA Office",
+      "floor": "4"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psa427",
+    "variant": "main",
+    "has_banner": true,
+    "access_level": "staff"
+  },
+  {
+    "id": "psa427-sx",
+    "name": "psa427-sx",
+    "queue_name": "psa427-sx",
+    "location": {
+      "building": "AS6",
+      "room": "04-27, TA Office",
+      "floor": "4"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": false,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psa427",
+    "variant": "sx",
+    "has_banner": true,
+    "access_level": "staff"
+  },
+  {
+    "id": "psa518-main",
+    "name": "psa518",
+    "queue_name": "psa518",
+    "location": {
+      "building": "AS6",
+      "room": "05-18, Staff Equipment Room",
+      "floor": "5"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psa518",
+    "variant": "main",
+    "has_banner": true,
+    "access_level": "staff"
+  },
+  {
+    "id": "psa518-sx",
+    "name": "psa518-sx",
+    "queue_name": "psa518-sx",
+    "location": {
+      "building": "AS6",
+      "room": "05-18, Staff Equipment Room",
+      "floor": "5"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": false,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psa518",
+    "variant": "sx",
+    "has_banner": true,
+    "access_level": "staff"
+  },
+  {
+    "id": "psa518-nb",
+    "name": "psa518-nb",
+    "queue_name": "psa518-nb",
+    "location": {
+      "building": "AS6",
+      "room": "05-18, Staff Equipment Room",
+      "floor": "5"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psa518",
+    "variant": "nb",
+    "has_banner": true,
+    "access_level": "staff"
+  },
+  {
+    "id": "psc245-main",
+    "name": "psc245",
+    "queue_name": "psc245",
+    "location": {
+      "building": "SoC",
+      "room": "Historical queue; location unverified",
+      "floor": "-"
+    },
+    "model": "Unknown",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psc245",
+    "variant": "main",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "psc245-sx",
+    "name": "psc245-sx",
+    "queue_name": "psc245-sx",
+    "location": {
+      "building": "SoC",
+      "room": "Historical queue; location unverified",
+      "floor": "-"
+    },
+    "model": "Unknown",
+    "supports_duplex": false,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psc245",
+    "variant": "sx",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "psc107-main",
+    "name": "psc107",
+    "queue_name": "psc107",
+    "location": {
+      "building": "COM1",
+      "room": "01-07, Database Research Lab 3",
+      "floor": "1"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psc107",
+    "variant": "main",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "psc107-sx",
+    "name": "psc107-sx",
+    "queue_name": "psc107-sx",
+    "location": {
+      "building": "COM1",
+      "room": "01-07, Database Research Lab 3",
+      "floor": "1"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": false,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psc107",
+    "variant": "sx",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "psc108-main",
+    "name": "psc108",
+    "queue_name": "psc108",
+    "location": {
+      "building": "COM1",
+      "room": "01-08, Database Research Lab 1",
+      "floor": "1"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psc108",
+    "variant": "main",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "psc108-sx",
+    "name": "psc108-sx",
+    "queue_name": "psc108-sx",
+    "location": {
+      "building": "COM1",
+      "room": "01-08, Database Research Lab 1",
+      "floor": "1"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": false,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psc108",
+    "variant": "sx",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "psc109-main",
+    "name": "psc109",
+    "queue_name": "psc109",
+    "location": {
+      "building": "COM1",
+      "room": "01-09, AI Research Lab 2",
+      "floor": "1"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psc109",
+    "variant": "main",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "psc109-sx",
+    "name": "psc109-sx",
+    "queue_name": "psc109-sx",
+    "location": {
+      "building": "COM1",
+      "room": "01-09, AI Research Lab 2",
+      "floor": "1"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": false,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psc109",
+    "variant": "sx",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "psc111-main",
+    "name": "psc111",
+    "queue_name": "psc111",
+    "location": {
+      "building": "COM1",
+      "room": "01-11, Database Research Lab 2",
+      "floor": "1"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psc111",
+    "variant": "main",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "psc111-sx",
+    "name": "psc111-sx",
+    "queue_name": "psc111-sx",
+    "location": {
+      "building": "COM1",
+      "room": "01-11, Database Research Lab 2",
+      "floor": "1"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": false,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psc111",
+    "variant": "sx",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "psc113-main",
+    "name": "psc113",
+    "queue_name": "psc113",
+    "location": {
+      "building": "COM1",
+      "room": "01-13, Embedded Systems Teaching Lab 2",
+      "floor": "1"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psc113",
+    "variant": "main",
+    "has_banner": true,
+    "access_level": "restricted"
+  },
+  {
+    "id": "psc113-sx",
+    "name": "psc113-sx",
+    "queue_name": "psc113-sx",
+    "location": {
+      "building": "COM1",
+      "room": "01-13, Embedded Systems Teaching Lab 2",
+      "floor": "1"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": false,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psc113",
+    "variant": "sx",
+    "has_banner": true,
+    "access_level": "restricted"
+  },
+  {
+    "id": "psc115-main",
+    "name": "psc115",
+    "queue_name": "psc115",
+    "location": {
+      "building": "COM1",
+      "room": "01-15, Computational Biology Research Lab 2",
+      "floor": "1"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psc115",
+    "variant": "main",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "psc115-sx",
+    "name": "psc115-sx",
+    "queue_name": "psc115-sx",
+    "location": {
+      "building": "COM1",
+      "room": "01-15, Computational Biology Research Lab 2",
+      "floor": "1"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": false,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psc115",
+    "variant": "sx",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "psc116-main",
+    "name": "psc116",
+    "queue_name": "psc116",
+    "location": {
+      "building": "COM1",
+      "room": "01-16, Systems and Networking Research Lab 1",
+      "floor": "1"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psc116",
+    "variant": "main",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "psc116-sx",
+    "name": "psc116-sx",
+    "queue_name": "psc116-sx",
+    "location": {
+      "building": "COM1",
+      "room": "01-16, Systems and Networking Research Lab 1",
+      "floor": "1"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": false,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psc116",
+    "variant": "sx",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "psc121-main",
+    "name": "psc121",
+    "queue_name": "psc121",
+    "location": {
+      "building": "COM1",
+      "room": "01-21, Computational Biology Research Lab 1",
+      "floor": "1"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psc121",
+    "variant": "main",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "psc121-sx",
+    "name": "psc121-sx",
+    "queue_name": "psc121-sx",
+    "location": {
+      "building": "COM1",
+      "room": "01-21, Computational Biology Research Lab 1",
+      "floor": "1"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": false,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psc121",
+    "variant": "sx",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "psd002-main",
+    "name": "psd002",
+    "queue_name": "psd002",
+    "location": {
+      "building": "COM2",
+      "room": "B1-02, TA/GT Cluster 2",
+      "floor": "B1"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psd002",
+    "variant": "main",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "psd002-sx",
+    "name": "psd002-sx",
+    "queue_name": "psd002-sx",
+    "location": {
+      "building": "COM2",
+      "room": "B1-02, TA/GT Cluster 2",
+      "floor": "B1"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": false,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psd002",
+    "variant": "sx",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "psd003-main",
+    "name": "psd003",
+    "queue_name": "psd003",
+    "location": {
+      "building": "COM2",
+      "room": "B1-03, TA/GT Cluster 3",
+      "floor": "B1"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psd003",
+    "variant": "main",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "psd003-sx",
+    "name": "psd003-sx",
+    "queue_name": "psd003-sx",
+    "location": {
+      "building": "COM2",
+      "room": "B1-03, TA/GT Cluster 3",
+      "floor": "B1"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": false,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psd003",
+    "variant": "sx",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "psd102-main",
+    "name": "psd102",
+    "queue_name": "psd102",
+    "location": {
+      "building": "COM2",
+      "room": "01-02, Media Research Lab 5",
+      "floor": "1"
+    },
+    "model": "LEXMARK MS821DN",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psd102",
+    "variant": "main",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "psd102-sx",
+    "name": "psd102-sx",
+    "queue_name": "psd102-sx",
+    "location": {
+      "building": "COM2",
+      "room": "01-02, Media Research Lab 5",
+      "floor": "1"
+    },
+    "model": "LEXMARK MS821DN",
+    "supports_duplex": false,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psd102",
+    "variant": "sx",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "psd107-main",
+    "name": "psd107",
+    "queue_name": "psd107",
+    "location": {
+      "building": "COM2",
+      "room": "01-07, IS Research Lab 3",
+      "floor": "1"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psd107",
+    "variant": "main",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "psd107-sx",
+    "name": "psd107-sx",
+    "queue_name": "psd107-sx",
+    "location": {
+      "building": "COM2",
+      "room": "01-07, IS Research Lab 3",
+      "floor": "1"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": false,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psd107",
+    "variant": "sx",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "psd404-main",
+    "name": "psd404",
+    "queue_name": "psd404",
+    "location": {
+      "building": "COM2",
+      "room": "04-04, PL & SE Research Lab 2",
+      "floor": "4"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psd404",
+    "variant": "main",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "psd404-sx",
+    "name": "psd404-sx",
+    "queue_name": "psd404-sx",
+    "location": {
+      "building": "COM2",
+      "room": "04-04, PL & SE Research Lab 2",
+      "floor": "4"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": false,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psd404",
+    "variant": "sx",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "pse033-main",
+    "name": "pse033",
+    "queue_name": "pse033",
+    "location": {
+      "building": "COM3",
+      "room": "B1-33, AI Research Lab 2",
+      "floor": "B1"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "pse033",
+    "variant": "main",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "pse033-sx",
+    "name": "pse033-sx",
+    "queue_name": "pse033-sx",
+    "location": {
+      "building": "COM3",
+      "room": "B1-33, AI Research Lab 2",
+      "floor": "B1"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": false,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "pse033",
+    "variant": "sx",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "pse217-main",
+    "name": "pse217",
+    "queue_name": "pse217",
+    "location": {
+      "building": "COM3",
+      "room": "02-17, Systems and Networking Lab",
+      "floor": "2"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "pse217",
+    "variant": "main",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "pse217-sx",
+    "name": "pse217-sx",
+    "queue_name": "pse217-sx",
+    "location": {
+      "building": "COM3",
+      "room": "02-17, Systems and Networking Lab",
+      "floor": "2"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": false,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "pse217",
+    "variant": "sx",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "pse218-main",
+    "name": "pse218",
+    "queue_name": "pse218",
+    "location": {
+      "building": "COM3",
+      "room": "02-18, Security Research Lab 1",
+      "floor": "2"
+    },
+    "model": "LEXMARK MS821DN",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "pse218",
+    "variant": "main",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "pse218-sx",
+    "name": "pse218-sx",
+    "queue_name": "pse218-sx",
+    "location": {
+      "building": "COM3",
+      "room": "02-18, Security Research Lab 1",
+      "floor": "2"
+    },
+    "model": "LEXMARK MS821DN",
+    "supports_duplex": false,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "pse218",
+    "variant": "sx",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "pse220-main",
+    "name": "pse220",
+    "queue_name": "pse220",
+    "location": {
+      "building": "COM3",
+      "room": "02-20, PL & SE Lab",
+      "floor": "2"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "pse220",
+    "variant": "main",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "pse220-sx",
+    "name": "pse220-sx",
+    "queue_name": "pse220-sx",
+    "location": {
+      "building": "COM3",
+      "room": "02-20, PL & SE Lab",
+      "floor": "2"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": false,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "pse220",
+    "variant": "sx",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "pse221-main",
+    "name": "pse221",
+    "queue_name": "pse221",
+    "location": {
+      "building": "COM3",
+      "room": "02-21, AI Research Lab 1",
+      "floor": "2"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "pse221",
+    "variant": "main",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "pse221-sx",
+    "name": "pse221-sx",
+    "queue_name": "pse221-sx",
+    "location": {
+      "building": "COM3",
+      "room": "02-21, AI Research Lab 1",
+      "floor": "2"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": false,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "pse221",
+    "variant": "sx",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "pse265-main",
+    "name": "pse265",
+    "queue_name": "pse265",
+    "location": {
+      "building": "COM3",
+      "room": "02-65, ISA Research Lab 1",
+      "floor": "2"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "pse265",
+    "variant": "main",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "pse265-sx",
+    "name": "pse265-sx",
+    "queue_name": "pse265-sx",
+    "location": {
+      "building": "COM3",
+      "room": "02-65, ISA Research Lab 1",
+      "floor": "2"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": false,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "pse265",
+    "variant": "sx",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "psf501-main",
+    "name": "psf501",
+    "queue_name": "psf501",
+    "location": {
+      "building": "COM4",
+      "room": "05-01, AI Research Lab 3",
+      "floor": "5"
+    },
+    "model": "LEXMARK MS821DN",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psf501",
+    "variant": "main",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "psf501-sx",
+    "name": "psf501-sx",
+    "queue_name": "psf501-sx",
+    "location": {
+      "building": "COM4",
+      "room": "05-01, AI Research Lab 3",
+      "floor": "5"
+    },
+    "model": "LEXMARK MS821DN",
+    "supports_duplex": false,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psf501",
+    "variant": "sx",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "psa403-main",
+    "name": "psa403",
+    "queue_name": "psa403",
+    "location": {
+      "building": "AS6",
+      "room": "04-03, Media Research Lab 2",
+      "floor": "4"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psa403",
+    "variant": "main",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "psa403-sx",
+    "name": "psa403-sx",
+    "queue_name": "psa403-sx",
+    "location": {
+      "building": "AS6",
+      "room": "04-03, Media Research Lab 2",
+      "floor": "4"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": false,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psa403",
+    "variant": "sx",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "psa411-main",
+    "name": "psa411",
+    "queue_name": "psa411",
+    "location": {
+      "building": "AS6",
+      "room": "04-11, Media Research Lab 4B",
+      "floor": "4"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psa411",
+    "variant": "main",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "psa411-sx",
+    "name": "psa411-sx",
+    "queue_name": "psa411-sx",
+    "location": {
+      "building": "AS6",
+      "room": "04-11, Media Research Lab 4B",
+      "floor": "4"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": false,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psa411",
+    "variant": "sx",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "psa413-main",
+    "name": "psa413",
+    "queue_name": "psa413",
+    "location": {
+      "building": "AS6",
+      "room": "04-13, Media Research Lab 1",
+      "floor": "4"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psa413",
+    "variant": "main",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "psa413-sx",
+    "name": "psa413-sx",
+    "queue_name": "psa413-sx",
+    "location": {
+      "building": "AS6",
+      "room": "04-13, Media Research Lab 1",
+      "floor": "4"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": false,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psa413",
+    "variant": "sx",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "psa421-main",
+    "name": "psa421",
+    "queue_name": "psa421",
+    "location": {
+      "building": "AS6",
+      "room": "04-21, Media Teaching Lab 1",
+      "floor": "4"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psa421",
+    "variant": "main",
+    "has_banner": true,
+    "access_level": "restricted"
+  },
+  {
+    "id": "psa421-sx",
+    "name": "psa421-sx",
+    "queue_name": "psa421-sx",
+    "location": {
+      "building": "AS6",
+      "room": "04-21, Media Teaching Lab 1",
+      "floor": "4"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": false,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psa421",
+    "variant": "sx",
+    "has_banner": true,
+    "access_level": "restricted"
+  },
+  {
+    "id": "psa425-main",
+    "name": "psa425",
+    "queue_name": "psa425",
+    "location": {
+      "building": "AS6",
+      "room": "04-25, Systems & Networking Research Lab 9",
+      "floor": "4"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psa425",
+    "variant": "main",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "psa425-sx",
+    "name": "psa425-sx",
+    "queue_name": "psa425-sx",
+    "location": {
+      "building": "AS6",
+      "room": "04-25, Systems & Networking Research Lab 9",
+      "floor": "4"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": false,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psa425",
+    "variant": "sx",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "psa426-main",
+    "name": "psa426",
+    "queue_name": "psa426",
+    "location": {
+      "building": "AS6",
+      "room": "04-26, Media Teaching Lab 2A",
+      "floor": "4"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psa426",
+    "variant": "main",
+    "has_banner": true,
+    "access_level": "restricted"
+  },
+  {
+    "id": "psa426-sx",
+    "name": "psa426-sx",
+    "queue_name": "psa426-sx",
+    "location": {
+      "building": "AS6",
+      "room": "04-26, Media Teaching Lab 2A",
+      "floor": "4"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": false,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psa426",
+    "variant": "sx",
+    "has_banner": true,
+    "access_level": "restricted"
+  },
+  {
+    "id": "psa517-main",
+    "name": "psa517",
+    "queue_name": "psa517",
+    "location": {
+      "building": "AS6",
+      "room": "05-17, Media Research Lab 5",
+      "floor": "5"
+    },
+    "model": "LEXMARK MS821DN",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psa517",
+    "variant": "main",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "psa517-sx",
+    "name": "psa517-sx",
+    "queue_name": "psa517-sx",
+    "location": {
+      "building": "AS6",
+      "room": "05-17, Media Research Lab 5",
+      "floor": "5"
+    },
+    "model": "LEXMARK MS821DN",
+    "supports_duplex": false,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psa517",
+    "variant": "sx",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "psa501-main",
+    "name": "psa501",
+    "queue_name": "psa501",
+    "location": {
+      "building": "AS6",
+      "room": "05-01, Media Research Lab 3",
+      "floor": "5"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psa501",
+    "variant": "main",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "psa501-sx",
+    "name": "psa501-sx",
+    "queue_name": "psa501-sx",
+    "location": {
+      "building": "AS6",
+      "room": "05-01, Media Research Lab 3",
+      "floor": "5"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": false,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psa501",
+    "variant": "sx",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "psa502-main",
+    "name": "psa502",
+    "queue_name": "psa502",
+    "location": {
+      "building": "AS6",
+      "room": "05-02, Media Research Lab 4",
+      "floor": "5"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psa502",
+    "variant": "main",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "psa502-sx",
+    "name": "psa502-sx",
+    "queue_name": "psa502-sx",
+    "location": {
+      "building": "AS6",
+      "room": "05-02, Media Research Lab 4",
+      "floor": "5"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": false,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psa502",
+    "variant": "sx",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "psa521-main",
+    "name": "psa521",
+    "queue_name": "psa521",
+    "location": {
+      "building": "AS6",
+      "room": "05-21, Media Research Lab 6",
+      "floor": "5"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psa521",
+    "variant": "main",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "psa521-sx",
+    "name": "psa521-sx",
+    "queue_name": "psa521-sx",
+    "location": {
+      "building": "AS6",
+      "room": "05-21, Media Research Lab 6",
+      "floor": "5"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": false,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psa521",
+    "variant": "sx",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "psa522-main",
+    "name": "psa522",
+    "queue_name": "psa522",
+    "location": {
+      "building": "AS6",
+      "room": "05-22, Media Research Lab 7",
+      "floor": "5"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psa522",
+    "variant": "main",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "psa522-sx",
+    "name": "psa522-sx",
+    "queue_name": "psa522-sx",
+    "location": {
+      "building": "AS6",
+      "room": "05-22, Media Research Lab 7",
+      "floor": "5"
+    },
+    "model": "LEXMARK MS810DN",
+    "supports_duplex": false,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psa522",
+    "variant": "sx",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "psa525-main",
+    "name": "psa525",
+    "queue_name": "psa525",
+    "location": {
+      "building": "AS6",
+      "room": "05-25, Media Research Lab 8",
+      "floor": "5"
+    },
+    "model": "LEXMARK MS821DN",
+    "supports_duplex": true,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psa525",
+    "variant": "main",
+    "has_banner": false,
+    "access_level": "restricted"
+  },
+  {
+    "id": "psa525-sx",
+    "name": "psa525-sx",
+    "queue_name": "psa525-sx",
+    "location": {
+      "building": "AS6",
+      "room": "05-25, Media Research Lab 8",
+      "floor": "5"
+    },
+    "model": "LEXMARK MS821DN",
+    "supports_duplex": false,
+    "supports_color": false,
+    "supported_paper_sizes": [
+      "A4"
+    ],
+    "group_id": "psa525",
+    "variant": "sx",
+    "has_banner": false,
+    "access_level": "restricted"
+  }
+]

@@ -238,7 +238,7 @@ impl PrintJob {
         tracking.error = Some(error);
     }
 
-    /// Called only when loading persisted jobs, before workers exist. Never
+    /// Called under the cross-process submission lease when no worker owns a job. Never
     /// restart a worker or infer remote rejection from a local interruption.
     pub(crate) fn recover_interrupted(&mut self) -> bool {
         if self.status != Status::Uploading {

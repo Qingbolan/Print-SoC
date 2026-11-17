@@ -18,6 +18,7 @@
 <p align="center">
   <a href="https://github.com/Qingbolan/Print-SoC/releases/latest">Download</a> ·
   <a href="#features">Features</a> ·
+  <a href="#agent-skill-support">Agent skill</a> ·
   <a href="#one-command-system-printer-setup">System printer setup</a> ·
   <a href="#watch-it-in-action">Demo</a> ·
   <a href="#first-print">First print</a> ·
@@ -54,11 +55,13 @@ Now I’m a PhD student, and I still see new students struggling with the same s
 
 - **One-command virtual printer setup:** run `print-soc virtual-printer install` to add Print@SoC to the macOS/Linux system printer list through an interactive Rust wizard. Print from your application's normal Print dialog.
 - **Preview before submission:** import PDFs, images and Office documents, inspect the prepared pages, and review front/back layout with the print settings alongside.
+- **Long-edge and short-edge duplex:** choose how the paper turns, see the binding edge and front/back guide in preview, and keep that choice when printing.
 - **Paper and layout controls:** choose copies, paper size, orientation, duplex binding, n-up or booklet layout. Conversion and advanced-layout dependencies are listed below.
-- **One account across entry points:** desktop and native printing use the shared SoC account and operating-system credential store.
+- **One account across entry points:** desktop, CLI, MCP and native printing use the shared SoC account and operating-system credential store.
 - **Job tracking and history:** inspect desktop and system-originated jobs, see the number of jobs ahead when queue evidence is available, and distinguish queue departure from confirmed paper output.
 - **Guided maintenance:** interactive installation, update checks, download verification, recovery and an uninstall preview with data-retention choices.
 - **CLI and MCP access:** launch and inspect the application from the terminal, or integrate the bundled stdio MCP server with a compatible client.
+- **Agent skill support:** let Codex or Claude Code help set up printing, find an accessible printer, prepare the settings and follow your job. The bundled [print-soc skill](plugins/print-soc/skills/print-soc/SKILL.md) uses CLI, desktop and MCP where available.
 - **Light and dark themes:** use the same document workspace in either appearance, with English and Chinese interface options.
 
 ### One-command system printer setup
@@ -80,6 +83,24 @@ print-soc virtual-printer status
 ```
 
 This is one command to start guided configuration, not a promise of unattended installation without credentials or administrator authorization. The CUPS installer does not provide a Windows system driver. [Full setup and removal guide](docs/usage.md#virtual-printer).
+
+## Agent skill support
+
+You can hand the setup to Codex, Claude Code or another local agent. The
+[print-soc skill](plugins/print-soc/skills/print-soc/SKILL.md) covers finding a
+printer you can access, preparing the file, choosing paper and binding, adding
+the system printer, and following the result. It also covers updates and removal.
+
+**Copy this prompt to your agent:**
+
+> Read https://github.com/Qingbolan/Print-SoC/blob/main/AGENTS.md and use its print-soc skill to set up SoC printing on my computer, find an accessible printer near me, and prepare my document and print settings; show me the preview and selected settings before printing, and let me enter passwords locally.
+
+[Install the skill for Codex or Claude Code](docs/agents.md) · [MCP setup](docs/agents.md#optional-mcp-connection)
+
+Use `$print-soc` in Codex or `/print-soc` in Claude Code once installed. The agent
+needs local access to Print@SoC and your documents; the skill itself does not
+provide credentials or send a test print. Native system-printer setup is available
+on macOS/Linux, while direct desktop printing also supports Windows.
 
 ## Watch it in action
 

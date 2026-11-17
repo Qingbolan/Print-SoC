@@ -84,7 +84,7 @@ mod history_tests {
     fn unordered_history_is_newest_first_with_stable_ties() {
         let job = |id: &str, seconds| PrintJob {
             id: id.into(), name: "test".into(), file_path: "test.pdf".into(), printer: "psts".into(),
-            settings: PrintSettings { copies: 1, duplex: DuplexMode::Simplex, orientation: Orientation::Portrait,
+            settings: PrintSettings { color_mode: ColorMode::Auto, scaling: ScalingMode::Fit, copies: 1, duplex: DuplexMode::Simplex, orientation: Orientation::Portrait,
                 page_range: PageRange::All, pages_per_sheet: 1, booklet: false, paper_size: PaperSize::A4 },
             status: PrintJobStatus::Completed, created_at: DateTime::from_timestamp(seconds, 0).unwrap(),
             updated_at: Utc::now(), error: None, lpq_job_id: None, progress: None, submission: None, native: None, tracking: None,
@@ -108,7 +108,16 @@ pub struct PrintSettings {
     pub pages_per_sheet: u32,
     pub booklet: bool,
     pub paper_size: PaperSize,
+    #[serde(default)]
+    pub color_mode: ColorMode,
+    #[serde(default)]
+    pub scaling: ScalingMode,
 }
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub enum ColorMode { #[default] Auto, Monochrome, Color }
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub enum ScalingMode { #[default] Fit, ActualSize }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum DuplexMode {

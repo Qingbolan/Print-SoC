@@ -1262,6 +1262,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "fs2"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9564fc758e15025b46aa6643b1b77d047d1a56a1aea6e01002ac0c7026876213"
+dependencies = [
+ "libc",
+ "winapi",
+]
+
+[[package]]
 name = "futf"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3334,12 +3344,13 @@ checksum = "925383efa346730478fb4838dbe9137d2a47675ad789c546d150a6e1dd4ab31c"
 
 [[package]]
 name = "print_at_soc"
-version = "0.375.5"
+version = "0.376.8"
 dependencies = [
  "base64 0.22.1",
  "chrono",
  "dialoguer",
  "dirs 5.0.1",
+ "fs2",
  "image",
  "indicatif",
  "keyring",

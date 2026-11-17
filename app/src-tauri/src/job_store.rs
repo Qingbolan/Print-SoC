@@ -1,19 +1,12 @@
-//! Per-job native-service records. Atomic snapshots let the desktop observe a
-//! separate login service without competing for its monolithic history file.
+//! Shared per-job records for desktop, native service and agent processes.
 use crate::types::PrintJob;
+use fs2::FileExt;
 use std::{
     collections::HashMap,
     fs,
     path::{Path, PathBuf},
-    sync::atomic::{AtomicBool, Ordering},
 };
-static SERVICE: AtomicBool = AtomicBool::new(false);
-pub fn service_mode() -> bool {
-    SERVICE.load(Ordering::SeqCst)
-}
-pub fn enter_service() {
-    SERVICE.store(true, Ordering::SeqCst);
-}
+
 fn root() -> Result<PathBuf, String> {
     crate::storage_service::get_app_data_dir()
         .map(|p| p.join("native-jobs"))
@@ -22,7 +15,7 @@ fn root() -> Result<PathBuf, String> {
 fn valid_id(id: &str) -> Result<(), String> {
     uuid::Uuid::parse_str(id)
         .map(|_| ())
-        .map_err(|_| "Invalid native job ID".into())
+        .map_err(|_| "Invalid shared job ID".into())
 }
 pub fn merge(jobs: &mut HashMap<String, PrintJob>) -> Result<(), String> {
     merge_from(&root()?, jobs)
@@ -43,16 +36,14 @@ fn merge_from(root: &Path, jobs: &mut HashMap<String, PrintJob>) -> Result<(), S
             continue;
         }
         let job: PrintJob = serde_json::from_slice(&fs::read(&path).map_err(|e| e.to_string())?)
-            .map_err(|e| format!("Invalid native job record: {e}"))?;
+            .map_err(|e| format!("Invalid shared job record: {e}"))?;
         valid_id(&job.id)?;
         if root.join(format!("{}.deleted", job.id)).exists() {
             jobs.remove(&job.id);
             continue;
         }
-        if job.native.is_none()
-            || path.file_stem().and_then(|s| s.to_str()) != Some(job.id.as_str())
-        {
-            return Err("Invalid native job ownership".into());
+        if path.file_stem().and_then(|s| s.to_str()) != Some(job.id.as_str()) {
+            return Err("Invalid shared job ownership".into());
         }
         if jobs
             .get(&job.id)
@@ -76,16 +67,11 @@ fn save_to(root: &Path, job: &PrintJob) -> Result<(), String> {
         .write(true)
         .open(root.join(".lock"))
         .map_err(|e| e.to_string())?;
-    #[cfg(unix)]
-    {
-        use std::os::fd::AsRawFd;
-        if unsafe { libc::flock(lock.as_raw_fd(), libc::LOCK_EX) } != 0 {
-            return Err("Cannot lock native job store".into());
-        }
-    }
+    lock.lock_exclusive()
+        .map_err(|e| format!("Cannot lock job store: {e}"))?;
     if root.join(format!("{}.deleted", job.id)).exists() {
         if job.status == crate::types::PrintJobStatus::Uploading {
-            return Err("Native job was deleted".into());
+            return Err("Job was deleted".into());
         }
         return Ok(());
     }
@@ -102,7 +88,7 @@ fn save_to(root: &Path, job: &PrintJob) -> Result<(), String> {
         if previous.status == crate::types::PrintJobStatus::Cancelled
             && job.status != previous.status
         {
-            return Err("Native job was cancelled".into());
+            return Err("Job was cancelled".into());
         }
         if job.status == crate::types::PrintJobStatus::Cancelled
             && matches!(
@@ -133,20 +119,15 @@ pub fn delete(id: &str) -> Result<(), String> {
         .write(true)
         .open(root.join(".lock"))
         .map_err(|e| e.to_string())?;
-    #[cfg(unix)]
-    {
-        use std::os::fd::AsRawFd;
-        if unsafe { libc::flock(lock.as_raw_fd(), libc::LOCK_EX) } != 0 {
-            return Err("Cannot lock native job store".into());
-        }
-    }
+    lock.lock_exclusive()
+        .map_err(|e| format!("Cannot lock job store: {e}"))?;
     let path = root.join(format!("{id}.json"));
     if path.exists() {
         let latest: PrintJob = serde_json::from_slice(&fs::read(&path).map_err(|e| e.to_string())?)
             .map_err(|e| e.to_string())?;
         if !latest.can_delete() {
             return Err(
-                "Cancel or resolve this active native job before deleting its history".into(),
+                "Cancel or resolve this active shared job before deleting its history".into(),
             );
         }
     }
@@ -159,13 +140,10 @@ pub fn delete(id: &str) -> Result<(), String> {
 }
 
 pub fn refresh(jobs: &mut HashMap<String, PrintJob>, id: &str) -> Result<(), String> {
-    if jobs.get(id).is_none_or(|job| job.native.is_none()) {
-        return Ok(());
-    }
     valid_id(id)?;
     let root = root()?;
     if root.join(format!("{id}.deleted")).exists() {
-        return Err("Native job was deleted".into());
+        return Err("Job was deleted".into());
     }
     let path = root.join(format!("{id}.json"));
     if !path.exists() {
@@ -242,10 +220,52 @@ mod tests {
         assert!(save_to(root.path(), &cancelled).is_err());
     }
     #[test]
+    fn ordinary_jobs_are_shared_and_submission_leases_exclude_other_workers() {
+        let root = tempfile::tempdir().unwrap();
+        let mut job = job();
+        job.native = None;
+        save_to(root.path(), &job).unwrap();
+        let mut peer = HashMap::new();
+        merge_from(root.path(), &mut peer).unwrap();
+        assert!(peer[&job.id].native.is_none());
+        let lease = acquire_submission_at(root.path(), &job.id).unwrap();
+        assert!(acquire_submission_at(root.path(), &job.id).is_err());
+        drop(lease);
+        assert!(acquire_submission_at(root.path(), &job.id).is_ok());
+    }
+    #[test]
     fn record_ids_cannot_escape_the_job_directory() {
         let root = tempfile::tempdir().unwrap();
         let mut job = job();
         job.id = "../outside".into();
         assert!(save_to(root.path(), &job).is_err());
     }
+}
+
+/// Hold this lease for the entire submission. Other processes may observe it,
+/// but cannot submit the same job or recover a live worker as interrupted.
+pub fn acquire_submission(id: &str) -> Result<SubmissionLease, String> {
+    valid_id(id)?;
+    acquire_submission_at(&root()?, id)
+}
+fn acquire_submission_at(root: &Path, id: &str) -> Result<SubmissionLease, String> {
+    fs::create_dir_all(&root).map_err(|e| e.to_string())?;
+    let lease = fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(root.join(format!("{id}.worker")))
+        .map_err(|e| e.to_string())?;
+    lease
+        .try_lock_exclusive()
+        .map_err(|_| "This job already has an active submission worker")?;
+    Ok(SubmissionLease(lease))
+}
+
+/// Explicit unlock prevents a concurrently forked converter from extending a
+/// completed worker's lease until its inherited descriptor reaches exec/exit.
+pub struct SubmissionLease(fs::File);
+impl Drop for SubmissionLease {
+    fn drop(&mut self) { let _ = FileExt::unlock(&self.0); }
 }

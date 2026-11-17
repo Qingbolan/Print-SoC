@@ -2,6 +2,7 @@ import { useI18n } from '@/lib/i18n'
 import { JobProgress } from './JobProgress'
 import { jobStatusLabel } from '@/lib/job-progress'
 import { DUPLEX_LABELS } from '@/lib/print-settings'
+import { DuplexBindingGuide } from '@/components/preview/DuplexBindingGuide'
 import { useState, useEffect, useRef } from 'react'
 import { Document, Page, pdfjs } from 'react-pdf'
 import {
@@ -149,6 +150,7 @@ export function JobDetailDialog({ job, open, onOpenChange }: JobDetailDialogProp
           </div>
         </DialogHeader>
 
+        <DuplexBindingGuide duplex={settings.duplex} orientation={settings.orientation} />
         {job.native && <div className="border-b border-border px-6 py-3 text-sm">
           <p className="font-medium">System printer · CUPS #{job.native.cups_job_id}</p>
           <p className="text-muted-foreground">This preview is the PDF rendered by your system print dialog. Page selection, rotation and pages per sheet have already been applied.</p>

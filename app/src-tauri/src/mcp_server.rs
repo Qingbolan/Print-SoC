@@ -135,11 +135,11 @@ fn initialize_result(params: &Value) -> Value {
 }
 
 fn tool_definitions() -> Vec<Value> {
-    vec![
+    let mut tools = vec![
         json!({
             "name": "connect_ssh",
             "title": "Connect to SoC SSH",
-            "description": "Connect to a NUS SoC SSH server and keep a persistent session for subsequent print tools. Credentials may be supplied as arguments or via PSOC_SSH_* environment variables.",
+            "description": "Connect to a NUS SoC SSH server and keep a persistent session for subsequent print tools. Empty arguments use the saved desktop account through the OS credential store. Explicit credentials or PSOC_SSH_* variables select another session.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -287,7 +287,13 @@ fn tool_definitions() -> Vec<Value> {
                 "required": ["file_path", "printer", "confirm"]
             }
         }),
-    ]
+    ];
+    if let Some(tool) = tools.iter_mut().find(|t| t["name"] == "submit_pdf_print_job") {
+        let properties = tool["inputSchema"]["properties"].as_object_mut().unwrap();
+        properties.extend(crate::agent_service::settings_schema());
+    }
+    tools.extend(crate::agent_service::tool_definitions());
+    tools
 }
 
 fn handle_tool_call(params: &Value) -> Result<Value, (i64, String)> {
@@ -306,15 +312,16 @@ fn handle_tool_call(params: &Value) -> Result<Value, (i64, String)> {
         )),
         "list_print_queues" => Ok(api_tool_result(
             "queues",
-            ssh_service::ssh_list_print_queues(empty_ssh_config()),
+            ssh_service::ssh_list_print_queues(ssh_service::ssh_current_config().unwrap_or_else(empty_ssh_config)),
         )),
         "check_print_quota" => Ok(api_tool_result(
             "quota",
-            ssh_service::ssh_get_print_quota(empty_ssh_config()),
+            ssh_service::ssh_get_print_quota(ssh_service::ssh_current_config().unwrap_or_else(empty_ssh_config)),
         )),
         "check_printer_queue" => Ok(check_printer_queue_tool(arguments)),
         "submit_pdf_print_job" => Ok(submit_pdf_print_job_tool(arguments)),
-        _ => Err((-32602, format!("Unknown tool: {}", name))),
+        _ => crate::agent_service::call(name, arguments).map(Ok)
+            .unwrap_or_else(|| Err((-32602, format!("Unknown tool: {}", name)))) ,
     }
 }
 
@@ -333,7 +340,7 @@ fn check_printer_queue_tool(arguments: &Value) -> Value {
 
     api_tool_result(
         "jobs",
-        ssh_service::ssh_check_printer_queue(empty_ssh_config(), printer),
+        ssh_service::ssh_check_printer_queue(ssh_service::ssh_current_config().unwrap_or_else(empty_ssh_config), printer),
     )
 }
 
@@ -399,6 +406,16 @@ fn submit_pdf_print_job_tool(arguments: &Value) -> Value {
 }
 
 fn build_ssh_config(arguments: &Value) -> Result<SSHConfig, String> {
+    let explicit = ["server", "host", "port", "username", "auth_type", "password", "key_path", "passphrase"]
+        .iter().any(|key| arguments.get(*key).is_some());
+    let environment = std::env::vars_os().any(|(key, _)| key.to_string_lossy().starts_with("PSOC_SSH_"));
+    if !explicit && !environment {
+        let saved = crate::account_service::account_current(None);
+        if !saved.success { return Err(saved.error.unwrap_or_default()); }
+        if let Some(config) = saved.data.flatten() { return Ok(config); }
+        return Err("Save your account in desktop Settings first, or supply explicit SSH authentication.".into());
+    }
+
     let server = optional_string(arguments, "server").or_else(|| env_string("PSOC_SSH_SERVER"));
     let host = optional_string(arguments, "host")
         .or_else(|| env_string("PSOC_SSH_HOST"))
@@ -461,18 +478,30 @@ fn build_ssh_config(arguments: &Value) -> Result<SSHConfig, String> {
     })
 }
 
-fn build_print_settings(arguments: &Value) -> Result<PrintSettings, String> {
+pub(crate) fn build_print_settings(arguments: &Value) -> Result<PrintSettings, String> {
     let pages_per_sheet = u32_arg(arguments, "pages_per_sheet", 1, 1, 16)?;
+    if ![1,2,4,6,9].contains(&pages_per_sheet) { return Err("pages_per_sheet must be 1, 2, 4, 6 or 9".into()); }
     let booklet = bool_arg(arguments, "booklet", false)?;
     if pages_per_sheet > 1 && booklet {
         return Err("booklet cannot be combined with pages_per_sheet > 1".to_string());
     }
 
     Ok(PrintSettings {
+        color_mode: match optional_string(arguments, "color_mode").as_deref().unwrap_or("auto") {
+            "auto" => ColorMode::Auto, "monochrome" => ColorMode::Monochrome, "color" => ColorMode::Color,
+            _ => return Err("Invalid color_mode".into()),
+        },
+        scaling: match optional_string(arguments, "scaling").as_deref().unwrap_or("fit") {
+            "fit" => ScalingMode::Fit, "actual_size" => ScalingMode::ActualSize,
+            _ => return Err("Invalid scaling".into()),
+        },
         copies: u32_arg(arguments, "copies", 1, 1, 99)?,
         duplex: parse_duplex(arguments)?,
         orientation: parse_orientation(arguments)?,
-        page_range: PageRange::All,
+        page_range: match arguments.get("page_range") {
+            Some(value) => serde_json::from_value(value.clone()).map_err(|e| format!("Invalid page_range: {e}"))?,
+            None => PageRange::All,
+        },
         pages_per_sheet,
         booklet,
         paper_size: parse_paper_size(arguments)?,
@@ -513,7 +542,7 @@ fn parse_paper_size(arguments: &Value) -> Result<PaperSize, String> {
     }
 }
 
-fn api_tool_result<T: Serialize>(key: &str, response: ApiResponse<T>) -> Value {
+pub(crate) fn api_tool_result<T: Serialize>(key: &str, response: ApiResponse<T>) -> Value {
     if response.success {
         let data = response
             .data
@@ -529,7 +558,7 @@ fn api_tool_result<T: Serialize>(key: &str, response: ApiResponse<T>) -> Value {
     }
 }
 
-fn structured_tool_result(structured: Value) -> Value {
+pub(crate) fn structured_tool_result(structured: Value) -> Value {
     let text = serde_json::to_string_pretty(&structured).unwrap_or_else(|_| "{}".to_string());
     json!({
         "content": [
@@ -543,7 +572,7 @@ fn structured_tool_result(structured: Value) -> Value {
     })
 }
 
-fn tool_error(message: impl Into<String>) -> Value {
+pub(crate) fn tool_error(message: impl Into<String>) -> Value {
     json!({
         "content": [
             {
@@ -555,7 +584,7 @@ fn tool_error(message: impl Into<String>) -> Value {
     })
 }
 
-fn required_string(arguments: &Value, key: &str) -> Result<String, String> {
+pub(crate) fn required_string(arguments: &Value, key: &str) -> Result<String, String> {
     optional_string(arguments, key)
         .ok_or_else(|| format!("Missing required string argument: {}", key))
 }
@@ -586,7 +615,7 @@ fn optional_port(arguments: &Value) -> Result<Option<u16>, String> {
     }
 }
 
-fn bool_arg(arguments: &Value, key: &str, default: bool) -> Result<bool, String> {
+pub(crate) fn bool_arg(arguments: &Value, key: &str, default: bool) -> Result<bool, String> {
     match arguments.get(key) {
         None | Some(Value::Null) => Ok(default),
         Some(Value::Bool(value)) => Ok(*value),

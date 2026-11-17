@@ -4,7 +4,7 @@ A Python wrapper for Print@SoC desktop application.
 Smart Printing for NUS SoC
 """
 
-__version__ = "0.375.5"
+__version__ = "0.376.8"
 __author__ = "Silan Hu"
 __email__ = "silan.hu@u.nus.edu"
 

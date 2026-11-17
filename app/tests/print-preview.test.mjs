@@ -59,3 +59,17 @@ test('booklet pads blanks and pairs outside-in across odd lengths and selections
     assert.equal(backRotation(expected, orientation, axis), 0)
   }
 })
+
+test('duplex preview marks the physical edge on front and back in every orientation', () => {
+  for (const [orientation, mode, front, back] of [
+    ['Portrait', 'DuplexLongEdge', 'left', 'right'],
+    ['Portrait', 'DuplexShortEdge', 'top', 'bottom'],
+    ['Landscape', 'DuplexLongEdge', 'top', 'bottom'],
+    ['Landscape', 'DuplexShortEdge', 'left', 'right'],
+  ]) {
+    assert.equal(exports.bindingEdge(mode, orientation, false), front)
+    assert.equal(exports.bindingEdge(mode, orientation, true), back)
+  }
+  assert.equal(exports.bindingEdge('Simplex', 'Portrait'), null)
+  assert.equal(exports.bindingEdge('Simplex', 'Landscape', true), null)
+})

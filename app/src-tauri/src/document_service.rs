@@ -25,9 +25,9 @@ const MAX_SOURCE_BYTES: u64 = 128 * 1024 * 1024;
 
 #[derive(Serialize)]
 pub struct PreparedDocument {
-    path: String,
-    name: String,
-    info: PDFInfo,
+    pub path: String,
+    pub name: String,
+    pub info: PDFInfo,
 }
 
 #[tauri::command]
@@ -62,7 +62,7 @@ pub async fn document_prepare(file_path: String) -> ApiResponse<PreparedDocument
     }
 }
 
-fn prepare(source: &Path) -> Result<PreparedDocument, String> {
+pub(crate) fn prepare(source: &Path) -> Result<PreparedDocument, String> {
     let cache = get_app_data_dir()
         .ok_or("Application data directory unavailable")?
         .join("imports");

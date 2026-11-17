@@ -41,3 +41,11 @@ export function makeBookletSheets(pages: number[]) {
 export function duplexForTurn(turn: TurnAxis, orientation: PrintSettings['orientation']): DuplexMode {
   return (turn === 'vertical') === (orientation === 'Portrait') ? 'DuplexLongEdge' : 'DuplexShortEdge'
 }
+
+/** The same physical binding appears on the opposite edge after turning over. */
+export function bindingEdge(duplex: DuplexMode, orientation: PrintSettings['orientation'], back = false): 'left' | 'right' | 'top' | 'bottom' | null {
+  if (duplex === 'Simplex') return null
+  return bindingAxis(duplex, orientation) === 'vertical'
+    ? (back ? 'right' : 'left')
+    : (back ? 'bottom' : 'top')
+}

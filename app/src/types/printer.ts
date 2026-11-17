@@ -46,6 +46,8 @@ export interface PrintSettings {
   pages_per_sheet: number
   booklet: boolean
   paper_size: PaperSize
+  color_mode?: 'Auto' | 'Monochrome' | 'Color'
+  scaling?: 'Fit' | 'ActualSize'
 }
 
 export type DuplexMode = 'Simplex' | 'DuplexLongEdge' | 'DuplexShortEdge'

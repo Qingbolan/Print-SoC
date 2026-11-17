@@ -2,7 +2,8 @@ import { requireReadyDocument, type QueuedDocument } from '@/lib/document-state'
 import { JobProgress } from '@/components/jobs/JobProgress'
 import { useNativeFileDrop } from '@/hooks/useNativeFileDrop'
 import { PdfSheet } from '@/components/preview/PdfSheet'
-import { makeSheets, makeBookletSheets, duplexForTurn, bindingAxis, backRotation, type TurnAxis } from '@/lib/print-preview'
+import { DuplexBindingGuide } from '@/components/preview/DuplexBindingGuide'
+import { makeSheets, makeBookletSheets, duplexForTurn, bindingAxis, bindingEdge, backRotation, type TurnAxis } from '@/lib/print-preview'
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useNavigate, useLocation, useParams } from 'react-router-dom'
 import { usePrinterStore } from '@/store/printer-store'
@@ -33,6 +34,7 @@ import {
   ZoomIn,
   ZoomOut,
   FlipHorizontal,
+  FlipVertical,
   FileSearch,
   RotateCcw,
   ArrowLeft,
@@ -202,6 +204,7 @@ export default function ModernPreviewPage() {
   const pagesOnCurrentSheet = currentPhysicalSheet
     ? (viewingBack ? currentPhysicalSheet.back : currentPhysicalSheet.front) : []
   const selectedBindingAxis = bindingAxis(settings.duplex, settings.orientation)
+  const visibleBindingEdge = bindingEdge(settings.duplex, settings.orientation, viewingBack)
   useEffect(() => { setTurnAxis(selectedBindingAxis) }, [selectedBindingAxis])
 
   // Get paper dimensions (width/height ratio)
@@ -788,7 +791,7 @@ export default function ModernPreviewPage() {
                         size="sm"
                         className="h-8 px-3 gap-2"
                       >
-                        <FlipHorizontal className="w-4 h-4" />
+                        {selectedBindingAxis === 'vertical' ? <FlipHorizontal className="w-4 h-4" /> : <FlipVertical className="w-4 h-4" />}
                         <span className="text-xs">{viewingBack ? 'Show front' : 'Show back'}</span>
                       </Button>
                     </div>
@@ -846,6 +849,7 @@ export default function ModernPreviewPage() {
                 </div>
               </div>
 
+              <DuplexBindingGuide duplex={settings.duplex} orientation={settings.orientation} />
               {settings.duplex !== 'Simplex' && (
                 <div className="flex flex-wrap items-center gap-2 px-4 py-2 text-xs text-muted-foreground">
                   <label htmlFor="preview-turn">Turn the paper</label>
@@ -857,7 +861,7 @@ export default function ModernPreviewPage() {
                     <option value="vertical">Left to right (book)</option>
                     <option value="horizontal">Top to bottom (calendar)</option>
                   </select>
-                  <span>{viewingBack ? 'Back' : 'Front'} · Binding: {selectedBindingAxis === 'vertical' ? 'left / right edge' : 'top / bottom edge'}</span>
+                  <span>{viewingBack ? 'Back' : 'Front'} · Binding: {visibleBindingEdge} edge</span>
                   {viewingBack && pagesOnCurrentSheet.length === 0 && <span>Blank back — nothing will be printed here</span>}
                   {viewingBack && backRotation(settings.duplex, settings.orientation, turnAxis) === 180 && <span>Back is upside down with this turning direction.</span>}
                 </div>
@@ -899,9 +903,12 @@ export default function ModernPreviewPage() {
                       rotation={viewingBack ? backRotation(settings.duplex, settings.orientation, turnAxis) : 0}
                     />
                     {settings.duplex !== 'Simplex' && (
-                      <div aria-hidden="true" className={selectedBindingAxis === 'vertical'
-                        ? 'pointer-events-none absolute inset-y-0 -left-1 border-l-2 border-primary'
-                        : 'pointer-events-none absolute inset-x-0 -top-1 border-t-2 border-primary'} />
+                      <div aria-hidden="true" className={cn('pointer-events-none absolute border-primary', {
+                        'inset-y-0 -left-1 border-l-2': visibleBindingEdge === 'left',
+                        'inset-y-0 -right-1 border-r-2': visibleBindingEdge === 'right',
+                        'inset-x-0 -top-1 border-t-2': visibleBindingEdge === 'top',
+                        'inset-x-0 -bottom-1 border-b-2': visibleBindingEdge === 'bottom',
+                      })} />
                     )}
                   </div>
                 ) : (

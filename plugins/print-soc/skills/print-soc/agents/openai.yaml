@@ -1,0 +1,4 @@
+interface:
+  display_name: "Print@SoC"
+  short_description: "Set up SoC printing, choose a printer and track jobs"
+  default_prompt: "Use $print-soc to set up printing, find a suitable accessible SoC printer, and prepare my document and settings for review before printing."

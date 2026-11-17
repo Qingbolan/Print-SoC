@@ -1,5 +1,5 @@
 mod native_wire;
-mod native_jobs;
+mod job_store;
 mod native_service;
 mod native_install;
 mod account_service;
@@ -8,6 +8,8 @@ mod credential_service;
 mod document_service;
 mod integration_service;
 mod mcp_server;
+mod agent_service;
+mod printer_catalog;
 mod pdf_service;
 mod process_service;
 mod print_service;

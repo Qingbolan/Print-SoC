@@ -44,87 +44,72 @@ pub fn ensure_directories() -> Result<(), String> {
     Ok(())
 }
 
-/// Load print history from JSON file
+/// Import the previous history once, then read the shared cross-process store.
 pub fn load_print_history() -> Result<HashMap<String, PrintJob>, String> {
-    let history_path =
-        get_history_file_path().ok_or_else(|| "Failed to get history file path".to_string())?;
-
-    if crate::native_jobs::service_mode() {
-        let mut jobs = HashMap::new();
-        crate::native_jobs::merge(&mut jobs)?;
-        for job in jobs.values_mut() { if job.recover_interrupted() { crate::native_jobs::save(job)?; } }
-        return Ok(jobs);
+    use fs2::FileExt;
+    ensure_directories()?;
+    let history_path = get_history_file_path().ok_or("History directory unavailable")?;
+    let migration = fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(history_path.with_extension("migration.lock"))
+        .map_err(|e| e.to_string())?;
+    migration.lock_exclusive().map_err(|e| e.to_string())?;
+    if history_path.exists() {
+        let content = fs::read_to_string(&history_path).map_err(|e| e.to_string())?;
+        let jobs: Vec<PrintJob> = if content.trim().is_empty() {
+            Vec::new()
+        } else {
+            serde_json::from_str(&content).map_err(|e| format!("Invalid legacy history: {e}"))?
+        };
+        // Never recover or advance timestamps while importing: a live service
+        // may already have a newer record or a deletion tombstone.
+        for job in jobs {
+            crate::job_store::save(&job)?;
+        }
+        fs::rename(&history_path, history_path.with_extension("migrated.json"))
+            .map_err(|e| e.to_string())?;
     }
-    if !history_path.exists() {
-        eprintln!("[Storage] History file does not exist, returning empty history");
-        return Ok(HashMap::new());
-    }
-
-    let content = fs::read_to_string(&history_path)
-        .map_err(|e| format!("Failed to read history file: {}", e))?;
-
-    if content.trim().is_empty() {
-        return Ok(HashMap::new());
-    }
-
-    let jobs: Vec<PrintJob> = serde_json::from_str(&content)
-        .map_err(|e| format!("Failed to parse history JSON: {}", e))?;
-
-    let mut map = HashMap::new();
-    let mut recovered = 0;
-    for mut job in jobs {
-        if job.recover_interrupted() { recovered += 1; }
+    drop(migration);
+    let mut jobs = HashMap::new();
+    crate::job_store::merge(&mut jobs)?;
+    for id in jobs.keys().cloned().collect::<Vec<_>>() {
+        // An active worker owns recovery. Refresh after acquiring its lease to
+        // avoid recovering a stale snapshot of a job that just finished.
+        let Ok(_lease) = crate::job_store::acquire_submission(&id) else {
+            continue;
+        };
+        if crate::job_store::refresh(&mut jobs, &id).is_err() {
+            jobs.remove(&id);
+            continue;
+        }
+        let Some(job) = jobs.get_mut(&id) else {
+            continue;
+        };
+        let mut changed = job.recover_interrupted();
         if !Path::new(&job.file_path).exists() {
-            if let Some(backup_path) = get_backup_file_path(&job.id) {
-                job.file_path = backup_path.to_string_lossy().to_string();
-                recovered += 1;
+            if let Some(path) = get_backup_file_path(&id) {
+                job.file_path = path.to_string_lossy().into_owned();
+                job.updated_at = chrono::Utc::now();
+                changed = true;
             }
         }
-        map.insert(job.id.clone(), job);
-    }
-
-    eprintln!("[Storage] Loaded {} print jobs from history", map.len());
-    if recovered > 0 {
-        eprintln!(
-            "[Storage] Recovered {} missing source files from local backups",
-            recovered
-        );
-        if let Err(error) = save_print_history(&map) {
-            eprintln!(
-                "[Storage] Warning: Failed to persist recovered paths: {}",
-                error
-            );
+        if changed {
+            crate::job_store::save(job)?;
         }
     }
-    Ok(map)
+    Ok(jobs)
 }
 
 /// Save print history to JSON file (atomic write)
 pub fn save_print_history(jobs: &HashMap<String, PrintJob>) -> Result<(), String> {
     ensure_directories()?;
 
-    let history_path =
-        get_history_file_path().ok_or_else(|| "Failed to get history file path".to_string())?;
-
-    // Convert HashMap to Vec for serialization
-    for job in jobs.values().filter(|job| job.native.is_some()) { crate::native_jobs::save(job)?; }
-    if crate::native_jobs::service_mode() { return Ok(()); }
-    let mut jobs_vec: Vec<&PrintJob> = jobs.values().filter(|job| job.native.is_none()).collect();
-    jobs_vec.sort_by(|a, b| PrintJob::newest_first(a, b));
-
-    let content = serde_json::to_string_pretty(&jobs_vec)
-        .map_err(|e| format!("Failed to serialize history: {}", e))?;
-
-    // Atomic write: write to temp file first, then rename
-    let temp_path = history_path.with_extension("json.tmp");
-
-    fs::write(&temp_path, &content)
-        .map_err(|e| format!("Failed to write temp history file: {}", e))?;
-
-    fs::rename(&temp_path, &history_path)
-        .map_err(|e| format!("Failed to rename history file: {}", e))?;
-
-    eprintln!("[Storage] Saved {} print jobs to history", jobs.len());
+    for job in jobs.values() {
+        crate::job_store::save(job)?;
+    }
     Ok(())
 }
 
@@ -152,6 +137,8 @@ pub fn backup_pdf_file(job_id: &str, source_path: &str) -> Result<PathBuf, Strin
 
 /// Delete PDF backup for a job
 pub fn delete_pdf_backup(job_id: &str) -> Result<(), String> {
+    let preview = crate::pdf_service::job_layout_path(job_id)?;
+    if preview.exists() { fs::remove_file(preview).map_err(|e|e.to_string())?; }
     let backups_dir =
         get_backups_dir().ok_or_else(|| "Failed to get backups directory path".to_string())?;
 
@@ -202,8 +189,8 @@ pub fn get_storage_info() -> Result<StorageInfo, String> {
     let backups_dir =
         get_backups_dir().ok_or_else(|| "Failed to get backups directory".to_string())?;
 
-    let history_size = get_dir_size(&history_dir);
-    let backups_size = get_dir_size(&backups_dir);
+    let history_size = get_dir_size(&history_dir) + get_dir_size(&data_dir.join("native-jobs"));
+    let backups_size = get_dir_size(&backups_dir) + get_dir_size(&data_dir.join("previews"));
     let total_size = history_size + backups_size + get_dir_size(&data_dir.join("imports"));
 
     // Count backup files
@@ -240,7 +227,9 @@ pub fn cleanup_old_history(jobs: &mut HashMap<String, PrintJob>, days: i64) -> V
         ) || job.created_at > cutoff;
 
         if !keep {
-            if job.native.is_some() && crate::native_jobs::delete(id).is_err() { return true; }
+            if crate::job_store::delete(id).is_err() {
+                return true;
+            }
             removed_ids.push(id.clone());
             // Clean up backup
             let _ = delete_pdf_backup(id);
