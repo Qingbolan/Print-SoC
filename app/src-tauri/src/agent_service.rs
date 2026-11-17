@@ -138,10 +138,8 @@ pub fn call(name: &str, args: &Value) -> Option<Value> {
                     args,
                     "file_path",
                 )?))?;
-                let requested = required_string(args, "printer")?;
+                let printer = required_string(args, "printer")?;
                 let settings = build_print_settings(args)?;
-                let printer = crate::ssh_service::queue_for_duplex_mode(&requested, matches!(settings.duplex, DuplexMode::Simplex));
-                crate::printer_catalog::validate_destination(&printer, &settings)?;
                 let job = unwrap_response(crate::print_service::print_create_job(
                     doc.name, doc.path, printer, settings,
                 ))?;

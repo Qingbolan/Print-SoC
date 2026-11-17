@@ -331,6 +331,7 @@ pub fn install(args: &[String]) -> Result<(), String> {
         )?;
         options.duplex = ["DuplexNoTumble", "DuplexTumble", "None"][selected].into();
     }
+    options.printer = crate::ssh_service::queue_for_duplex_mode(&options.printer, options.duplex == "None")?;
     println!("Local queue: {}\nRemote queue: {}\nDefaults: {} / {}\nNo document is printed during setup.",options.name,options.printer,options.paper,options.duplex);
     if options.dry {
         println!("Preview complete. No service, printer or credentials were changed.");

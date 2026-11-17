@@ -1,0 +1,542 @@
+{
+  "cpa518": {
+    "duplex": "cpa518-dx",
+    "simplex": "cpa518"
+  },
+  "cpa518-dx": {
+    "duplex": "cpa518-dx",
+    "simplex": "cpa518"
+  },
+  "cpc313": {
+    "duplex": "cpc313-dx",
+    "simplex": "cpc313"
+  },
+  "cpc313-dx": {
+    "duplex": "cpc313-dx",
+    "simplex": "cpc313"
+  },
+  "cpd313": {
+    "duplex": "cpd313-dx",
+    "simplex": "cpd313"
+  },
+  "cpd313-dx": {
+    "duplex": "cpd313-dx",
+    "simplex": "cpd313"
+  },
+  "cpgoc": {
+    "duplex": "cpgoc-dx",
+    "simplex": "cpgoc"
+  },
+  "cpgoc-a3": {
+    "duplex": "cpgoc-a3",
+    "simplex": "cpgoc-a3"
+  },
+  "cpgoc-dx": {
+    "duplex": "cpgoc-dx",
+    "simplex": "cpgoc"
+  },
+  "cptsc": {
+    "duplex": "cptsc-dx",
+    "simplex": "cptsc"
+  },
+  "cptsc-a3": {
+    "duplex": "cptsc-a3-dx",
+    "simplex": "cptsc-a3"
+  },
+  "cptsc-a3-dx": {
+    "duplex": "cptsc-a3-dx",
+    "simplex": "cptsc-a3"
+  },
+  "cptsc-dx": {
+    "duplex": "cptsc-dx",
+    "simplex": "cptsc"
+  },
+  "psa403": {
+    "duplex": "psa403",
+    "simplex": "psa403-sx"
+  },
+  "psa403-sx": {
+    "duplex": "psa403",
+    "simplex": "psa403-sx"
+  },
+  "psa411": {
+    "duplex": "psa411",
+    "simplex": "psa411-sx"
+  },
+  "psa411-sx": {
+    "duplex": "psa411",
+    "simplex": "psa411-sx"
+  },
+  "psa413": {
+    "duplex": "psa413",
+    "simplex": "psa413-sx"
+  },
+  "psa413-sx": {
+    "duplex": "psa413",
+    "simplex": "psa413-sx"
+  },
+  "psa421": {
+    "duplex": "psa421",
+    "simplex": "psa421-sx"
+  },
+  "psa421-sx": {
+    "duplex": "psa421",
+    "simplex": "psa421-sx"
+  },
+  "psa425": {
+    "duplex": "psa425",
+    "simplex": "psa425-sx"
+  },
+  "psa425-sx": {
+    "duplex": "psa425",
+    "simplex": "psa425-sx"
+  },
+  "psa426": {
+    "duplex": "psa426",
+    "simplex": "psa426-sx"
+  },
+  "psa426-sx": {
+    "duplex": "psa426",
+    "simplex": "psa426-sx"
+  },
+  "psa427": {
+    "duplex": "psa427",
+    "simplex": "psa427-sx"
+  },
+  "psa427-sx": {
+    "duplex": "psa427",
+    "simplex": "psa427-sx"
+  },
+  "psa501": {
+    "duplex": "psa501",
+    "simplex": "psa501-sx"
+  },
+  "psa501-sx": {
+    "duplex": "psa501",
+    "simplex": "psa501-sx"
+  },
+  "psa502": {
+    "duplex": "psa502",
+    "simplex": "psa502-sx"
+  },
+  "psa502-sx": {
+    "duplex": "psa502",
+    "simplex": "psa502-sx"
+  },
+  "psa517": {
+    "duplex": "psa517",
+    "simplex": "psa517-sx"
+  },
+  "psa517-sx": {
+    "duplex": "psa517",
+    "simplex": "psa517-sx"
+  },
+  "psa518": {
+    "duplex": "psa518",
+    "simplex": "psa518-sx"
+  },
+  "psa518-nb": {
+    "duplex": "psa518-nb",
+    "simplex": "psa518-nb"
+  },
+  "psa518-sx": {
+    "duplex": "psa518",
+    "simplex": "psa518-sx"
+  },
+  "psa521": {
+    "duplex": "psa521",
+    "simplex": "psa521-sx"
+  },
+  "psa521-sx": {
+    "duplex": "psa521",
+    "simplex": "psa521-sx"
+  },
+  "psa522": {
+    "duplex": "psa522",
+    "simplex": "psa522-sx"
+  },
+  "psa522-sx": {
+    "duplex": "psa522",
+    "simplex": "psa522-sx"
+  },
+  "psa525": {
+    "duplex": "psa525",
+    "simplex": "psa525-sx"
+  },
+  "psa525-sx": {
+    "duplex": "psa525",
+    "simplex": "psa525-sx"
+  },
+  "psc008": {
+    "duplex": "psc008-dx",
+    "simplex": "psc008-sx"
+  },
+  "psc008-dx": {
+    "duplex": "psc008-dx",
+    "simplex": "psc008-sx"
+  },
+  "psc008-sx": {
+    "duplex": "psc008-dx",
+    "simplex": "psc008-sx"
+  },
+  "psc011": {
+    "duplex": "psc011-dx",
+    "simplex": "psc011-sx"
+  },
+  "psc011-dx": {
+    "duplex": "psc011-dx",
+    "simplex": "psc011-sx"
+  },
+  "psc011-sx": {
+    "duplex": "psc011-dx",
+    "simplex": "psc011-sx"
+  },
+  "psc106": {
+    "duplex": "psc106",
+    "simplex": "psc106-sx"
+  },
+  "psc106-nb": {
+    "duplex": "psc106-nb",
+    "simplex": "psc106-nb"
+  },
+  "psc106-sx": {
+    "duplex": "psc106",
+    "simplex": "psc106-sx"
+  },
+  "psc107": {
+    "duplex": "psc107",
+    "simplex": "psc107-sx"
+  },
+  "psc107-sx": {
+    "duplex": "psc107",
+    "simplex": "psc107-sx"
+  },
+  "psc108": {
+    "duplex": "psc108",
+    "simplex": "psc108-sx"
+  },
+  "psc108-sx": {
+    "duplex": "psc108",
+    "simplex": "psc108-sx"
+  },
+  "psc109": {
+    "duplex": "psc109",
+    "simplex": "psc109-sx"
+  },
+  "psc109-sx": {
+    "duplex": "psc109",
+    "simplex": "psc109-sx"
+  },
+  "psc111": {
+    "duplex": "psc111",
+    "simplex": "psc111-sx"
+  },
+  "psc111-sx": {
+    "duplex": "psc111",
+    "simplex": "psc111-sx"
+  },
+  "psc113": {
+    "duplex": "psc113",
+    "simplex": "psc113-sx"
+  },
+  "psc113-sx": {
+    "duplex": "psc113",
+    "simplex": "psc113-sx"
+  },
+  "psc115": {
+    "duplex": "psc115",
+    "simplex": "psc115-sx"
+  },
+  "psc115-sx": {
+    "duplex": "psc115",
+    "simplex": "psc115-sx"
+  },
+  "psc116": {
+    "duplex": "psc116",
+    "simplex": "psc116-sx"
+  },
+  "psc116-sx": {
+    "duplex": "psc116",
+    "simplex": "psc116-sx"
+  },
+  "psc121": {
+    "duplex": "psc121",
+    "simplex": "psc121-sx"
+  },
+  "psc121-sx": {
+    "duplex": "psc121",
+    "simplex": "psc121-sx"
+  },
+  "psc245": {
+    "duplex": "psc245",
+    "simplex": "psc245-sx"
+  },
+  "psc245-sx": {
+    "duplex": "psc245",
+    "simplex": "psc245-sx"
+  },
+  "psc313": {
+    "duplex": "psc313",
+    "simplex": "psc313-sx"
+  },
+  "psc313-nb": {
+    "duplex": "psc313-nb",
+    "simplex": "psc313-nb"
+  },
+  "psc313-sx": {
+    "duplex": "psc313",
+    "simplex": "psc313-sx"
+  },
+  "psd002": {
+    "duplex": "psd002",
+    "simplex": "psd002-sx"
+  },
+  "psd002-sx": {
+    "duplex": "psd002",
+    "simplex": "psd002-sx"
+  },
+  "psd003": {
+    "duplex": "psd003",
+    "simplex": "psd003-sx"
+  },
+  "psd003-sx": {
+    "duplex": "psd003",
+    "simplex": "psd003-sx"
+  },
+  "psd102": {
+    "duplex": "psd102",
+    "simplex": "psd102-sx"
+  },
+  "psd102-sx": {
+    "duplex": "psd102",
+    "simplex": "psd102-sx"
+  },
+  "psd107": {
+    "duplex": "psd107",
+    "simplex": "psd107-sx"
+  },
+  "psd107-sx": {
+    "duplex": "psd107",
+    "simplex": "psd107-sx"
+  },
+  "psd238": {
+    "duplex": "psd238",
+    "simplex": "psd238-sx"
+  },
+  "psd238-nb": {
+    "duplex": "psd238-nb",
+    "simplex": "psd238-nb"
+  },
+  "psd238-sx": {
+    "duplex": "psd238",
+    "simplex": "psd238-sx"
+  },
+  "psd263": {
+    "duplex": "psd263",
+    "simplex": "psd263-sx"
+  },
+  "psd263-nb": {
+    "duplex": "psd263-nb",
+    "simplex": "psd263-nb"
+  },
+  "psd263-sx": {
+    "duplex": "psd263",
+    "simplex": "psd263-sx"
+  },
+  "psd313": {
+    "duplex": "psd313",
+    "simplex": "psd313-sx"
+  },
+  "psd313-nb": {
+    "duplex": "psd313-nb",
+    "simplex": "psd313-nb"
+  },
+  "psd313-sx": {
+    "duplex": "psd313",
+    "simplex": "psd313-sx"
+  },
+  "psd404": {
+    "duplex": "psd404",
+    "simplex": "psd404-sx"
+  },
+  "psd404-sx": {
+    "duplex": "psd404",
+    "simplex": "psd404-sx"
+  },
+  "psd405": {
+    "duplex": "psd405",
+    "simplex": "psd405-sx"
+  },
+  "psd405-nb": {
+    "duplex": "psd405-nb",
+    "simplex": "psd405-nb"
+  },
+  "psd405-sx": {
+    "duplex": "psd405",
+    "simplex": "psd405-sx"
+  },
+  "pse017": {
+    "duplex": "pse017",
+    "simplex": "pse017-sx"
+  },
+  "pse017-sx": {
+    "duplex": "pse017",
+    "simplex": "pse017-sx"
+  },
+  "pse033": {
+    "duplex": "pse033",
+    "simplex": "pse033-sx"
+  },
+  "pse033-sx": {
+    "duplex": "pse033",
+    "simplex": "pse033-sx"
+  },
+  "pse124": {
+    "duplex": "pse124",
+    "simplex": "pse124-sx"
+  },
+  "pse124-sx": {
+    "duplex": "pse124",
+    "simplex": "pse124-sx"
+  },
+  "pse202": {
+    "duplex": "pse202",
+    "simplex": "pse202-sx"
+  },
+  "pse202-sx": {
+    "duplex": "pse202",
+    "simplex": "pse202-sx"
+  },
+  "pse217": {
+    "duplex": "pse217",
+    "simplex": "pse217-sx"
+  },
+  "pse217-sx": {
+    "duplex": "pse217",
+    "simplex": "pse217-sx"
+  },
+  "pse218": {
+    "duplex": "pse218",
+    "simplex": "pse218-sx"
+  },
+  "pse218-sx": {
+    "duplex": "pse218",
+    "simplex": "pse218-sx"
+  },
+  "pse220": {
+    "duplex": "pse220",
+    "simplex": "pse220-sx"
+  },
+  "pse220-sx": {
+    "duplex": "pse220",
+    "simplex": "pse220-sx"
+  },
+  "pse221": {
+    "duplex": "pse221",
+    "simplex": "pse221-sx"
+  },
+  "pse221-sx": {
+    "duplex": "pse221",
+    "simplex": "pse221-sx"
+  },
+  "pse265": {
+    "duplex": "pse265",
+    "simplex": "pse265-sx"
+  },
+  "pse265-sx": {
+    "duplex": "pse265",
+    "simplex": "pse265-sx"
+  },
+  "psf204": {
+    "duplex": "psf204",
+    "simplex": "psf204-sx"
+  },
+  "psf204-sx": {
+    "duplex": "psf204",
+    "simplex": "psf204-sx"
+  },
+  "psf501": {
+    "duplex": "psf501",
+    "simplex": "psf501-sx"
+  },
+  "psf501-sx": {
+    "duplex": "psf501",
+    "simplex": "psf501-sx"
+  },
+  "psgob": {
+    "duplex": "psgob",
+    "simplex": "psgob-sx"
+  },
+  "psgob-sx": {
+    "duplex": "psgob",
+    "simplex": "psgob-sx"
+  },
+  "psgoc": {
+    "duplex": "psgoc",
+    "simplex": "psgoc-sx"
+  },
+  "psgoc-sx": {
+    "duplex": "psgoc",
+    "simplex": "psgoc-sx"
+  },
+  "pstb": {
+    "duplex": "pstb-dx",
+    "simplex": "pstb-sx"
+  },
+  "pstb-dx": {
+    "duplex": "pstb-dx",
+    "simplex": "pstb-sx"
+  },
+  "pstb-sx": {
+    "duplex": "pstb-dx",
+    "simplex": "pstb-sx"
+  },
+  "pstc": {
+    "duplex": "pstc-dx",
+    "simplex": "pstc-sx"
+  },
+  "pstc-dx": {
+    "duplex": "pstc-dx",
+    "simplex": "pstc-sx"
+  },
+  "pstc-sx": {
+    "duplex": "pstc-dx",
+    "simplex": "pstc-sx"
+  },
+  "psts": {
+    "duplex": "psts-dx",
+    "simplex": "psts-sx"
+  },
+  "psts-dx": {
+    "duplex": "psts-dx",
+    "simplex": "psts-sx"
+  },
+  "psts-sx": {
+    "duplex": "psts-dx",
+    "simplex": "psts-sx"
+  },
+  "pstsb": {
+    "duplex": "pstb-dx",
+    "simplex": "pstb-sx"
+  },
+  "pstsb-dx": {
+    "duplex": "pstb-dx",
+    "simplex": "pstb-sx"
+  },
+  "pstsb-sx": {
+    "duplex": "pstb-dx",
+    "simplex": "pstb-sx"
+  },
+  "pstsc": {
+    "duplex": "pstc-dx",
+    "simplex": "pstc-sx"
+  },
+  "pstsc-dx": {
+    "duplex": "pstc-dx",
+    "simplex": "pstc-sx"
+  },
+  "pstsc-sx": {
+    "duplex": "pstc-dx",
+    "simplex": "pstc-sx"
+  }
+}

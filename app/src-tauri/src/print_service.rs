@@ -88,6 +88,10 @@ pub fn print_create_job(
     if let Err(error) = crate::ssh_service::validate_print_queue_name(&printer) {
         return ApiResponse::error(error);
     }
+    let printer = match crate::ssh_service::queue_for_duplex_mode(&printer, matches!(settings.duplex, DuplexMode::Simplex)) {
+        Ok(queue) => queue, Err(error) => return ApiResponse::error(error),
+    };
+    if let Err(error) = crate::printer_catalog::validate_destination(&printer,&settings) { return ApiResponse::error(error); }
     let job_id = Uuid::new_v4().to_string();
 
     // A prepared job is a durable snapshot: later edits to the source must not
@@ -285,7 +289,7 @@ fn begin_submission(job_id: &str, config: &SSHConfig) -> Result<PrintJob, String
     }
     job.submission = Some(SubmissionAttempt { id: Uuid::new_v4().to_string(), account: SSHIdentity::from(config) });
     job.status = PrintJobStatus::Uploading;
-    job.printer = crate::ssh_service::queue_for_duplex_mode(&job.printer, matches!(job.settings.duplex, DuplexMode::Simplex));
+    job.printer = crate::ssh_service::queue_for_duplex_mode(&job.printer, matches!(job.settings.duplex, DuplexMode::Simplex))?;
     job.progress = Some(PrintProgress { stage: PrintStage::Preparing, bytes_sent: 0, total_bytes: 0 });
     job.error = None;
     job.lpq_job_id = None;

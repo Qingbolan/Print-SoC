@@ -197,31 +197,14 @@ def _normalize_duplex(value: str) -> str:
 
 def adjusted_queue_for_duplex(queue: str, duplex: str) -> str:
     validate_queue_name(queue)
-    legacy_aliases = {
-        "pstsb": "pstb",
-        "pstsb-dx": "pstb-dx",
-        "pstsb-sx": "pstb-sx",
-        "pstsc": "pstc",
-        "pstsc-dx": "pstc-dx",
-        "pstsc-sx": "pstc-sx",
-    }
-    queue = legacy_aliases.get(queue, queue)
-    duplex = _normalize_duplex(duplex)
-
-    def replace_suffix(target: str, suffix: str) -> str:
-        if target.endswith("-sx") or target.endswith("-dx"):
-            return f"{target[:-3]}-{suffix}"
-        return f"{target}-{suffix}"
-
-    if duplex == "simplex":
-        if queue.endswith("-nb"):
-            return queue
-        return replace_suffix(queue, "sx")
-    if queue.endswith("-sx") or queue.endswith("-dx"):
-        return replace_suffix(queue, "dx")
-    if queue in {"psc008", "psc011", "psts", "pstb", "pstc"}:
-        return f"{queue}-dx"
-    return queue
+    mode = 'simplex' if _normalize_duplex(duplex) == 'simplex' else 'duplex'
+    routes = json.loads(Path(__file__).with_name('queue-routing.json').read_text())
+    if queue not in routes:
+        return queue
+    target = routes[queue][mode]
+    if target is None:
+        raise RuntimeError(f'Queue {queue} has no matching {mode} destination')
+    return str(target)
 
 
 def parse_cups_options(options: str) -> Dict[str, str]:

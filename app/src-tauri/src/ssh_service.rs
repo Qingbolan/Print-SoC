@@ -487,7 +487,7 @@ fn build_lpr_command(
 }
 
 fn build_lpr_command_with_options(printer:&str,file_path:&str,settings:&PrintSettings,options:&[(String,String)]) -> Result<String,String> {
-    let queue = queue_for_duplex_mode(printer, matches!(settings.duplex, DuplexMode::Simplex));
+    let queue = queue_for_duplex_mode(printer, matches!(settings.duplex, DuplexMode::Simplex))?;
     validate_print_queue_name(&queue)?;
     let sides = match settings.duplex {
         DuplexMode::Simplex => "one-sided",
@@ -702,52 +702,15 @@ pub(crate) fn upload_with_progress(
     })
 }
 
-fn normalize_legacy_public_queue(queue: &str) -> String {
-    match queue {
-        "pstsb" => "pstb".to_string(),
-        "pstsb-dx" => "pstb-dx".to_string(),
-        "pstsb-sx" => "pstb-sx".to_string(),
-        "pstsc" => "pstc".to_string(),
-        "pstsc-dx" => "pstc-dx".to_string(),
-        "pstsc-sx" => "pstc-sx".to_string(),
-        _ => queue.to_string(),
+/// Rust and the Python CLI consume the same generated queue-routing table.
+/// Unknown queues keep their exact name: never invent an unadvertised suffix.
+pub(crate) fn queue_for_duplex_mode(queue: &str, simplex: bool) -> Result<String,String> {
+    let routes: serde_json::Value = serde_json::from_str(include_str!("../../../release/python-pip/print_at_soc/queue-routing.json")).expect("bundled queue routes");
+    match routes.get(queue) {
+        None => Ok(queue.into()),
+        Some(route) => route[if simplex { "simplex" } else { "duplex" }].as_str()
+            .map(str::to_owned).ok_or_else(||format!("Queue {queue} has no matching {} destination",if simplex {"single-sided"} else {"two-sided"})),
     }
-}
-
-fn is_socprint_public_base_queue(queue: &str) -> bool {
-    matches!(queue, "psc008" | "psc011" | "psts" | "pstb" | "pstc")
-}
-
-fn replace_queue_suffix(queue: &str, suffix: &str) -> String {
-    if let Some(base) = queue.strip_suffix("-sx") {
-        format!("{}-{}", base, suffix)
-    } else if let Some(base) = queue.strip_suffix("-dx") {
-        format!("{}-{}", base, suffix)
-    } else {
-        format!("{}-{}", queue, suffix)
-    }
-}
-
-pub(crate) fn queue_for_duplex_mode(queue: &str, simplex: bool) -> String {
-    let normalized = normalize_legacy_public_queue(queue);
-
-    if normalized.ends_with("-nb") {
-        return normalized;
-    }
-
-    if simplex {
-        return replace_queue_suffix(&normalized, "sx");
-    }
-
-    if normalized.ends_with("-sx") || normalized.ends_with("-dx") {
-        return replace_queue_suffix(&normalized, "dx");
-    }
-
-    if is_socprint_public_base_queue(&normalized) {
-        return format!("{}-dx", normalized);
-    }
-
-    normalized
 }
 
 pub(crate) fn validate_print_queue_name(queue: &str) -> Result<(), String> {
@@ -1008,12 +971,12 @@ Queue: no printable jobs in queue
 
     #[test]
     fn normalizes_socprint_public_queue_suffixes() {
-        assert_eq!(queue_for_duplex_mode("psts", false), "psts-dx");
-        assert_eq!(queue_for_duplex_mode("psts-sx", false), "psts-dx");
-        assert_eq!(queue_for_duplex_mode("psts-dx", true), "psts-sx");
-        assert_eq!(queue_for_duplex_mode("psc008", true), "psc008-sx");
-        assert_eq!(queue_for_duplex_mode("pstsb", false), "pstb-dx");
-        assert_eq!(queue_for_duplex_mode("pstsc-sx", false), "pstc-dx");
+        assert_eq!(queue_for_duplex_mode("psts", false).unwrap(), "psts-dx");
+        assert_eq!(queue_for_duplex_mode("psts-sx", false).unwrap(), "psts-dx");
+        assert_eq!(queue_for_duplex_mode("psts-dx", true).unwrap(), "psts-sx");
+        assert_eq!(queue_for_duplex_mode("psc008", true).unwrap(), "psc008-sx");
+        assert_eq!(queue_for_duplex_mode("pstsb", false).unwrap(), "pstb-dx");
+        assert_eq!(queue_for_duplex_mode("pstsc-sx", false).unwrap(), "pstc-dx");
     }
 
     fn duplex_test_settings(duplex: DuplexMode, orientation: Orientation) -> PrintSettings {
@@ -1049,6 +1012,15 @@ Queue: no printable jobs in queue
                 }
             }
         }
+    }
+
+    #[test]
+    fn private_and_colour_queues_do_not_invent_duplex_suffixes() {
+        for (input,simplex,expected) in [
+            ("psc111-sx",false,"psc111"), ("psc111",true,"psc111-sx"),
+            ("cptsc",false,"cptsc-dx"), ("cptsc-dx",true,"cptsc"),
+            ("cptsc-a3-dx",true,"cptsc-a3"), ("unknown-queue",true,"unknown-queue"),
+        ] { assert_eq!(queue_for_duplex_mode(input,simplex).unwrap(),expected); }
     }
 
     #[test]

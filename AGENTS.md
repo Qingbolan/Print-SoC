@@ -63,6 +63,9 @@ before submission. Never automatically retry an ambiguous submission.
 | Agent workflow | `plugins/print-soc/skills/print-soc`; keep one canonical skill |
 
 Rust filenames without a directory in this table are under `app/src-tauri/src`.
+After editing catalogue entries or aliases, run `python3 scripts/printer_catalog.py`.
+Rust and the pip CLI use its generated queue-routing table; never hand-edit queue
+suffix rules in another client.
 
 Keep modules cohesive and boundaries explicit. Fix causes in their owning layer,
 reuse shared logic and model lifecycle changes as state transitions. Prefer
@@ -81,6 +84,7 @@ cargo test --manifest-path app/src-tauri/Cargo.toml --lib
 PYTHONPATH=release/python-pip python3 -m pytest release/python-pip/tests -q
 npm --prefix release/node.js-npm test
 python3 scripts/version.py check
+python3 scripts/printer_catalog.py --check
 python3 scripts/verify_agent_workflow.py app/src-tauri/target/debug/print_at_soc --require-layout
 git diff --check
 ```
