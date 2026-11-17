@@ -42,7 +42,7 @@ The same two-page document, viewed from the back. This is a preview, not proof o
 
 ## Why I built this
 
-I started my master’s at NUS in 2025. One of the things I struggled with as a new student was getting the SoC printers to work from my Mac. Installing and configuring the drivers took more effort than I expected for something as ordinary as printing a document.
+I started my master’s at NUS in 2024. One of the things I struggled with as a new student was getting the SoC printers to work from my Mac. Installing and configuring the drivers took more effort than I expected for something as ordinary as printing a document.
 
 Printing over SSH gave me another way in, but I still ran into problems. When I printed my ICA Student’s Pass (STP) documents, the content came out so enlarged that parts of the pages were cut off. Files that weren’t PDFs meant extra conversion steps before I could submit them. And when I needed to check something I’d printed earlier, I had no convenient history to return to.
 
