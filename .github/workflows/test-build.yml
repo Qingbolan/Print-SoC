@@ -4,7 +4,18 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - '**/*.md'
+      - '**/LICENSE*'
+      - 'docs/**'
+      - 'app/screenshots/**'
+      - 'app/public/logo*.png'
   workflow_dispatch:
+
+# A newer push supersedes the previous non-publishing build on the same branch.
+concurrency:
+  group: test-build-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
