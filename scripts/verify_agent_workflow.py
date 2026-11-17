@@ -96,7 +96,7 @@ def verify(binary, require_layout):
             if os.name == 'posix':
                 import fcntl
                 import uuid
-                store = Path(job['file_path']).parents[2] / 'native-jobs'
+                store = Path(job['file_path']).parents[2] / 'jobs'
                 running = dict(second['job'], id=str(uuid.uuid4()), status='Uploading',
                                progress={'stage': 'Uploading', 'bytes_sent': 0, 'total_bytes': 100})
                 (store / (running['id'] + '.json')).write_text(json.dumps(running))

@@ -9,8 +9,27 @@ use std::{
 
 fn root() -> Result<PathBuf, String> {
     crate::storage_service::get_app_data_dir()
-        .map(|p| p.join("native-jobs"))
+        .map(|p| p.join("jobs"))
         .ok_or("Application data unavailable".into())
+}
+fn native_root() -> Result<PathBuf, String> {
+    Ok(root()?.with_file_name("native-jobs"))
+}
+fn native_record_exists(native: &Path, id: &str) -> bool {
+    native.join(format!("{id}.json")).exists() || native.join(format!("{id}.deleted")).exists()
+}
+fn record_root(id: &str) -> Result<PathBuf, String> {
+    let native = native_root()?;
+    Ok(if native_record_exists(&native, id) {
+        native
+    } else {
+        root()?
+    })
+}
+pub fn recovery_owned(job: &PrintJob) -> bool {
+    // Pre-lease native services own their own recovery. Do not classify a live
+    // installed worker as crashed merely because it predates submission leases.
+    job.native.is_none() || root().is_ok_and(|p| p.join(format!("{}.worker", job.id)).exists())
 }
 fn valid_id(id: &str) -> Result<(), String> {
     uuid::Uuid::parse_str(id)
@@ -18,7 +37,8 @@ fn valid_id(id: &str) -> Result<(), String> {
         .map_err(|_| "Invalid shared job ID".into())
 }
 pub fn merge(jobs: &mut HashMap<String, PrintJob>) -> Result<(), String> {
-    merge_from(&root()?, jobs)
+    merge_from(&root()?, jobs)?;
+    merge_from(&native_root()?, jobs)
 }
 fn merge_from(root: &Path, jobs: &mut HashMap<String, PrintJob>) -> Result<(), String> {
     if !root.exists() {
@@ -55,11 +75,41 @@ fn merge_from(root: &Path, jobs: &mut HashMap<String, PrintJob>) -> Result<(), S
     Ok(())
 }
 pub fn save(job: &PrintJob) -> Result<(), String> {
-    save_to(&root()?, job)
+    save_partitioned(&root()?, &native_root()?, job)
 }
-fn save_to(root: &Path, job: &PrintJob) -> Result<(), String> {
+
+/// Keep native records in their established partition so an already installed
+/// driver sees cancellation immediately and never encounters ordinary jobs.
+fn save_partitioned(root: &Path, native: &Path, job: &PrintJob) -> Result<(), String> {
     valid_id(&job.id)?;
-    fs::create_dir_all(&root).map_err(|e| e.to_string())?;
+    let _lock = lock_store(root)?;
+    if job.native.is_some() || native_record_exists(native, &job.id) {
+        let ordinary = root.join(format!("{}.json", job.id));
+        if root.join(format!("{}.deleted", job.id)).exists() {
+            return Err("Job was deleted".into());
+        }
+        if ordinary.exists() {
+            let previous: PrintJob =
+                serde_json::from_slice(&fs::read(&ordinary).map_err(|e| e.to_string())?)
+                    .map_err(|e| e.to_string())?;
+            if previous.status == crate::types::PrintJobStatus::Cancelled {
+                return Err("Job was cancelled".into());
+            }
+            if previous.updated_at > job.updated_at {
+                return Err("Job changed while attaching native origin".into());
+            }
+        }
+        save_to(native, job)?;
+        if ordinary.exists() {
+            fs::remove_file(ordinary).map_err(|e| e.to_string())?;
+        }
+        Ok(())
+    } else {
+        save_locked(root, job)
+    }
+}
+fn lock_store(root: &Path) -> Result<ExclusiveLock, String> {
+    fs::create_dir_all(root).map_err(|e| e.to_string())?;
     let lock = fs::OpenOptions::new()
         .create(true)
         .truncate(false)
@@ -69,6 +119,14 @@ fn save_to(root: &Path, job: &PrintJob) -> Result<(), String> {
         .map_err(|e| e.to_string())?;
     lock.lock_exclusive()
         .map_err(|e| format!("Cannot lock job store: {e}"))?;
+    Ok(ExclusiveLock(lock))
+}
+fn save_to(root: &Path, job: &PrintJob) -> Result<(), String> {
+    let _lock = lock_store(root)?;
+    save_locked(root, job)
+}
+fn save_locked(root: &Path, job: &PrintJob) -> Result<(), String> {
+    valid_id(&job.id)?;
     if root.join(format!("{}.deleted", job.id)).exists() {
         if job.status == crate::types::PrintJobStatus::Uploading {
             return Err("Job was deleted".into());
@@ -82,6 +140,9 @@ fn save_to(root: &Path, job: &PrintJob) -> Result<(), String> {
                 .map_err(|e| e.to_string())?;
         if previous.updated_at >= job.updated_at {
             return Ok(());
+        }
+        if previous.native.is_some() && job.native.is_none() {
+            return Err("Native origin changed; reload the job before modifying it".into());
         }
         // Cancellation and the irreversible submit boundary are arbitrated
         // under the same cross-process lock, not by wall-clock timestamps.
@@ -110,17 +171,14 @@ fn save_to(root: &Path, job: &PrintJob) -> Result<(), String> {
 }
 pub fn delete(id: &str) -> Result<(), String> {
     valid_id(id)?;
-    let root = root()?;
-    fs::create_dir_all(&root).map_err(|e| e.to_string())?;
-    let lock = fs::OpenOptions::new()
-        .create(true)
-        .truncate(false)
-        .read(true)
-        .write(true)
-        .open(root.join(".lock"))
-        .map_err(|e| e.to_string())?;
-    lock.lock_exclusive()
-        .map_err(|e| format!("Cannot lock job store: {e}"))?;
+    let ordinary = root()?;
+    let _ordinary_lock = lock_store(&ordinary)?;
+    let root = record_root(id)?;
+    let _native_lock = if root != ordinary {
+        Some(lock_store(&root)?)
+    } else {
+        None
+    };
     let path = root.join(format!("{id}.json"));
     if path.exists() {
         let latest: PrintJob = serde_json::from_slice(&fs::read(&path).map_err(|e| e.to_string())?)
@@ -141,7 +199,7 @@ pub fn delete(id: &str) -> Result<(), String> {
 
 pub fn refresh(jobs: &mut HashMap<String, PrintJob>, id: &str) -> Result<(), String> {
     valid_id(id)?;
-    let root = root()?;
+    let root = record_root(id)?;
     if root.join(format!("{id}.deleted")).exists() {
         return Err("Job was deleted".into());
     }
@@ -234,6 +292,42 @@ mod tests {
         assert!(acquire_submission_at(root.path(), &job.id).is_ok());
     }
     #[test]
+    fn installed_native_workers_keep_their_partition_and_observe_cancellation() {
+        let directory = tempfile::tempdir().unwrap();
+        let ordinary = directory.path().join("jobs");
+        let native = directory.path().join("native-jobs");
+        let mut spool = job();
+        let origin = spool.native.take();
+        save_partitioned(&ordinary, &native, &spool).unwrap();
+        assert!(!native.exists());
+        spool.native = origin;
+        spool.updated_at += chrono::Duration::seconds(1);
+        save_partitioned(&ordinary, &native, &spool).unwrap();
+        assert!(!ordinary.join(format!("{}.json", spool.id)).exists());
+        let mut installed_worker = HashMap::new();
+        merge_from(&native, &mut installed_worker).unwrap();
+        assert!(installed_worker.values().all(|job| job.native.is_some()));
+        let mut submitting = spool.clone();
+        spool
+            .request_status(crate::types::PrintJobStatus::Cancelled, None)
+            .unwrap();
+        // The fixture had a future timestamp; advance monotonically.
+        spool.updated_at = submitting.updated_at + chrono::Duration::seconds(1);
+        save_partitioned(&ordinary, &native, &spool).unwrap();
+        merge_from(&native, &mut installed_worker).unwrap();
+        assert_eq!(
+            installed_worker[&spool.id].status,
+            crate::types::PrintJobStatus::Cancelled
+        );
+        submitting.updated_at = spool.updated_at + chrono::Duration::seconds(1);
+        assert!(save_to(&native, &submitting).is_err());
+        let mut ordinary_job = job();
+        ordinary_job.native = None;
+        save_partitioned(&ordinary, &native, &ordinary_job).unwrap();
+        merge_from(&native, &mut installed_worker).unwrap();
+        assert!(!installed_worker.contains_key(&ordinary_job.id));
+    }
+    #[test]
     fn record_ids_cannot_escape_the_job_directory() {
         let root = tempfile::tempdir().unwrap();
         let mut job = job();
@@ -244,11 +338,11 @@ mod tests {
 
 /// Hold this lease for the entire submission. Other processes may observe it,
 /// but cannot submit the same job or recover a live worker as interrupted.
-pub fn acquire_submission(id: &str) -> Result<SubmissionLease, String> {
+pub fn acquire_submission(id: &str) -> Result<ExclusiveLock, String> {
     valid_id(id)?;
     acquire_submission_at(&root()?, id)
 }
-fn acquire_submission_at(root: &Path, id: &str) -> Result<SubmissionLease, String> {
+fn acquire_submission_at(root: &Path, id: &str) -> Result<ExclusiveLock, String> {
     fs::create_dir_all(&root).map_err(|e| e.to_string())?;
     let lease = fs::OpenOptions::new()
         .create(true)
@@ -260,12 +354,14 @@ fn acquire_submission_at(root: &Path, id: &str) -> Result<SubmissionLease, Strin
     lease
         .try_lock_exclusive()
         .map_err(|_| "This job already has an active submission worker")?;
-    Ok(SubmissionLease(lease))
+    Ok(ExclusiveLock(lease))
 }
 
 /// Explicit unlock prevents a concurrently forked converter from extending a
 /// completed worker's lease until its inherited descriptor reaches exec/exit.
-pub struct SubmissionLease(fs::File);
-impl Drop for SubmissionLease {
-    fn drop(&mut self) { let _ = FileExt::unlock(&self.0); }
+pub struct ExclusiveLock(fs::File);
+impl Drop for ExclusiveLock {
+    fn drop(&mut self) {
+        let _ = FileExt::unlock(&self.0);
+    }
 }

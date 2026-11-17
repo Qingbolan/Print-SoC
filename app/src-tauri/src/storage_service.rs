@@ -78,6 +78,12 @@ pub fn load_print_history() -> Result<HashMap<String, PrintJob>, String> {
     for id in jobs.keys().cloned().collect::<Vec<_>>() {
         // An active worker owns recovery. Refresh after acquiring its lease to
         // avoid recovering a stale snapshot of a job that just finished.
+        if jobs
+            .get(&id)
+            .is_some_and(|job| !crate::job_store::recovery_owned(job))
+        {
+            continue;
+        }
         let Ok(_lease) = crate::job_store::acquire_submission(&id) else {
             continue;
         };
@@ -138,7 +144,9 @@ pub fn backup_pdf_file(job_id: &str, source_path: &str) -> Result<PathBuf, Strin
 /// Delete PDF backup for a job
 pub fn delete_pdf_backup(job_id: &str) -> Result<(), String> {
     let preview = crate::pdf_service::job_layout_path(job_id)?;
-    if preview.exists() { fs::remove_file(preview).map_err(|e|e.to_string())?; }
+    if preview.exists() {
+        fs::remove_file(preview).map_err(|e| e.to_string())?;
+    }
     let backups_dir =
         get_backups_dir().ok_or_else(|| "Failed to get backups directory path".to_string())?;
 
@@ -189,7 +197,9 @@ pub fn get_storage_info() -> Result<StorageInfo, String> {
     let backups_dir =
         get_backups_dir().ok_or_else(|| "Failed to get backups directory".to_string())?;
 
-    let history_size = get_dir_size(&history_dir) + get_dir_size(&data_dir.join("native-jobs"));
+    let history_size = get_dir_size(&history_dir)
+        + get_dir_size(&data_dir.join("native-jobs"))
+        + get_dir_size(&data_dir.join("jobs"));
     let backups_size = get_dir_size(&backups_dir) + get_dir_size(&data_dir.join("previews"));
     let total_size = history_size + backups_size + get_dir_size(&data_dir.join("imports"));
 
