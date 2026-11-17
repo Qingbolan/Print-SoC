@@ -2,14 +2,9 @@
   <img src="app/public/logo-app-icon.png" width="88" alt="Print@SoC icon" />
 </p>
 
-<h1 align="center">Print@SoC — NUS SoC printing made easier</h1>
+<h1 align="center">Print@SoC</h1>
 
 <p align="center"><strong>Print your assignment. Skip the per-printer setup.</strong></p>
-
-Print@SoC is an open-source desktop app for printing at the **National University of Singapore (NUS) School of Computing**. Preview PDFs, images and Office documents, choose a SoC printer, and keep your print history in one place. It sends jobs through the school’s SSH printing service, so you don’t have to configure each campus printer on your laptop.
-
-Use the desktop on **Windows, macOS or Linux**, or add one virtual printer on macOS/Linux to print from Word and other apps. You’ll need a SoC account and access to the school’s network; Office conversion uses LibreOffice. Built by a student, now a PhD student, for people who just need their documents printed.
-
 <p align="center"><strong>Prefer printing from Word?</strong> On macOS and Linux, run <code>print-soc virtual-printer install</code><br />to add a Print@SoC printer through a guided setup. <a href="#one-command-system-printer-setup">Setup requirements →</a></p>
 
 <p align="center">
@@ -31,7 +26,7 @@ Use the desktop on **Windows, macOS or Linux**, or add one virtual printer on ma
   <a href="https://github.com/Qingbolan/Print-SoC/issues">Report an issue</a>
 </p>
 
-<img src="app/screenshots/readme/preview-native-split.jpg" alt="Print@SoC desktop document preview with NUS SoC printer selection and duplex settings, shown in dark and light themes on macOS" width="100%" />
+<img src="app/screenshots/readme/preview-native-split.jpg" alt="Print@SoC preview: original dark and light macOS screenshots joined by a diagonal divider" width="100%" />
 
 <p align="center"><sub>Dark / light comparison · two actual macOS captures joined diagonally · local development build.</sub></p>
 
