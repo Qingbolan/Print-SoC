@@ -42,15 +42,11 @@ The same two-page document, viewed from the back. This is a preview, not proof o
 
 ## Why I built this
 
-I started my master’s at NUS in 2024. One of the things I struggled with as a new student was getting the SoC printers to work from my Mac. Installing and configuring the drivers took more effort than I expected for something as ordinary as printing a document.
+I started my master’s at NUS in 2025 and struggled to set up SoC printing on my Mac. SSH printing helped, but my ICA Student’s Pass (STP) documents came out enlarged and cut off. Non-PDF files needed extra conversion, and I had no easy way to look up past print jobs.
 
-Printing over SSH gave me another way in, but I still ran into problems. When I printed my ICA Student’s Pass (STP) documents, the content came out so enlarged that parts of the pages were cut off. Files that weren’t PDFs meant extra conversion steps before I could submit them. And when I needed to check something I’d printed earlier, I had no convenient history to return to.
+So I built Print@SoC: a place to preview documents, choose a printer and keep a printing history.
 
-That’s why I started Print@SoC. I wanted to see the page before sending it, print the files I actually had, and find my previous jobs afterward. The school’s servers could already do the printing; I wanted the steps around it to be easier.
-
-I’m now a PhD student, and I still see new students arriving at SoC and struggling with the same printer setup. I remember how frustrating that was when I first arrived. I hope sharing this project helps them spend less time figuring out how to print and get on with what they came here to do.
-
-The app brings document preparation, preview, printer selection and history together. You can print from it without setting up each campus printer locally. If you prefer Word’s own Print dialog, the optional virtual printer gives you that route too, with one command to start its setup.
+Now I’m a PhD student, and I still see new students struggling with the same setup. I hope this saves you some of the trouble I went through.
 
 [Why I built this](#why-i-built-this) · [Problem statement](#problem-statement) · [Design rationale](#solution-printsoc) · [Install](#install) · [Architecture](#how-it-works) · [Development](#development)
 
@@ -99,7 +95,7 @@ Recorded on macOS with a public two-page sample: open Word's Print dialog, selec
 
 A student trying to print an assignment needs to make several independent choices: which printer is accessible, which queue reaches it, how to authenticate, and how to express paper and duplex settings. A conventional network-printer setup exposes these choices through operating-system-specific configuration screens and printer drivers.
 
-The configuration work typically includes selecting a network endpoint and protocol, identifying a queue, choosing a driver or printer description, and setting defaults. These details matter, but they are separate from the user's immediate task: reviewing a document and getting the intended pages onto paper. The exact setup varies by operating system and queue; there is no single step count or measured failure rate claimed here.
+Setup means finding the right address, protocol, queue and driver, then checking the defaults. The steps vary by operating system and printer.
 
 Three concrete use cases motivated Print@SoC:
 
@@ -143,7 +139,7 @@ The direct document workflow avoids per-destination local driver setup. The opti
 | Share a job lifecycle across entry points | Inspect system-originated and desktop jobs in one workspace | A queue observation cannot prove physical output. |
 | Use a standalone Rust CUPS backend | System printing does not depend on the user's Python environment | CUPS integration applies to macOS/Linux and needs installation. |
 
-The goal is to reduce the configuration required for a concrete print task while making the remaining dependencies and uncertain outcomes visible. It does not require replacing the university's printing infrastructure or claiming that every printer implements the same options.
+Print@SoC uses the university’s existing printing infrastructure. Queue access and supported options still depend on the destination printer.
 
 ## Install
 
@@ -304,8 +300,10 @@ npm run tauri:build
 
 ## Help and contributing
 
-Start with the [user guide](docs/usage.md) and [maintenance guide](docs/maintenance.md). For a bug, [open an issue](https://github.com/Qingbolan/Print-SoC/issues) with your OS, app version, reproduction steps and expected result. Remove passwords, tokens and private document content from logs or screenshots.
+Questions or something not working? Check the [user guide](docs/usage.md), or [open an issue](https://github.com/Qingbolan/Print-SoC/issues). Include your OS, app version and what happened; leave out passwords and private documents.
 
-Contributions should include focused checks and explain any effect on real printing. Hardware claims should state the printer, submitted settings and observed paper output. See [AGENTS.md](AGENTS.md) for repository instructions.
+[PRs](https://github.com/Qingbolan/Print-SoC/pulls) are welcome—whether it’s a bug fix, clearer docs or a better printing workflow. See [AGENTS.md](AGENTS.md) for development guidelines, and tell us how you tested your change.
 
-Package license texts: [Python distribution](release/python-pip/LICENSE) · [npm distribution](release/node.js-npm/LICENSE).
+Made by **Silan Hu**. Find me at [silan.tech](https://silan.tech) or email [silan.hu@u.nus.edu](mailto:silan.hu@u.nus.edu). I’d love to hear whether this helped you print your first assignment at SoC.
+
+Package licenses: [Python](release/python-pip/LICENSE) · [npm](release/node.js-npm/LICENSE).
