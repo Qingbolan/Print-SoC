@@ -4,8 +4,16 @@
 
 <h1 align="center">Print@SoC</h1>
 
-<p align="center"><strong>Your documents. Your SoC printers. One desktop workspace.</strong></p>
-<p align="center">Preview documents, choose a printer, and follow your jobs through NUS School of Computing’s SSH printing service.</p>
+<p align="center"><strong>Print to NUS SoC printers from your own laptop—with one SoC account.</strong></p>
+<p align="center">Preview your documents, choose a campus printer, and see how many jobs are ahead.<br />On macOS and Linux, one guided setup also brings SoC printing to Word and other apps’ Print dialogs.</p>
+
+<p align="center">
+  <a href="https://pypi.org/project/print-at-soc/"><img src="https://img.shields.io/pypi/v/print-at-soc?style=flat-square&amp;logo=pypi&amp;logoColor=white&amp;label=PyPI" alt="Latest published PyPI version" /></a>
+  <a href="release/python-pip/LICENSE"><img src="https://img.shields.io/badge/License-MIT-3DA639?style=flat-square" alt="MIT package license" /></a>
+  <a href="#desktop"><img src="https://img.shields.io/badge/Desktop-Windows-0078D4?style=flat-square" alt="Windows desktop" /></a>
+  <a href="#desktop"><img src="https://img.shields.io/badge/Desktop-macOS-222222?style=flat-square&amp;logo=apple&amp;logoColor=white" alt="macOS desktop" /></a>
+  <a href="#desktop"><img src="https://img.shields.io/badge/Desktop-Linux-FCC624?style=flat-square&amp;logo=linux&amp;logoColor=black" alt="Linux desktop" /></a>
+</p>
 
 <p align="center">
   <a href="https://github.com/Qingbolan/Print-SoC/releases/latest">Download</a> ·
