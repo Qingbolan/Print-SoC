@@ -895,10 +895,10 @@ export default function SettingsPage() {
                     <Badge variant="secondary">v{appVersion}</Badge>
                   </div>
                   <p className="text-sm text-muted-foreground">
-                    Smart printing solution for NUS School of Computing
+                    Preview documents, choose a NUS School of Computing printer, and keep your print history in one place.
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    Built with Tauri, React, and Rust
+                    An independent, open-source project by Silan Hu. Built with Tauri, React, and Rust.
                   </p>
                 </SimpleCardContent>
               </SimpleCard>

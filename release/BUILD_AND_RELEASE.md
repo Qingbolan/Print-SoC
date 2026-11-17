@@ -24,13 +24,13 @@ bundles live under `app/src-tauri/target/release/bundle/`.
 Commit the source and push it before dispatching:
 
 ```bash
-gh workflow run build-release.yml --ref main -f publish_pypi=true -f publish_npm=false
+gh workflow run build-release.yml --ref main -f publish_pypi=true
 ```
 
-CI resolves a version receipt once, tests the Python/npm distributions, builds
+CI resolves a version receipt once, tests the Python distribution and Node launcher, builds
 macOS ARM/Intel, Windows x64 and Linux x64, checks macOS bundle versions, then
-publishes the GitHub desktop assets. Only after that does it publish enabled
-package registries. npm publication is opt-in.
+publishes the GitHub desktop assets. Only after that does it publish to
+PyPI when enabled. npm publication and package artifacts have been removed.
 
 Do not retag an existing version or replace it with another source commit. Fixes
 require a new commit, which produces a new Tide coordinate. Registry credentials

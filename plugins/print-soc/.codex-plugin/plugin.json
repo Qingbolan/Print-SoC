@@ -1,6 +1,6 @@
 {
   "name": "print-soc",
-  "version": "0.376.9",
+  "version": "0.377.1",
   "description": "Help agents configure NUS SoC printing, choose printers and track authorized jobs.",
   "author": {
     "name": "Silan Hu"

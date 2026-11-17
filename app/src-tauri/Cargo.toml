@@ -1,10 +1,10 @@
 [package]
 name = "print_at_soc"
-version = "0.376.9"
-description = "Print_at_SoC - Smart Printing for NUS SoC"
+version = "0.377.1"
+description = "NUS School of Computing desktop printing with document preview, duplex settings and print history"
 authors = ["Silan Hu(silan.hu@u.nus.edu)"]
 license = "MIT"
-repository = "https://github.com/Qingbolan/nus-llama-printer"
+repository = "https://github.com/Qingbolan/Print-SoC"
 edition = "2021"
 
 [lib]

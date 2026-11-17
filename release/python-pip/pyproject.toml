@@ -5,14 +5,14 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "print-at-soc"
 dynamic = ["version"]
-description = "Print@SoC - Smart Printing for NUS SoC - Python CLI wrapper for desktop application"
+description = "NUS School of Computing printing: CLI launcher for document preview, print history and guided virtual printer setup."
 authors = [
     {name = "Silan Hu", email = "silan.hu@u.nus.edu"}
 ]
 readme = "README.md"
 requires-python = ">=3.8"
 license = {text = "MIT"}
-keywords = ["nus", "soc", "printing", "ssh", "pdf", "desktop-application"]
+keywords = ["nus", "nus-soc", "printing", "virtual-printer", "ssh", "pdf", "duplex", "print-preview", "print-history", "mcp"]
 dependencies = [
     "paramiko>=3.4",
     "keyring>=24,<26",
@@ -39,6 +39,8 @@ classifiers = [
 [project.urls]
 Homepage = "https://github.com/Qingbolan/Print-SoC"
 Repository = "https://github.com/Qingbolan/Print-SoC"
+Documentation = "https://github.com/Qingbolan/Print-SoC/blob/main/docs/usage.md"
+Releases = "https://github.com/Qingbolan/Print-SoC/releases"
 Issues = "https://github.com/Qingbolan/Print-SoC/issues"
 
 [project.scripts]

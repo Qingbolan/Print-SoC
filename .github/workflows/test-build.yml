@@ -236,7 +236,7 @@ jobs:
 
   test-npm:
     needs: resolve-version
-    name: Test npm Package
+    name: Test Node Launcher
     runs-on: ubuntu-latest
 
     steps:
@@ -262,7 +262,3 @@ jobs:
       - name: Run tests
         working-directory: ./release/node.js-npm
         run: npm test
-
-      - name: Test package
-        working-directory: ./release/node.js-npm
-        run: npm pack --dry-run

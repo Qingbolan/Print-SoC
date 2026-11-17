@@ -1,6 +1,6 @@
 {
   "name": "print-at-soc",
-  "version": "0.376.9",
+  "version": "0.377.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -15,9 +15,8 @@
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
-    "tauri:icon": "tauri icon app/src-tauri/icons/app-icon.png -o app/src-tauri/icons",
+    "tauri:icon": "node scripts/generate-icons.mjs",
     "assets:logo": "node ./scripts/sync-logo.mjs",
-    "posttauri:icon": "npm run assets:logo",
     "version:sync": "python3 ../scripts/version.py sync",
     "prebuild": "npm run version:sync",
     "pretauri:build": "npm run version:sync"

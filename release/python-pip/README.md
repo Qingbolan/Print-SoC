@@ -1,6 +1,12 @@
 # Print@SoC Python CLI
 
-Python wrapper for the Print@SoC desktop app and MCP stdio server.
+Print@SoC helps National University of Singapore (NUS) School of Computing users print without configuring each campus printer. Preview documents, choose print settings and keep a job history in the desktop app on Windows, macOS and Linux.
+
+This package is the **Python CLI launcher** for the desktop app and MCP stdio server. On macOS/Linux, `print-soc virtual-printer install` starts guided setup of a system printer for Word and other apps. A SoC account and network access are required; Office conversion needs LibreOffice.
+
+[Download the desktop](https://github.com/Qingbolan/Print-SoC/releases/latest) · [Setup and user guide](https://github.com/Qingbolan/Print-SoC/blob/main/docs/usage.md) · [Agent skill for Codex and Claude Code](https://github.com/Qingbolan/Print-SoC#agent-skill-support) · [Get help or report a bug](https://github.com/Qingbolan/Print-SoC/issues)
+
+An independent community project by [Silan Hu](https://silan.tech), not an official NUS service.
 
 ## Installation
 

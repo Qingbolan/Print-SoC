@@ -24,15 +24,15 @@ python3 scripts/version.py check
 The shared projection updates the desktop package and lockfile, Tauri metadata,
 Cargo manifest and lockfile, Python package version, npm package version, and Codex plugin manifest.
 The settings page and CLI/MCP version reports read those generated values.
-Desktop builds, Python source builds, and `npm run package` run the projection
-automatically. Direct `npm pack` checks the stamp and rejects stale metadata
-because npm reads its package version before running lifecycle hooks. Published wheels, source distributions, and npm packages retain
-their stamped version and do not require Git or Tide to install.
+Desktop builds and Python source builds run the projection automatically.
+Published wheels and source distributions retain their stamped version and do
+not require Git or Tide to install. The Node launcher remains available in the
+source tree for existing integrations, but is private and is no longer published.
 
 ## Release
 
 ```bash
-gh workflow run build-release.yml --ref main -f publish_pypi=true -f publish_npm=false
+gh workflow run build-release.yml --ref main -f publish_pypi=true
 ```
 
 CI resolves Tide exactly once and passes a JSON receipt containing its coordinate
@@ -41,7 +41,12 @@ All platforms and registries use this same coordinate. Desktop assets must be
 available before publishing package launchers. A fresh `print-soc --install`
 updates the separately installed desktop binary; upgrading pip alone does not.
 
-Release tags `v<coordinate>` are lightweight and immutable. Only **annotated**
+The `v1.0.0` release is the first annotated Tide epoch anchor, on its exact
+release commit. Tide therefore resolves that commit to `1.0.0`; subsequent
+commits advance within epoch 1. This is the explicit 1.0 version-policy transition.
+Create this anchor only after final source validation, and never move it.
+
+Other release tags `v<coordinate>` are lightweight and immutable. Only **annotated**
 `v*` tags are Tide epoch anchors; adding an anchor is an explicit version-policy
 change. Automatically generated release tags must not become new anchors, which
 would change the coordinate while building the release. With no annotated

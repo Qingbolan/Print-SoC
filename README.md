@@ -2,9 +2,14 @@
   <img src="app/public/logo-app-icon.png" width="88" alt="Print@SoC icon" />
 </p>
 
-<h1 align="center">Print@SoC</h1>
+<h1 align="center">Print@SoC — NUS SoC printing made easier</h1>
 
 <p align="center"><strong>Print your assignment. Skip the per-printer setup.</strong></p>
+
+Print@SoC is an open-source desktop app for printing at the **National University of Singapore (NUS) School of Computing**. Preview PDFs, images and Office documents, choose a SoC printer, and keep your print history in one place. It sends jobs through the school’s SSH printing service, so you don’t have to configure each campus printer on your laptop.
+
+Use the desktop on **Windows, macOS or Linux**, or add one virtual printer on macOS/Linux to print from Word and other apps. You’ll need a SoC account and access to the school’s network; Office conversion uses LibreOffice. Built by a student, now a PhD student, for people who just need their documents printed.
+
 <p align="center"><strong>Prefer printing from Word?</strong> On macOS and Linux, run <code>print-soc virtual-printer install</code><br />to add a Print@SoC printer through a guided setup. <a href="#one-command-system-printer-setup">Setup requirements →</a></p>
 
 <p align="center">
@@ -26,7 +31,7 @@
   <a href="https://github.com/Qingbolan/Print-SoC/issues">Report an issue</a>
 </p>
 
-<img src="app/screenshots/readme/preview-native-split.jpg" alt="Print@SoC preview: original dark and light macOS screenshots joined by a diagonal divider" width="100%" />
+<img src="app/screenshots/readme/preview-native-split.jpg" alt="Print@SoC desktop document preview with NUS SoC printer selection and duplex settings, shown in dark and light themes on macOS" width="100%" />
 
 <p align="center"><sub>Dark / light comparison · two actual macOS captures joined diagonally · local development build.</sub></p>
 
@@ -60,7 +65,6 @@ Now I’m a PhD student, and I still see new students struggling with the same s
 - **One account across entry points:** desktop, CLI, MCP and native printing use the shared SoC account and operating-system credential store.
 - **Job tracking and history:** inspect desktop and system-originated jobs, see the number of jobs ahead when queue evidence is available, and distinguish queue departure from confirmed paper output.
 - **Guided maintenance:** interactive installation, update checks, download verification, recovery and an uninstall preview with data-retention choices.
-- **CLI and MCP access:** launch and inspect the application from the terminal, or integrate the bundled stdio MCP server with a compatible client.
 - **Agent skill support:** let Codex or Claude Code help set up printing, find an accessible printer, prepare the settings and follow your job. The bundled [print-soc skill](plugins/print-soc/skills/print-soc/SKILL.md) uses CLI, desktop and MCP where available.
 - **Light and dark themes:** use the same document workspace in either appearance, with English and Chinese interface options.
 
@@ -180,7 +184,7 @@ The release page is the authority for available assets. This README describes th
 
 ### Command line
 
-Choose **one** launcher. Both expose `print-soc`, `print-at-soc`, and `psoc`.
+The Python launcher exposes `print-soc`, `print-at-soc`, and `psoc`.
 
 ```sh
 # Python launcher (Python 3.8+)
@@ -189,14 +193,10 @@ print-soc --install
 print-soc
 ```
 
-```sh
-# npm launcher (Node.js 14.14+)
-npm install -g print-at-soc
-print-soc --install
-print-soc
-```
+npm publication has ended; use PyPI or GitHub Releases for current versions.
+If migrating from the global npm launcher, remove it with `npm uninstall -g print-at-soc` before installing the Python launcher to avoid command-name conflicts.
 
-The launchers install the desktop separately. npm’s maintenance wizard also requires Python 3.8+ with `venv`; the Rust system-printing path does not. See [installation, update and recovery details](docs/maintenance.md).
+The launcher installs the desktop separately. The Rust system-printing path does not require Python. See [installation, update and recovery details](docs/maintenance.md).
 
 ## First print
 

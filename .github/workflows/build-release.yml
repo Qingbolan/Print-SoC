@@ -7,10 +7,10 @@ on:
         description: 'Publish the Python package after desktop assets are ready'
         type: boolean
         default: true
-      publish_npm:
-        description: 'Publish the npm package after desktop assets are ready'
-        type: boolean
-        default: false
+
+concurrency:
+  group: print-soc-release
+  cancel-in-progress: false
 
 env:
   CARGO_TERM_COLOR: always
@@ -234,8 +234,8 @@ jobs:
           Write-Host "Generated packages:"
           Get-ChildItem "${{ github.workspace }}/windows-packages" | Format-Table Name, Length
 
-          if ($packagesFound -eq 0) {
-            Write-Error "No packages were generated"
+          if ($packagesFound -ne 2) {
+            Write-Error "Both MSI and NSIS installers are required"
             exit 1
           }
 
@@ -322,8 +322,17 @@ jobs:
           draft: false
           prerelease: false
           generate_release_notes: true
+          fail_on_unmatched_files: true
           body: |
-            ## Print@SoC - Smart Printing for NUS SoC
+            ## Print@SoC — NUS SoC document printing
+
+            Desktop printing with document preview, duplex and booklet layouts, shared job history,
+            and guided system-printer setup on macOS/Linux. Office conversion requires LibreOffice.
+            The desktop icon preserves the installed macOS appearance and uses the same white
+            rounded tile on Windows/Linux.
+
+            Current CLI releases are published to PyPI; npm publication has ended.
+            Install with `python -m pip install --upgrade print-at-soc`, then `print-soc --install`.
 
             ### Downloads
             | Platform | Architecture | File |
@@ -394,7 +403,7 @@ jobs:
 
   test-npm:
     needs: resolve-version
-    name: Test npm Package
+    name: Test Node Launcher
     runs-on: ubuntu-latest
 
     steps:
@@ -420,16 +429,6 @@ jobs:
       - name: Run tests
         working-directory: ./release/node.js-npm
         run: npm test
-
-      - name: Test package
-        working-directory: ./release/node.js-npm
-        run: npm pack
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: npm-package
-          path: release/node.js-npm/*.tgz
-          if-no-files-found: error
 
   publish-pypi:
     if: inputs.publish_pypi
@@ -470,38 +469,3 @@ jobs:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
         run: twine upload dist/*
-
-  publish-npm:
-    if: ${{ always() && inputs.publish_npm && needs.create-release.result == 'success' && needs.test-npm.result == 'success' && (needs.publish-pypi.result == 'success' || needs.publish-pypi.result == 'skipped') }}
-    name: Publish to npm
-    needs: [resolve-version, create-release, test-npm, publish-pypi]
-    runs-on: ubuntu-latest
-    environment: npm
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: actions/download-artifact@v4
-        with:
-          name: tide-version
-      - name: Apply shared Tide version
-        run: python3 scripts/version.py sync --receipt .release-version.json
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          registry-url: 'https://registry.npmjs.org'
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: npm-package
-          path: release/node.js-npm/package-dist
-
-      - name: Publish to npm
-        working-directory: ./release/node.js-npm
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish ./package-dist/*.tgz --access public

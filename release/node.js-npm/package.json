@@ -1,7 +1,7 @@
 {
   "name": "print-at-soc",
-  "version": "0.376.9",
-  "description": "Print@SoC - Smart Printing for NUS SoC - Node.js CLI wrapper for desktop application",
+  "version": "0.377.1",
+  "description": "NUS School of Computing printing: Node.js launcher for document preview, print history and guided virtual printer setup.",
   "main": "lib/cli.js",
   "bin": {
     "print-at-soc": "lib/cli.js",
@@ -10,19 +10,21 @@
     "psoc": "lib/cli.js"
   },
   "scripts": {
-    "test": "node test/test.js && node test/maintenance.test.js && node test/runtime.test.js",
-    "prepublishOnly": "node lib/cli.js --version",
-    "prepack": "node lib/stamp-version.js check",
-    "package": "node lib/stamp-version.js pack"
+    "test": "node test/test.js && node test/maintenance.test.js && node test/runtime.test.js"
   },
   "keywords": [
     "nus",
-    "soc",
+    "nus-soc",
     "printing",
+    "virtual-printer",
     "ssh",
     "pdf",
-    "desktop-application",
-    "tauri"
+    "duplex",
+    "print-preview",
+    "print-history",
+    "mcp",
+    "codex",
+    "claude-code"
   ],
   "author": {
     "name": "Silan Hu",
@@ -55,5 +57,6 @@
   "cpu": [
     "x64",
     "arm64"
-  ]
+  ],
+  "private": true
 }
